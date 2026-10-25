@@ -1,0 +1,3 @@
+import { json, sameOrigin, settings } from "@/lib/server";
+import { requireAdmin, audit } from "@/lib/admin";
+export async function POST(req:Request){if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);const admin=await requireAdmin(req);if(!admin)return json({error:"Sessão administrativa necessária."},401);const now=Date.now();try{await settings().DB.prepare("INSERT INTO catalog_reviews(id,reviewer_user_id,reviewed_at) VALUES(?,?,?)").bind(crypto.randomUUID(),admin.id,now).run();await audit("catalog_review_recorded","success",admin.id);return json({reviewedAt:now});}catch{return json({error:"Não foi possível registrar a revisão."},500);}}

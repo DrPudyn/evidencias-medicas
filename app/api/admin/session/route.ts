@@ -1,0 +1,4 @@
+import { json, sameOrigin, settings } from "@/lib/server";
+import { requireAdmin } from "@/lib/admin";
+export async function GET(req:Request){const user=await requireAdmin(req);return user?json({active:true,email:user.email,expiresInMinutes:15}):json({active:false},401);}
+export async function DELETE(req:Request){if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);const cookie=req.headers.get("cookie")?.match(/(?:^|;\s*)admin_session=([a-f0-9]{64})(?:;|$)/)?.[1];if(cookie)await settings().DB.prepare("UPDATE admin_sessions SET revoked_at=? WHERE digest=?").bind(Date.now(),await (await import("@/lib/server")).digest(cookie)).run();return json({ok:true},200,{"Set-Cookie":`admin_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${new URL(req.url).protocol==="https:"?"; Secure":""}`});}

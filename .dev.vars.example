@@ -1,0 +1,10 @@
+# Copie para .dev.vars somente para desenvolvimento local. Nunca publique este arquivo.
+ADMIN_EMAILS=evidenciasmedicas@outlook.com
+ADMIN_BOOTSTRAP_ENABLED=true
+ADMIN_RP_ID=localhost
+ADMIN_ORIGIN=http://localhost:5173
+
+# Optional NCBI contact/API key; configure only before public use.
+NCBI_CONTACT_EMAIL=
+NCBI_API_KEY=
+
