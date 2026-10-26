@@ -1,0 +1,607 @@
+{
+  "catalogVersion": "1.0.0",
+  "items": [
+    {
+      "id": "sbc-heart-failure-2026",
+      "title": "Diretriz Brasileira de Insuficiência Cardíaca – 2026",
+      "year": 2026,
+      "topic": "heart-failure",
+      "topics": [
+        "heart-failure",
+        "cardiomyopathy"
+      ],
+      "kind": "Diretriz",
+      "scope": "Abrange diagnóstico, avaliação clínica, tratamento e acompanhamento da insuficiência cardíaca.",
+      "url": "https://journals.cardiol.br/article/diretriz-brasileira-de-insuficiencia-cardiaca-2026/",
+      "provenance": {
+        "source": "journals.cardiol.br",
+        "url": "https://journals.cardiol.br/article/diretriz-brasileira-de-insuficiencia-cardiaca-2026/",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-valvular-2026",
+      "title": "Diretriz Brasileira de Valvopatias – 2026",
+      "year": 2026,
+      "topic": "valvular",
+      "kind": "Diretriz",
+      "scope": "Reúne recomendações para avaliação e manejo das doenças das válvulas cardíacas.",
+      "url": "https://journals.cardiol.br/article/diretriz-brasileira-de-valvopatias-2026/",
+      "provenance": {
+        "source": "journals.cardiol.br",
+        "url": "https://journals.cardiol.br/article/diretriz-brasileira-de-valvopatias-2026/",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-cardiogeriatrics-2026",
+      "title": "Diretriz Brasileira de Cardiogeriatria – 2026",
+      "year": 2026,
+      "topic": "cardiogeriatrics",
+      "kind": "Diretriz",
+      "scope": "Aborda particularidades da avaliação e do cuidado cardiovascular de pessoas idosas.",
+      "url": "https://journals.cardiol.br/article/diretriz-brasileira-de-cardiogeriatria-2026/",
+      "provenance": {
+        "source": "journals.cardiol.br",
+        "url": "https://journals.cardiol.br/article/diretriz-brasileira-de-cardiogeriatria-2026/",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-electrical-storm-2026",
+      "title": "Posicionamento sobre Diagnóstico e Tratamento da Tempestade Elétrica – 2026",
+      "year": 2026,
+      "topic": "arrhythmia",
+      "kind": "Posicionamento",
+      "scope": "Resume a abordagem de episódios recorrentes de arritmias ventriculares graves e suas opções de manejo.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260215/0066-782x-abc-123-4-e20260215.x98474.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260215/0066-782x-abc-123-4-e20260215.x98474.pdf",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-systemic-imaging-2026",
+      "title": "Posicionamento sobre Avaliação Multimodalidade em Imagem Cardíaca em Pacientes com Doenças Sistêmicas – 2026",
+      "year": 2026,
+      "topic": "imaging",
+      "kind": "Posicionamento",
+      "scope": "Discute como combinar métodos de imagem cardíaca na avaliação de pessoas com doenças sistêmicas.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260221/0066-782x-abc-123-4-e20260221.x98474.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260221/0066-782x-abc-123-4-e20260221.x98474.pdf",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-sports-emergencies-2026",
+      "title": "Posicionamento sobre Emergências Cardiovasculares para Eventos Esportivos – 2026",
+      "year": 2026,
+      "topic": "sports",
+      "kind": "Posicionamento",
+      "scope": "Orientações de prevenção, reconhecimento e resposta a emergências cardiovasculares em eventos esportivos.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260220/0066-782x-abc-123-4-e20260220.x98474.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260220/0066-782x-abc-123-4-e20260220.x98474.pdf",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-stress-echo-2026",
+      "title": "Diretriz sobre Ecocardiografia de Estresse – 2026",
+      "year": 2026,
+      "topic": "imaging",
+      "topics": [
+        "imaging",
+        "coronary"
+      ],
+      "kind": "Diretriz",
+      "scope": "Aborda indicações, execução e interpretação da ecocardiografia sob estresse.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-123-4-e20260223/0066-782X-abc-123-4-e20260223.x98474.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-123-4-e20260223/0066-782X-abc-123-4-e20260223.x98474.pdf",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-dengue-antithrombotic-2026",
+      "title": "Posicionamento sobre o Manejo de Antitrombóticos e Anticoagulantes em Dengue – 2026",
+      "year": 2026,
+      "topic": "anticoagulation",
+      "topics": [
+        "anticoagulation",
+        "arrhythmia"
+      ],
+      "kind": "Posicionamento",
+      "scope": "Discute decisões sobre antitrombóticos e anticoagulantes quando dengue e risco trombótico coexistem.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260216/0066-782x-abc-123-4-e20260216.x98474.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260216/0066-782x-abc-123-4-e20260216.x98474.pdf",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-pocus-2026",
+      "title": "Posicionamento sobre o Uso do Ultrassom Point of Care (POCUS) na Medicina Cardiovascular – 2026",
+      "year": 2026,
+      "topic": "imaging",
+      "kind": "Posicionamento",
+      "scope": "Apresenta usos e limites do ultrassom à beira-leito na avaliação cardiovascular.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260222/0066-782x-abc-123-4-e20260222.x98474.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782x-abc-123-4-e20260222/0066-782x-abc-123-4-e20260222.x98474.pdf",
+        "society": "SBC",
+        "guidelineYear": 2026,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-hypertension-2025",
+      "title": "Diretriz Brasileira de Hipertensão Arterial – 2025",
+      "year": 2025,
+      "topic": "hypertension",
+      "kind": "Diretriz",
+      "scope": "Atualiza diagnóstico, estratificação de risco e tratamento da hipertensão arterial.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250624/0066-782X-abc-122-09-e20250624.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250624/0066-782X-abc-122-09-e20250624.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-women-cardiometabolic-2025",
+      "title": "Posicionamento sobre a Saúde Cardiometabólica ao Longo do Ciclo de Vida da Mulher – 2025",
+      "year": 2025,
+      "topic": "women",
+      "topics": [
+        "women",
+        "prevention",
+        "obesity"
+      ],
+      "kind": "Posicionamento",
+      "scope": "Percorre fatores de risco e saúde cardiometabólica em diferentes fases da vida da mulher.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250615/0066-782X-abc-122-09-e20250615.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250615/0066-782X-abc-122-09-e20250615.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-obesity-prevention-2025",
+      "title": "Diretriz Brasileira Baseada em Evidências de 2025 para o Manejo da Obesidade e Prevenção de Doenças Cardiovasculares e Complicações Associadas à Obesidade: Uma Declaração de Posicionamento de Cinco Sociedades Médicas",
+      "year": 2025,
+      "topic": "obesity",
+      "topics": [
+        "obesity",
+        "prevention",
+        "dyslipidemia"
+      ],
+      "kind": "Diretriz multissocietária",
+      "authorship": "SBC, SBEM, ABESO, SBD e Academia Brasileira do Sono",
+      "scope": "Recomenda uma abordagem integrada da obesidade e do risco cardiovascular; documento conjunto de cinco sociedades.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250621/0066-782X-abc-122-09-e20250621.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250621/0066-782X-abc-122-09-e20250621.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-atrial-fibrillation-2025",
+      "title": "Diretriz Brasileira de Fibrilação Atrial – 2025",
+      "year": 2025,
+      "topic": "atrial-fibrillation",
+      "topics": [
+        "atrial-fibrillation",
+        "arrhythmia",
+        "anticoagulation"
+      ],
+      "kind": "Diretriz",
+      "scope": "Orienta diagnóstico e manejo da fibrilação atrial, incluindo prevenção de eventos tromboembólicos.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250618/0066-782X-abc-122-09-e20250618.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250618/0066-782X-abc-122-09-e20250618.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-chronic-coronary-syndrome-2025",
+      "title": "Diretriz de Síndrome Coronariana Crônica – 2025",
+      "year": 2025,
+      "topic": "coronary",
+      "kind": "Diretriz",
+      "scope": "Aborda avaliação e tratamento de pessoas com doença coronariana crônica.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250619/0066-782X-abc-122-09-e20250619.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250619/0066-782X-abc-122-09-e20250619.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-chest-pain-2025",
+      "title": "Diretriz Brasileira de Atendimento à Dor Torácica na Unidade de Emergência – 2025",
+      "year": 2025,
+      "topic": "acute-coronary",
+      "topics": [
+        "acute-coronary",
+        "coronary"
+      ],
+      "kind": "Diretriz",
+      "scope": "Organiza a investigação e a tomada de decisão inicial diante de dor torácica na emergência.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250620/0066-782X-abc-122-09-e20250620.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250620/0066-782X-abc-122-09-e20250620.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-dyslipidemia-2025",
+      "title": "Diretriz Brasileira de Dislipidemias e Prevenção da Aterosclerose – 2025",
+      "year": 2025,
+      "topic": "dyslipidemia",
+      "topics": [
+        "dyslipidemia",
+        "prevention"
+      ],
+      "kind": "Diretriz",
+      "scope": "Atualiza avaliação das lipoproteínas, risco aterosclerótico e estratégias de prevenção cardiovascular.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250640/0066-782X-abc-122-09-e20250640.x74770.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-122-09-e20250640/0066-782X-abc-122-09-e20250640.x74770.pdf",
+        "society": "SBC",
+        "guidelineYear": 2025,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-perioperative-2024",
+      "title": "Diretriz de Avaliação Cardiovascular Perioperatória da Sociedade Brasileira de Cardiologia – 2024",
+      "year": 2024,
+      "topic": "perioperative",
+      "topics": [
+        "perioperative",
+        "endocarditis"
+      ],
+      "kind": "Diretriz",
+      "scope": "Inclui uma seção sobre profilaxia da endocardite infecciosa; não é uma diretriz geral para o tratamento da endocardite.",
+      "url": "https://www.scielo.br/j/abc/a/NPrb8bhPV5J7bMDcqKT3SQr/?lang=pt",
+      "provenance": {
+        "source": "www.scielo.br",
+        "url": "https://www.scielo.br/j/abc/a/NPrb8bhPV5J7bMDcqKT3SQr/?lang=pt",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-ct-mri-2024",
+      "title": "Diretriz de Ressonância Magnética e Tomografia Computadorizada Cardiovascular – 2024",
+      "year": 2024,
+      "topic": "imaging",
+      "kind": "Diretriz",
+      "scope": "Orienta indicações, protocolos e interpretação de ressonância e tomografia do coração.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-09-e20240608/0066-782X-abc-121-09-e20240608.x81990.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-09-e20240608/0066-782X-abc-121-09-e20240608.x81990.pdf",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-pediatric-ergometry-2024",
+      "title": "Diretriz Brasileira de Ergometria em Crianças e Adolescentes – 2024",
+      "year": 2024,
+      "topic": "sports",
+      "kind": "Diretriz",
+      "scope": "Aborda avaliação ergométrica e teste de esforço em crianças e adolescentes.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-08-e20240525/0066-782X-abc-121-08-e20240525.x81990.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-08-e20240525/0066-782X-abc-121-08-e20240525.x81990.pdf",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-menopause-2024",
+      "title": "Diretriz Brasileira sobre a Saúde Cardiovascular no Climatério e na Menopausa – 2024",
+      "year": 2024,
+      "topic": "women",
+      "kind": "Diretriz",
+      "scope": "Reúne aspectos cardiovasculares relacionados ao climatério e à menopausa.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-07-e20240478/0066-782X-abc-121-07-e20240478.x47225.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-07-e20240478/0066-782X-abc-121-07-e20240478.x47225.pdf",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-hypertrophic-cardiomyopathy-2024",
+      "title": "Diretriz sobre Diagnóstico e Tratamento da Cardiomiopatia Hipertrófica – 2024",
+      "year": 2024,
+      "topic": "cardiomyopathy",
+      "kind": "Diretriz",
+      "scope": "Resume critérios diagnósticos, avaliação de risco e opções terapêuticas para cardiomiopatia hipertrófica.",
+      "url": "https://drive.google.com/file/d/1UxQOcB5lq-7IhNW_7WtydSqMVfn2xbe-/view?usp=sharing",
+      "provenance": {
+        "source": "drive.google.com",
+        "url": "https://drive.google.com/file/d/1UxQOcB5lq-7IhNW_7WtydSqMVfn2xbe-/view?usp=sharing",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-blood-pressure-2024",
+      "title": "Diretriz Brasileira de Medida da Pressão Arterial – 2024",
+      "year": 2024,
+      "topic": "hypertension",
+      "kind": "Diretriz",
+      "scope": "Padroniza técnicas e condições de medida da pressão arterial em consultório e fora dele.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-4-e20240113/0066-782X-abc-121-4-e20240113.x47225.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-4-e20240113/0066-782X-abc-121-4-e20240113.x47225.pdf",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-adult-ergometry-2024",
+      "title": "Diretriz Brasileira de Ergometria em População Adulta – 2024",
+      "year": 2024,
+      "topic": "sports",
+      "kind": "Diretriz",
+      "scope": "Orienta indicações, preparo, realização e interpretação da ergometria em adultos.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-3-e20240110/0066-782X-abc-121-3-e20240110.x47225.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-3-e20240110/0066-782X-abc-121-3-e20240110.x47225.pdf",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-vaping-2024",
+      "title": "Posicionamento sobre o Uso de Dispositivos Eletrônicos para Fumar – 2024",
+      "year": 2024,
+      "topic": "prevention",
+      "kind": "Posicionamento",
+      "scope": "Discute evidências e implicações cardiovasculares do uso de cigarros eletrônicos.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-02-e20240063/0066-782X-abc-121-02-e20240063.x88402.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-121-02-e20240063/0066-782X-abc-121-02-e20240063.x88402.pdf",
+        "society": "SBC",
+        "guidelineYear": 2024,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-cardiac-devices-2023",
+      "title": "Diretriz Brasileira de Dispositivos Cardíacos Eletrônicos Implantáveis – 2023",
+      "year": 2023,
+      "topic": "arrhythmia",
+      "topics": [
+        "arrhythmia",
+        "endocarditis"
+      ],
+      "kind": "Diretriz",
+      "scope": "Contém recomendações sobre infecção de dispositivos e endocardite relacionada ao sistema implantável; não substitui uma diretriz geral de endocardite.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-01-e20220892/0066-782X-abc-120-01-e20220892.x55156.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-01-e20220892/0066-782X-abc-120-01-e20220892.x55156.pdf",
+        "society": "SBC",
+        "guidelineYear": 2023,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-chagas-cardiomyopathy-2023",
+      "title": "Diretriz da SBC sobre Diagnóstico e Tratamento da Cardiomiopatia da Doença de Chagas – 2023",
+      "year": 2023,
+      "topic": "chagas",
+      "topics": [
+        "chagas",
+        "cardiomyopathy",
+        "heart-failure"
+      ],
+      "kind": "Diretriz",
+      "scope": "Aborda manifestações cardíacas da doença de Chagas, diagnóstico e manejo da cardiomiopatia.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-06-e20230269/0066-782X-abc-120-06-e20230269.x55156.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-06-e20230269/0066-782X-abc-120-06-e20230269.x55156.pdf",
+        "society": "SBC",
+        "guidelineYear": 2023,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-myocardial-strain-2023",
+      "title": "Posicionamento sobre o Uso do Strain Miocárdico na Rotina do Cardiologista – 2023",
+      "year": 2023,
+      "topic": "imaging",
+      "kind": "Posicionamento",
+      "scope": "Explica aplicações e limitações da análise de deformação miocárdica por imagem.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-09-e20230646/0066-782X-abc-120-09-e20230646.x88402.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-09-e20230646/0066-782X-abc-120-09-e20230646.x88402.pdf",
+        "society": "SBC",
+        "guidelineYear": 2023,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-carotid-ultrasound-2023",
+      "title": "Atualização da Recomendação para Avaliação da Doença das Artérias Carótidas e Vertebrais pela Ultrassonografia Vascular – 2023",
+      "year": 2023,
+      "topic": "carotid",
+      "kind": "Atualização",
+      "scope": "Atualiza o uso da ultrassonografia vascular para avaliar carótidas e artérias vertebrais.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-10-e20230695/0066-782X-abc-120-10-e20230695.x55156.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-120-10-e20230695/0066-782X-abc-120-10-e20230695.x55156.pdf",
+        "society": "SBC",
+        "guidelineYear": 2023,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-ecg-reports-2022",
+      "title": "Diretriz sobre a Análise e Emissão de Laudos Eletrocardiográficos – 2022",
+      "year": 2022,
+      "topic": "arrhythmia",
+      "kind": "Diretriz",
+      "scope": "Padroniza análise e elaboração de laudos de eletrocardiograma.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-119-04-0638/0066-782X-abc-119-04-0638.x55156.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-119-04-0638/0066-782X-abc-119-04-0638.x55156.pdf",
+        "society": "SBC",
+        "guidelineYear": 2022,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-myocarditis-2022",
+      "title": "Diretriz de Miocardites da Sociedade Brasileira de Cardiologia – 2022",
+      "year": 2022,
+      "topic": "myocarditis",
+      "topics": [
+        "myocarditis",
+        "cardiomyopathy"
+      ],
+      "kind": "Diretriz",
+      "scope": "Trata do reconhecimento, investigação e cuidado das miocardites.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-119-01-0143/0066-782X-abc-119-01-0143.x55156.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-119-01-0143/0066-782X-abc-119-01-0143.x55156.pdf",
+        "society": "SBC",
+        "guidelineYear": 2022,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-vte-2022",
+      "title": "Diretriz Conjunta sobre Tromboembolismo Venoso – 2022",
+      "year": 2022,
+      "topic": "venous-thromboembolism",
+      "topics": [
+        "venous-thromboembolism",
+        "anticoagulation"
+      ],
+      "kind": "Diretriz conjunta",
+      "authorship": "Documento conjunto; consultar a publicação para a lista completa de sociedades participantes",
+      "scope": "Aborda prevenção, diagnóstico e tratamento do tromboembolismo venoso.",
+      "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-118-04-0797/0066-782X-abc-118-04-0797.x27815.pdf",
+      "provenance": {
+        "source": "abccardiol.org",
+        "url": "https://abccardiol.org/wp-content/uploads/articles_xml/0066-782X-abc-118-04-0797/0066-782X-abc-118-04-0797.x27815.pdf",
+        "society": "SBC",
+        "guidelineYear": 2022,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    },
+    {
+      "id": "sbc-aortic-surgery-2004",
+      "title": "Diretrizes para a Cirurgia das doenças da Aorta",
+      "year": 2004,
+      "topic": "aortic",
+      "kind": "Diretriz",
+      "scope": "Registro histórico de cirurgia da aorta no acervo oficial da SBC; ano 2004. O acervo consultado não apresentou uma atualização SBC específica mais recente para este tema.",
+      "url": "https://drive.google.com/file/d/1-B-EW2jriqj-i8eJYPWC2hC6cs9DTF41/view?usp=sharing",
+      "provenance": {
+        "source": "drive.google.com",
+        "url": "https://drive.google.com/file/d/1-B-EW2jriqj-i8eJYPWC2hC6cs9DTF41/view?usp=sharing",
+        "society": "SBC",
+        "guidelineYear": 2004,
+        "accessedAt": null,
+        "accessStatus": "not-recorded"
+      }
+    }
+  ]
+}
