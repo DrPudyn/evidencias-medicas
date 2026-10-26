@@ -1,5 +1,7 @@
 # Evidências Médicas
 
+Preparação para iPhone (PWA, Capacitor, configuração e verificações): [docs/iphone.md](docs/iphone.md).
+
 Portal para localizar literatura científica e documentos de sociedades médicas, com foco inicial em Cardiologia e Endocrinologia e Metabologia. O site ajuda a encontrar a fonte original e a guardá-la na biblioteca da conta. A ordenação da busca no PubMed segue a data de publicação ou a relevância da consulta; ela não é uma nota automática de qualidade da evidência.
 
 O nome do pacote npm é `evidencias-medicas`.
