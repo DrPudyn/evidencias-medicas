@@ -1,0 +1,313 @@
+[
+  {
+    "id": "sbem-macroprolactinemia-2025",
+    "title": "Position statement on macroprolactinemia",
+    "year": 2025,
+    "topic": "endo-pituitary",
+    "kind": "Posicionamento",
+    "authorship": "SBEM e SBPC/ML",
+    "scope": "Explica o que é macroprolactina, como os exames a identificam e quando considerar a investigação, para reduzir exames e tratamentos desnecessários.",
+    "url": "https://www.aem-sbem.com/article/position-statement-on-macroprolactinemia-from-the-department-of-neuroendocrinology-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian-society-of-clinical-pathology-labor/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/position-statement-on-macroprolactinemia-from-the-department-of-neuroendocrinology-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian-society-of-clinical-pathology-labor/",
+      "publishedDate": "2025",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-iodine-pregnancy-2025",
+    "title": "Suplementação universal de iodo na gestação no Brasil: posicionamento do Departamento de Tireoide",
+    "year": 2025,
+    "topic": "endo-thyroid",
+    "topics": [
+      "endo-thyroid",
+      "endo-reproductive"
+    ],
+    "kind": "Posicionamento",
+    "authorship": "SBEM — Departamento de Tireoide",
+    "scope": "Discute deficiência e excesso de iodo na gestação e a evidência brasileira sobre suplementação universal.",
+    "url": "https://www.aem-sbem.com/article/should-iodine-supplementation-be-universally-recommended-for-pregnant-women-in-brazil-a-position-statement-from-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/should-iodine-supplementation-be-universally-recommended-for-pregnant-women-in-brazil-a-position-statement-from-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem/",
+      "publishedDate": "2025",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-obesity-cardiovascular-2025",
+    "title": "Diretriz brasileira baseada em evidências para obesidade e prevenção cardiovascular — 2025",
+    "year": 2025,
+    "topic": "endo-obesity",
+    "topics": [
+      "endo-obesity",
+      "endo-diabetes",
+      "endo-lipids"
+    ],
+    "kind": "Diretriz multissocietária",
+    "authorship": "SBEM, ABESO, SBD, SBC e Academia Brasileira do Sono",
+    "scope": "Reúne recomendações para manejo da obesidade e prevenção de doença cardiovascular e complicações associadas. Texto integral aberto no PubMed Central.",
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12625227/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12625227/",
+      "publishedDate": "2025",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-abeso-obesity-pharmacological-2024",
+    "title": "Tratamento farmacológico da obesidade em adultos e impacto nas comorbidades — atualização 2024",
+    "year": 2024,
+    "topic": "endo-obesity",
+    "kind": "Posicionamento",
+    "authorship": "SBEM e ABESO",
+    "scope": "Revisa medicamentos aprovados e opções emergentes para obesidade em adultos; confira o texto original para critérios, contraindicações e atualização regulatória.",
+    "url": "https://www.aem-sbem.com/article/pharmacologic-treatment-of-obesity-in-adults-and-its-impact-on-comorbidities-2024-update-and-position-statement-of-specialists-from-the-brazilian-association-for-the-study-of-obesity-and-metabolic-sy/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/pharmacologic-treatment-of-obesity-in-adults-and-its-impact-on-comorbidities-2024-update-and-position-statement-of-specialists-from-the-brazilian-association-for-the-study-of-obesity-and-metabolic-sy/",
+      "publishedDate": "2024",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-masld-2023",
+    "title": "Diretriz brasileira para rastreamento, diagnóstico, tratamento e seguimento da MASLD em adultos com sobrepeso ou obesidade",
+    "year": 2023,
+    "topic": "endo-liver",
+    "topics": [
+      "endo-liver",
+      "endo-obesity",
+      "endo-diabetes"
+    ],
+    "kind": "Diretriz conjunta",
+    "authorship": "SBEM, Sociedade Brasileira de Hepatologia e ABESO",
+    "scope": "Aborda doença hepática esteatótica associada à disfunção metabólica em adultos com sobrepeso ou obesidade, do rastreamento ao acompanhamento.",
+    "url": "https://www.aem-sbem.com/article/brazilian-evidence-based-guideline-for-screening-diagnosis-treatment-and-follow-up-of-metabolic-dysfunction-associated-steatotic-liver-disease-masld-in-adult-individuals-with-overweight-or-obesit/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/brazilian-evidence-based-guideline-for-screening-diagnosis-treatment-and-follow-up-of-metabolic-dysfunction-associated-steatotic-liver-disease-masld-in-adult-individuals-with-overweight-or-obesit/",
+      "publishedDate": "2023",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-thyroid-ablation-2024",
+    "title": "Consenso brasileiro sobre ablação térmica de nódulos tireoidianos",
+    "year": 2024,
+    "topic": "endo-thyroid",
+    "kind": "Consenso conjunto",
+    "authorship": "SBEM, Sociedade Brasileira de Radiologia Intervencionista e Cirurgia Endovascular e Sociedade Brasileira de Cirurgia de Cabeça e Pescoço",
+    "scope": "Discute indicações, avaliação pré-procedimento, técnica, seguimento, complicações e treinamento em ablação térmica de nódulos.",
+    "url": "https://www.aem-sbem.com/article/brazilian-consensus-on-the-application-of-thermal-ablation-for-treatment-of-thyroid-nodules-a-task-force-statement-by-the-brazilian-society-of-interventional-radiology-and-endovascular-surgery-sobri/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/brazilian-consensus-on-the-application-of-thermal-ablation-for-treatment-of-thyroid-nodules-a-task-force-statement-by-the-brazilian-society-of-interventional-radiology-and-endovascular-surgery-sobri/",
+      "publishedDate": "2024",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-hyperprolactinemia-diagnosis-2024",
+    "title": "Diagnóstico da hiperprolactinemia em mulheres",
+    "year": 2024,
+    "topic": "endo-pituitary",
+    "topics": [
+      "endo-pituitary",
+      "endo-reproductive"
+    ],
+    "kind": "Posicionamento conjunto",
+    "authorship": "SBEM e FEBRASGO",
+    "scope": "Resume a investigação de causas fisiológicas, medicamentosas e patológicas e a distinção entre prolactinoma e outras causas de prolactina elevada.",
+    "url": "https://www.aem-sbem.com/article/diagnosis-of-hyperprolactinemia-in-women-a-position-statement-from-the-brazilian-federation-of-gynecology-and-obstetrics-associations-febrasgo-and-the-brazilian-society-of-endocrinology-and-metabol/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/diagnosis-of-hyperprolactinemia-in-women-a-position-statement-from-the-brazilian-federation-of-gynecology-and-obstetrics-associations-febrasgo-and-the-brazilian-society-of-endocrinology-and-metabol/",
+      "publishedDate": "2024",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-hyperprolactinemia-treatment-2024",
+    "title": "Tratamento da hiperprolactinemia em mulheres",
+    "year": 2024,
+    "topic": "endo-pituitary",
+    "topics": [
+      "endo-pituitary",
+      "endo-reproductive"
+    ],
+    "kind": "Posicionamento conjunto",
+    "authorship": "SBEM e FEBRASGO",
+    "scope": "Aborda tratamento da hiperprolactinemia sintomática e prolactinomas, incluindo situações relacionadas à gestação.",
+    "url": "https://www.aem-sbem.com/article/treatment-of-hyperprolactinemia-in-women-a-position-statement-from-the-brazilian-federation-of-gynecology-and-obstetrics-associations-febrasgo-and-the-brazilian-society-of-endocrinology-and-metabol/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/treatment-of-hyperprolactinemia-in-women-a-position-statement-from-the-brazilian-federation-of-gynecology-and-obstetrics-associations-febrasgo-and-the-brazilian-society-of-endocrinology-and-metabol/",
+      "publishedDate": "2024",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-hypothyroidism-special-2022",
+    "title": "Hipotireoidismo primário em situações especiais na vida adulta",
+    "year": 2022,
+    "topic": "endo-thyroid",
+    "kind": "Posicionamento",
+    "authorship": "SBEM — Departamento de Tireoide",
+    "scope": "Discute hipotireoidismo em idosos, hipotireoidismo subclínico em pessoas com doença cardíaca e casos de difícil controle.",
+    "url": "https://www.aem-sbem.com/article/approach-to-adult-patients-with-primary-hypothyroidism-in-some-special-situations-a-position-statement-from-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/approach-to-adult-patients-with-primary-hypothyroidism-in-some-special-situations-a-position-statement-from-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem/",
+      "publishedDate": "2022",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-papillary-thyroid-cancer-2022",
+    "title": "Estratégias para carcinoma papilífero de tireoide de baixo risco",
+    "year": 2022,
+    "topic": "endo-thyroid",
+    "kind": "Posicionamento",
+    "authorship": "SBEM — Departamento de Tireoide",
+    "scope": "Apresenta opções para tumores papilíferos de baixo risco, incluindo critérios de vigilância ativa e indicação de cirurgia.",
+    "url": "https://www.aem-sbem.com/article/treatment-strategies-for-low-risk-papillary-thyroid-carcinoma-a-position-statement-from-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/treatment-strategies-for-low-risk-papillary-thyroid-carcinoma-a-position-statement-from-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism-sbem/",
+      "publishedDate": "2022",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-obesity-classification-2022",
+    "title": "Classificação da obesidade baseada no histórico de peso",
+    "year": 2022,
+    "topic": "endo-obesity",
+    "kind": "Documento oficial",
+    "authorship": "SBEM e ABESO",
+    "scope": "Propõe classificar a obesidade considerando também o maior peso atingido ao longo da vida; é um documento conceitual, não uma diretriz completa de tratamento.",
+    "url": "https://www.aem-sbem.com/article/proposal-of-an-obesity-classification-based-on-weight-history-an-official-document-by-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian-society-for-the-study-of-obesity-a/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/proposal-of-an-obesity-classification-based-on-weight-history-an-official-document-by-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian-society-for-the-study-of-obesity-a/",
+      "publishedDate": "2022",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-osteoporosis-very-high-risk-2022",
+    "title": "Risco muito alto de fratura na osteoporose pós-menopausa: definição e manejo",
+    "year": 2022,
+    "topic": "endo-bone",
+    "kind": "Posicionamento conjunto",
+    "authorship": "SBEM e ABRASSO",
+    "scope": "Discute identificação de mulheres com risco muito alto de fratura e o lugar de terapias anabólicas; consulte o artigo para critérios e limites de aplicação.",
+    "url": "https://www.aem-sbem.com/article/definition-and-management-of-very-high-fracture-risk-in-women-with-postmenopausal-osteoporosis-a-position-statement-from-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/definition-and-management-of-very-high-fracture-risk-in-women-with-postmenopausal-osteoporosis-a-position-statement-from-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian/",
+      "publishedDate": "2022",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-vitamin-d-2020",
+    "title": "Valores de referência da 25-hidroxivitamina D: revisão do posicionamento",
+    "year": 2020,
+    "topic": "endo-bone",
+    "kind": "Posicionamento conjunto",
+    "authorship": "SBEM e SBPC/ML",
+    "scope": "Discute métodos e limitações da dosagem de vitamina D e em quais grupos pode ser indicada sua avaliação.",
+    "url": "https://www.aem-sbem.com/article/reference-values-of-25-hydroxyvitamin-d-revisited-a-position-statement-from-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian-society-of-clinical-pathology-laboratory-med/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/reference-values-of-25-hydroxyvitamin-d-revisited-a-position-statement-from-the-brazilian-society-of-endocrinology-and-metabolism-sbem-and-the-brazilian-society-of-clinical-pathology-laboratory-med/",
+      "publishedDate": "2020",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-hypoparathyroidism-2018",
+    "title": "Diagnóstico e tratamento do hipoparatireoidismo",
+    "year": 2018,
+    "topic": "endo-bone",
+    "kind": "Diretriz / posicionamento",
+    "authorship": "SBEM — Departamento de Metabolismo Ósseo e Mineral; elaborado segundo o programa de diretrizes da AMB",
+    "scope": "Revisa evidências para o diagnóstico e tratamento do hipoparatireoidismo. Documento mais antigo; confira se há atualização posterior antes de aplicar recomendações.",
+    "url": "https://www.aem-sbem.com/article/diagnosis-and-treatment-of-hypoparathyroidism-a-position-statement-from-the-brazilian-society-of-endocrinology-and-metabolism/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/diagnosis-and-treatment-of-hypoparathyroidism-a-position-statement-from-the-brazilian-society-of-endocrinology-and-metabolism/",
+      "publishedDate": "2018",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-subclinical-hypothyroidism-2013",
+    "title": "Abordagem clínica e tratamento do hipotireoidismo subclínico em adultos",
+    "year": 2013,
+    "topic": "endo-thyroid",
+    "kind": "Consenso histórico",
+    "authorship": "SBEM — Departamento de Tireoide",
+    "scope": "Consenso brasileiro sobre hipotireoidismo subclínico em adultos. Publicado em 2013; pode estar desatualizado e deve ser lido como referência histórica até confirmar atualização vigente.",
+    "url": "https://www.aem-sbem.com/article/the-brazilian-consensus-for-the-clinical-approach-and-treatment-of-subclinical-hypothyroidism-in-adults-recommendations-of-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabol/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/the-brazilian-consensus-for-the-clinical-approach-and-treatment-of-subclinical-hypothyroidism-in-adults-recommendations-of-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabol/",
+      "publishedDate": "2013",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-hyperthyroidism-2013",
+    "title": "Consenso brasileiro para diagnóstico e tratamento do hipertireoidismo",
+    "year": 2013,
+    "topic": "endo-thyroid",
+    "kind": "Consenso histórico",
+    "authorship": "SBEM — Departamento de Tireoide",
+    "scope": "Documento sobre investigação e tratamento da tireotoxicose. Publicado em 2013; consulte a publicação para verificar seu alcance e eventuais atualizações.",
+    "url": "https://www.aem-sbem.com/article/the-brazilian-consensus-for-the-diagnosis-and-treatment-of-hyperthyroidism-recommendations-by-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/the-brazilian-consensus-for-the-diagnosis-and-treatment-of-hyperthyroidism-recommendations-by-the-thyroid-department-of-the-brazilian-society-of-endocrinology-and-metabolism/",
+      "publishedDate": "2013",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  },
+  {
+    "id": "sbem-thyroid-nodules-cancer-2013",
+    "title": "Nódulos tireoidianos e câncer diferenciado da tireoide: atualização do consenso brasileiro",
+    "year": 2013,
+    "topic": "endo-thyroid",
+    "kind": "Consenso histórico",
+    "authorship": "Consenso brasileiro de tireoide publicado no periódico oficial da SBEM",
+    "scope": "Aborda avaliação de nódulos e câncer diferenciado da tireoide. Publicado em 2013; incluído como referência histórica, com atualização vigente a confirmar.",
+    "url": "https://www.aem-sbem.com/article/thyroid-nodules-and-differentiated-thyroid-cancer-update-on-the-brazilian-consensus/",
+    "provenance": {
+      "society": "SBEM",
+      "originalUrl": "https://www.aem-sbem.com/article/thyroid-nodules-and-differentiated-thyroid-cancer-update-on-the-brazilian-consensus/",
+      "publishedDate": "2013",
+      "lastReviewedAt": null,
+      "catalogVersion": "1.0.0"
+    }
+  }
+]
