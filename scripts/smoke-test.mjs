@@ -1,3 +1,4 @@
+import './catalog-smoke.mjs';
 import assert from 'node:assert/strict';
 const origin=process.env.SMOKE_ORIGIN || 'http://127.0.0.1:5173';
 async function call(path,method='GET',data,cookie='',customOrigin=origin){const r=await fetch(origin+path,{method,headers:{'Content-Type':'application/json',Origin:customOrigin,...(cookie?{Cookie:cookie}:{})},...(data?{body:JSON.stringify(data)}:{})});if(r.status>=500)throw new Error(`${method} ${path}: HTTP ${r.status}: ${(await r.text()).slice(0,500)}`);return {status:r.status,data:await r.json().catch(()=>({})),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
