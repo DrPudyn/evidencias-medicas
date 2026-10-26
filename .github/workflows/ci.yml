@@ -15,6 +15,10 @@ jobs:
     name: Lint, typecheck, build, smoke
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Keep Node fetch on loopback even if the runner exports HTTP(S)_PROXY.
+    env:
+      NO_PROXY: 127.0.0.1,localhost,::1
+      no_proxy: 127.0.0.1,localhost,::1
 
     steps:
       - name: Checkout
@@ -23,7 +27,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22.13"
+          # engines: >=22.13.0 — use current Node 22.x (22.13.x undici had CI-only 503s)
+          node-version: "22"
           cache: npm
 
       # .openai/ is gitignored; Vite imports .openai/hosting.json at config load.
@@ -136,5 +141,30 @@ jobs:
             -d '{"mode":"register","role":"student","name":"Probe CI","college":"Faculdade CI","state":"MG","email":"probe-ci@example.test","phone":"","emailNotifications":false,"whatsappNotifications":false,"privacyConsent":true}')
           echo "Auth probe HTTP ${auth}: $(cat /tmp/auth-probe.json)"
           test "$auth" = "200"
+
+          echo "Node $(node -v); proxy env:"
+          env | grep -i proxy || true
+
+          # Same client as smoke-test.mjs (undici fetch); log bodies if consent != 200.
+          node --input-type=module <<'EOF'
+          const origin = "http://127.0.0.1:5173";
+          async function call(path, method = "GET", data) {
+            const r = await fetch(origin + path, {
+              method,
+              headers: { "Content-Type": "application/json", Origin: origin },
+              ...(data ? { body: JSON.stringify(data) } : {}),
+            });
+            const text = await r.text();
+            console.log(method, path, r.status, text.slice(0, 300));
+            return r.status;
+          }
+          const statuses = [
+            await call("/api/bookmarks"),
+            await call("/api/admin/dashboard"),
+            await call("/api/admin/catalog", "POST", {}),
+            await call("/api/analytics/consent", "POST", { consent: false }),
+          ];
+          if (statuses[3] !== 200) process.exit(1);
+          EOF
 
           node scripts/smoke-test.mjs
