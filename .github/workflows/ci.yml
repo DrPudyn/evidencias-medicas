@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, build, smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Keep Node fetch on loopback even if the runner exports HTTP(S)_PROXY.
+    env:
+      NO_PROXY: 127.0.0.1,localhost,::1
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # engines: >=22.13.0
+          node-version: "22"
+          cache: npm
+
+      # .openai/ is gitignored; Vite imports .openai/hosting.json at config load.
+      # Non-secret local stub only (same shape previous agents used locally).
+      - name: Stub .openai/hosting.json
+        run: |
+          mkdir -p .openai
+          printf '%s\n' '{"d1":"DB","r2":null}' > .openai/hosting.json
+
+      - name: Install dependencies
+        run: npm run install:ci
+
+      # Requires the lint fixes from PR #2; lint errors must fail this job.
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply local D1 migrations
+        run: |
+          persist="$(pwd)/.sites-runtime/ci-d1"
+          for file in \
+            drizzle/0000_stiff_sabretooth.sql \
+            drizzle/0001_fearless_reaper.sql \
+            drizzle/0002_global_integration_limits.sql
+          do
+            node --import ./scripts/sites-env.mjs \
+              ./node_modules/wrangler/bin/wrangler.js d1 execute DB \
+              --local \
+              --config dist/server/wrangler.json \
+              --persist-to "$persist" \
+              --file "$file"
+          done
+
+      # Compiled Worker, real local D1, no dev proxy and no external requests.
+      # Unexpected outbound calls fail even when application code catches errors.
+      - name: Smoke test (local preview)
+        run: node scripts/smoke-ci.mjs

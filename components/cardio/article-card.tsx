@@ -1,0 +1,76 @@
+"use client";
+
+import { ArrowUpRight } from "lucide-react";
+import type { Article } from "@/lib/catalog";
+import { trackClinicalEvent } from "@/lib/analytics-client";
+import { BookmarkButton } from "@/components/cardio/bookmark-button";
+import { languageName, prettyDate } from "@/components/cardio/format";
+
+export function ArticleCard({
+  article,
+  number,
+  saved,
+  pending,
+  onOpen,
+  onToggle,
+}: {
+  article: Article;
+  number: string;
+  saved: boolean;
+  pending: boolean;
+  onOpen: (article: Article) => void;
+  onToggle: (article: Article) => void;
+}) {
+  const society = article.source === "SBC" || article.source === "SBEM";
+  return (
+    <article className="article-card">
+      <div className="article-number">{number}</div>
+      <div className="article-main">
+        <div className="article-meta">
+          <span className="type-tag">{article.type}</span>
+          <span>{society ? article.year : `Publicação: ${prettyDate(article.date)}`}</span>
+          {article.source !== "SBC" && article.electronicDate && <span>Online: {prettyDate(article.electronicDate)}</span>}
+          {article.source !== "SBC" && article.language && <span className="language-tag">Idioma original: {languageName(article.language)}</span>}
+        </div>
+        {society ? (
+          <a
+            className="article-title"
+            href={article.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => trackClinicalEvent("source_click", article.topic || "all", article.source || "SBC")}
+          >
+            {article.title}
+          </a>
+        ) : (
+          <button className="article-title" onClick={() => onOpen(article)}>
+            {article.title}
+          </button>
+        )}
+        <p className="article-authors">{article.authors}</p>
+        <div className="article-bottom">
+          <span className="journal">
+            <span /> {article.journal}
+          </span>
+          {society ? (
+            <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">
+              Abrir diretriz <ArrowUpRight size={15} />
+            </a>
+          ) : (
+            <button onClick={() => onOpen(article)}>
+              Ver artigo <ArrowUpRight size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+      <BookmarkButton
+        saved={saved}
+        pending={pending}
+        className={saved ? "bookmark-button selected" : "bookmark-button"}
+        label={saved ? `Remover da biblioteca: ${article.title}` : `Salvar artigo: ${article.title}`}
+        title="Salvar na biblioteca"
+        onClick={() => onToggle(article)}
+      />
+    </article>
+  );
+}
