@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -41,10 +40,8 @@ jobs:
       - name: Install dependencies
         run: npm run install:ci
 
-      # Soft until PR #2 (lint fixes) merges into main. Step continue-on-error keeps
-      # the job check green so typecheck/build/smoke remain the hard gates.
+      # Requires the lint fixes from PR #2; lint errors must fail this job.
       - name: Lint
-        continue-on-error: true
         run: npm run lint
 
       - name: Typecheck
@@ -55,7 +52,7 @@ jobs:
 
       - name: Apply local D1 migrations
         run: |
-          persist="$(pwd)/.wrangler/state"
+          persist="$(pwd)/.sites-runtime/ci-d1"
           for file in \
             drizzle/0000_stiff_sabretooth.sql \
             drizzle/0001_fearless_reaper.sql \
@@ -79,7 +76,7 @@ jobs:
           cp .dev.vars.example .dev.vars
           printf '\nLOCAL_PREVIEW_ENABLED=true\n' >> .dev.vars
           mkdir -p .sites-runtime
-          persist="$(pwd)/.wrangler/state"
+          persist="$(pwd)/.sites-runtime/ci-d1"
 
           node --import ./scripts/sites-env.mjs \
             ./node_modules/wrangler/bin/wrangler.js d1 execute DB \
@@ -142,11 +139,22 @@ jobs:
           echo "Auth probe HTTP ${auth}: $(cat /tmp/auth-probe.json)"
           test "$auth" = "200"
 
-          echo "Node $(node -v); proxy env:"
-          env | grep -i proxy || true
+          echo "Node $(node -v)"
 
-          # Same client as smoke-test.mjs (undici fetch); log bodies if consent != 200.
-          node --input-type=module <<'EOF'
+          # Workerd local preview can return 503 when undici reuses a connection.
+          # Close each smoke connection; do not retry or accept failed assertions.
+          cat > .sites-runtime/smoke-fetch.mjs <<'EOF'
+          const originalFetch = globalThis.fetch;
+          globalThis.fetch = (input, init = {}) => {
+            const headers = new Headers(init.headers ?? (input instanceof Request ? input.headers : undefined));
+            headers.set("Connection", "close");
+            return originalFetch(input, { ...init, headers });
+          };
+          EOF
+
+          # Use the same connection policy for the probe and the smoke.
+
+          node --import ./.sites-runtime/smoke-fetch.mjs --input-type=module <<'EOF'
           const origin = "http://127.0.0.1:5173";
           async function call(path, method = "GET", data) {
             const r = await fetch(origin + path, {
@@ -167,4 +175,4 @@ jobs:
           if (statuses[3] !== 200) process.exit(1);
           EOF
 
-          node scripts/smoke-test.mjs
+          node --import ./.sites-runtime/smoke-fetch.mjs scripts/smoke-test.mjs
