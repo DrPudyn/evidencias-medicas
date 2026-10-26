@@ -1,7 +1,7 @@
 import { json, settings } from "@/lib/server";
 import { requireAdmin } from "@/lib/admin";
 
-function value(row: any) { return Number(row?.n || 0); }
+function value(row: { n?: number | null } | null | undefined) { return Number(row?.n || 0); }
 
 export async function GET(req: Request) {
   const admin = await requireAdmin(req);
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
     db.prepare("SELECT day,event,topic,source,count FROM analytics_daily_counts WHERE day>=? ORDER BY day DESC,event,topic,source").bind(from).all(),
     db.prepare("SELECT day,service,successes,errors,total_duration_ms FROM service_metrics WHERE day>=? ORDER BY day DESC,service").bind(from).all(),
     db.prepare("SELECT url,status_code,result,duration_ms,checked_at FROM catalog_link_checks ORDER BY checked_at DESC LIMIT 100").all(),
-    db.prepare("SELECT reviewed_at FROM catalog_reviews ORDER BY reviewed_at DESC LIMIT 1").first(),
+    db.prepare("SELECT reviewed_at FROM catalog_reviews ORDER BY reviewed_at DESC LIMIT 1").first<{ reviewed_at: number }>(),
     db.prepare("SELECT action,outcome,created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT 50").all(),
   ]);
 
@@ -52,7 +52,7 @@ export async function GET(req: Request) {
     sessions: value(visits), previousSessions: value(visitsPrevious),
     activeDefinition: "Visitantes únicos com métricas consentidas em pelo menos um dia do período. Não representa todas as contas ativas.",
     events: events.results, services: services.results, catalogChecks: checks.results,
-    lastCatalogReview: (reviews as any)?.reviewed_at || null, audit: audit.results,
+    lastCatalogReview: reviews?.reviewed_at || null, audit: audit.results,
     latencyPercentile: null, latencyNote: "Percentis não instrumentados; somente média agregada por dia e serviço disponível.",
     billing: { configured: false, status: "Sem provedor configurado", revenue: null },
   });
