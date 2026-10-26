@@ -151,10 +151,7 @@ db/index.ts           cliente Drizzle no binding D1 `DB`
 drizzle/              SQL 0000, 0001 e 0002
 components/           consentimento de métricas e primitivos de interface
 scripts/              instalação, dev, build, prévia e scripts/smoke-test.mjs
-examples/d1/          exemplo opcional do starter, com uma tabela notes; o tsconfig exclui essa pasta
 ```
-
-`app/chatgpt-auth.ts` ficou do starter e expõe auxiliares de identidade ChatGPT. Nenhuma página do portal importa esse módulo. O acesso implementado é o código por e-mail.
 
 `PROJETO.md`, `AUDITORIA.md` e `CONTEXTO-DO-PROJETO.md` registram etapas anteriores. `CONTEXTO-DO-PROJETO.md` (25/10/2026) avisa que parte de `PROJETO.md` ainda descreve fases locais antigas. Quando um número ou um fluxo divergir, vale o código.
 
