@@ -11,36 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Soft-fail until PR #2 (lint fixes) lands on main. Typecheck/build/smoke stay hard gates.
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22.13"
-          cache: npm
-
-      - name: Stub .openai/hosting.json
-        run: |
-          mkdir -p .openai
-          printf '%s\n' '{"d1":"DB","r2":null}' > .openai/hosting.json
-
-      - name: Install dependencies
-        run: npm run install:ci
-
-      - name: Lint
-        run: npm run lint
-
   check:
-    name: Typecheck, build, smoke
+    name: Lint, typecheck, build, smoke
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -64,6 +36,12 @@ jobs:
       - name: Install dependencies
         run: npm run install:ci
 
+      # Soft until PR #2 (lint fixes) merges into main. Step continue-on-error keeps
+      # the job check green so typecheck/build/smoke remain the hard gates.
+      - name: Lint
+        continue-on-error: true
+        run: npm run lint
+
       - name: Typecheck
         run: npx tsc --noEmit
 
@@ -85,33 +63,56 @@ jobs:
               --file "$file"
           done
 
-      # Local preview OTP path needs no RESEND_API_KEY / NCBI_API_KEY.
-      # .dev.vars.example has only non-secret local admin bootstrap settings.
-      - name: Prepare local preview vars
-        run: cp .dev.vars.example .dev.vars
-
-      - name: Start local preview
+      # Local preview OTP needs LOCAL_PREVIEW_ENABLED (no RESEND/NCBI secrets).
+      # Start preview and smoke in the same step so the worker is not killed
+      # between GitHub Actions steps.
+      - name: Smoke test (local preview)
         run: |
+          set -euo pipefail
+          cp .dev.vars.example .dev.vars
+          printf '\nLOCAL_PREVIEW_ENABLED=true\n' >> .dev.vars
           mkdir -p .sites-runtime
-          nohup npm run preview:local > .sites-runtime/preview-ci.log 2>&1 &
-          echo $! > .sites-runtime/preview-ci.pid
+          node scripts/preview-local.mjs > .sites-runtime/preview-ci.log 2>&1 &
+          preview_pid=$!
+          cleanup() {
+            kill "$preview_pid" 2>/dev/null || true
+            wait "$preview_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          ready=0
           for attempt in $(seq 1 90); do
             if curl -sf "http://127.0.0.1:5173/api/account" >/dev/null; then
               echo "Preview ready after ${attempt} attempt(s)."
-              exit 0
+              ready=1
+              break
+            fi
+            if ! kill -0 "$preview_pid" 2>/dev/null; then
+              echo "Preview process exited early. Log:"
+              cat .sites-runtime/preview-ci.log || true
+              cat .sites-runtime/preview-worker.log || true
+              exit 1
             fi
             sleep 2
           done
-          echo "Preview failed to become ready. Log:"
-          cat .sites-runtime/preview-ci.log || true
-          exit 1
-
-      - name: Smoke test
-        run: node scripts/smoke-test.mjs
-
-      - name: Stop local preview
-        if: always()
-        run: |
-          if [ -f .sites-runtime/preview-ci.pid ]; then
-            kill "$(cat .sites-runtime/preview-ci.pid)" 2>/dev/null || true
+          if [ "$ready" -ne 1 ]; then
+            echo "Preview failed to become ready. Log:"
+            cat .sites-runtime/preview-ci.log || true
+            cat .sites-runtime/preview-worker.log || true
+            exit 1
           fi
+
+          # Confirm OTP preview mode before the full smoke suite.
+          probe=$(curl -s -o /tmp/preview-probe.json -w '%{http_code}' \
+            -X POST "http://127.0.0.1:5173/api/auth/request" \
+            -H 'Content-Type: application/json' \
+            -H 'Origin: http://127.0.0.1:5173' \
+            -d '{"mode":"register","role":"student","name":"Probe CI","college":"Faculdade CI","state":"MG","email":"probe-ci@example.test","phone":"","emailNotifications":false,"whatsappNotifications":false,"privacyConsent":true}')
+          echo "Preview probe HTTP ${probe}: $(cat /tmp/preview-probe.json)"
+          if [ "$probe" != "200" ]; then
+            echo "LOCAL_PREVIEW_ENABLED path not active; refusing to run smoke."
+            cat .sites-runtime/preview-worker.log || true
+            exit 1
+          fi
+
+          node scripts/smoke-test.mjs
