@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Soft-fail until PR #2 (lint fixes) lands on main. Typecheck/build/smoke stay hard gates.
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: npm
+
+      - name: Stub .openai/hosting.json
+        run: |
+          mkdir -p .openai
+          printf '%s\n' '{"d1":"DB","r2":null}' > .openai/hosting.json
+
+      - name: Install dependencies
+        run: npm run install:ci
+
+      - name: Lint
+        run: npm run lint
+
+  check:
+    name: Typecheck, build, smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13"
+          cache: npm
+
+      # .openai/ is gitignored; Vite imports .openai/hosting.json at config load.
+      # Non-secret local stub only (same shape previous agents used locally).
+      - name: Stub .openai/hosting.json
+        run: |
+          mkdir -p .openai
+          printf '%s\n' '{"d1":"DB","r2":null}' > .openai/hosting.json
+
+      - name: Install dependencies
+        run: npm run install:ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Apply local D1 migrations
+        run: |
+          for file in \
+            drizzle/0000_stiff_sabretooth.sql \
+            drizzle/0001_fearless_reaper.sql \
+            drizzle/0002_global_integration_limits.sql
+          do
+            node --import ./scripts/sites-env.mjs \
+              ./node_modules/wrangler/bin/wrangler.js d1 execute DB \
+              --local \
+              --config dist/server/wrangler.json \
+              --persist-to .wrangler/state \
+              --file "$file"
+          done
+
+      # Local preview OTP path needs no RESEND_API_KEY / NCBI_API_KEY.
+      # .dev.vars.example has only non-secret local admin bootstrap settings.
+      - name: Prepare local preview vars
+        run: cp .dev.vars.example .dev.vars
+
+      - name: Start local preview
+        run: |
+          mkdir -p .sites-runtime
+          nohup npm run preview:local > .sites-runtime/preview-ci.log 2>&1 &
+          echo $! > .sites-runtime/preview-ci.pid
+          for attempt in $(seq 1 90); do
+            if curl -sf "http://127.0.0.1:5173/api/account" >/dev/null; then
+              echo "Preview ready after ${attempt} attempt(s)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Preview failed to become ready. Log:"
+          cat .sites-runtime/preview-ci.log || true
+          exit 1
+
+      - name: Smoke test
+        run: node scripts/smoke-test.mjs
+
+      - name: Stop local preview
+        if: always()
+        run: |
+          if [ -f .sites-runtime/preview-ci.pid ]; then
+            kill "$(cat .sites-runtime/preview-ci.pid)" 2>/dev/null || true
+          fi
