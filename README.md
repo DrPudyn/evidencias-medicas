@@ -74,15 +74,14 @@ npm ci
 
 `npm run install:ci` é o instalador travado do repositório. No perfil portátil ele também chama `npm ci`, com as dependências de desenvolvimento e opcionais incluídas.
 
-`vite.config.ts` importa `.openai/hosting.json`. A pasta `.openai/` está no `.gitignore`, então o arquivo não vem no clone. Sem ele, o Vite não carrega a configuração e o build não copia o arquivo para `dist/.openai/hosting.json`. Crie o arquivo só na máquina local. `db/index.ts` espera o binding D1 com o nome `DB`:
+`vite.config.ts` importa `.openai/hosting.json`. A pasta `.openai/` está no `.gitignore`, então o arquivo não vem no clone. Sem ele, o Vite não carrega a configuração e o build não copia o arquivo para `dist/.openai/hosting.json`. Crie o arquivo só na máquina local. `db/index.ts` espera o binding D1 com o nome `DB`. `vite.config.ts` também lê `r2`; a chave precisa existir para o TypeScript aceitar o JSON importado. Com `null`, nenhum bucket R2 é criado. O portal persiste dados no D1:
 
 ```json
 {
-  "d1": "DB"
+  "d1": "DB",
+  "r2": null
 }
 ```
-
-O campo `r2` é lido pela configuração do Vite quando existe. O portal persiste dados no D1.
 
 ```sh
 npm run dev
@@ -180,7 +179,7 @@ O que segue pendente de validação operacional:
 - Acervo completo da SBC, proveniência versionada e observabilidade além da média diária.
 - Alertas de conteúdo. As preferências de e-mail e WhatsApp são gravadas; o envio não está implementado.
 
-Compilar, passar no smoke test local e operar em produção são verificações diferentes. O smoke test de 17/10/2026 não foi repetido nesta atualização de documentação.
+Compilar, passar no smoke test local e operar em produção são verificações diferentes. Nesta atualização de documentação, em 26/10/2026, `npx tsc --noEmit` e `npm run build` passaram de novo. O build repetiu o aviso de rotas `Unknown` na classificação estática. `node scripts/smoke-test.mjs` não foi executado outra vez.
 
 ## Scripts
 
