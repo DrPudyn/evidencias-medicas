@@ -50,6 +50,7 @@ jobs:
 
       - name: Apply local D1 migrations
         run: |
+          persist="$(pwd)/.wrangler/state"
           for file in \
             drizzle/0000_stiff_sabretooth.sql \
             drizzle/0001_fearless_reaper.sql \
@@ -59,20 +60,40 @@ jobs:
               ./node_modules/wrangler/bin/wrangler.js d1 execute DB \
               --local \
               --config dist/server/wrangler.json \
-              --persist-to .wrangler/state \
+              --persist-to "$persist" \
               --file "$file"
           done
 
-      # Local preview OTP needs LOCAL_PREVIEW_ENABLED (no RESEND/NCBI secrets).
-      # Start preview and smoke in the same step so the worker is not killed
-      # between GitHub Actions steps.
+      # Local OTP preview needs LOCAL_PREVIEW_ENABLED (no RESEND/NCBI secrets).
+      # Run wrangler on :5173 directly (same persist/bindings as preview:local) so
+      # smoke hits the Worker without the Node proxy in scripts/preview-local.mjs,
+      # which can turn multi Set-Cookie responses into opaque 503s on Actions.
       - name: Smoke test (local preview)
         run: |
           set -euo pipefail
           cp .dev.vars.example .dev.vars
           printf '\nLOCAL_PREVIEW_ENABLED=true\n' >> .dev.vars
           mkdir -p .sites-runtime
-          node scripts/preview-local.mjs > .sites-runtime/preview-ci.log 2>&1 &
+          persist="$(pwd)/.wrangler/state"
+
+          node --import ./scripts/sites-env.mjs \
+            ./node_modules/wrangler/bin/wrangler.js d1 execute DB \
+            --local --config dist/server/wrangler.json --persist-to "$persist" \
+            --command "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'analytics_%' ORDER BY name" \
+            | tee .sites-runtime/d1-tables.log
+          grep -q analytics_visitors .sites-runtime/d1-tables.log
+
+          node --import ./scripts/sites-env.mjs \
+            ./node_modules/wrangler/bin/wrangler.js dev \
+            --config dist/server/wrangler.json \
+            --local --persist-to "$persist" \
+            --ip 127.0.0.1 --port 5173 --inspector-port 0 --log-level warn \
+            --var LOCAL_PREVIEW_ENABLED:true \
+            --var ADMIN_RP_ID:localhost \
+            --var 'ADMIN_ORIGIN:http://127.0.0.1:5173' \
+            --var ADMIN_BOOTSTRAP_ENABLED:true \
+            --var 'ADMIN_EMAILS:evidenciasmedicas@outlook.com' \
+            > .sites-runtime/preview-ci.log 2>&1 &
           preview_pid=$!
           cleanup() {
             kill "$preview_pid" 2>/dev/null || true
@@ -90,7 +111,6 @@ jobs:
             if ! kill -0 "$preview_pid" 2>/dev/null; then
               echo "Preview process exited early. Log:"
               cat .sites-runtime/preview-ci.log || true
-              cat .sites-runtime/preview-worker.log || true
               exit 1
             fi
             sleep 2
@@ -98,21 +118,23 @@ jobs:
           if [ "$ready" -ne 1 ]; then
             echo "Preview failed to become ready. Log:"
             cat .sites-runtime/preview-ci.log || true
-            cat .sites-runtime/preview-worker.log || true
             exit 1
           fi
 
-          # Confirm OTP preview mode before the full smoke suite.
-          probe=$(curl -s -o /tmp/preview-probe.json -w '%{http_code}' \
+          consent=$(curl -s -o /tmp/consent-probe.json -w '%{http_code}' \
+            -X POST "http://127.0.0.1:5173/api/analytics/consent" \
+            -H 'Content-Type: application/json' \
+            -H 'Origin: http://127.0.0.1:5173' \
+            -d '{"consent":false}')
+          echo "Consent probe HTTP ${consent}: $(cat /tmp/consent-probe.json)"
+          test "$consent" = "200"
+
+          auth=$(curl -s -o /tmp/auth-probe.json -w '%{http_code}' \
             -X POST "http://127.0.0.1:5173/api/auth/request" \
             -H 'Content-Type: application/json' \
             -H 'Origin: http://127.0.0.1:5173' \
             -d '{"mode":"register","role":"student","name":"Probe CI","college":"Faculdade CI","state":"MG","email":"probe-ci@example.test","phone":"","emailNotifications":false,"whatsappNotifications":false,"privacyConsent":true}')
-          echo "Preview probe HTTP ${probe}: $(cat /tmp/preview-probe.json)"
-          if [ "$probe" != "200" ]; then
-            echo "LOCAL_PREVIEW_ENABLED path not active; refusing to run smoke."
-            cat .sites-runtime/preview-worker.log || true
-            exit 1
-          fi
+          echo "Auth probe HTTP ${auth}: $(cat /tmp/auth-probe.json)"
+          test "$auth" = "200"
 
           node scripts/smoke-test.mjs
