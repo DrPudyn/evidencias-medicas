@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, BookOpen, SlidersHorizontal } from "lucide-react";
-import { societyForSpecialty } from "@/data/catalogo/societies";
+import { guidelinesForSpecialty } from "@/data/catalogo";
 import { medicalSpecialties } from "@/lib/catalog";
 import type { BrowseModel } from "@/components/cardio/catalog-query";
 import type { BrowseState } from "@/hooks/use-browse";
@@ -31,9 +31,10 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
             browse.setPage(1);
             browse.setPeriod("all");
             browse.setFree(false);
-            if (browse.tab === "sbc" && !societyForSpecialty(next)) browse.setTab("live");
+            const hasDocuments = guidelinesForSpecialty(next).length > 0;
+            if (browse.tab === "sbc" && !hasDocuments) browse.setTab("live");
             if (browse.tab === "collection" && next !== "cardiology" && next !== "endocrinology") {
-              browse.setTab(societyForSpecialty(next) ? "sbc" : "live");
+              browse.setTab(hasDocuments ? "sbc" : "live");
             }
           }}
         >
@@ -148,4 +149,3 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
     </aside>
   );
 }
-

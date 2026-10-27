@@ -94,9 +94,9 @@ export type BrowseModelInput = {
 export function browseModel(input: BrowseModelInput) {
   const guidelineSource = guidelineSourceFor(input.specialty);
   const society = societyForSpecialty(input.specialty);
-  const hasBrazilianCatalog = Boolean(society);
-  const hasClassics = input.specialty === "cardiology" || input.specialty === "endocrinology";
   const activeGuidelines = guidelinesForSpecialty(input.specialty);
+  const hasBrazilianCatalog = activeGuidelines.length > 0;
+  const hasClassics = input.specialty === "cardiology" || input.specialty === "endocrinology";
   const activeTopics = specialtyTopicSets[input.specialty] || generalTopics;
   const activeCollection = input.specialty === "endocrinology" ? endocrinologyCollection : collection;
   const shown =

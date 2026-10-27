@@ -58,6 +58,7 @@ export function ResultsPanel({
         {tabs.map(([value, label]) => (
           <button role="tab" aria-selected={browse.tab === value} className={browse.tab === value ? "active" : ""} key={value} onClick={() => onChooseTab(value)}>
             {tabIcon(value)} {label}
+            {value === "sbc" && <span className="count-badge">{model.activeGuidelines.length}</span>}
             {value === "saved" && saved.length > 0 && <span className="count-badge">{saved.length}</span>}
           </button>
         ))}

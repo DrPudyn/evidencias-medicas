@@ -12,7 +12,7 @@ O nome do pacote npm é `evidencias-medicas`.
 
 Títulos, resumos e o idioma devolvido pelo PubMed permanecem os do registro original. `lib/catalog.ts` mapeia alguns conceitos em português para termos de consulta. Esse mapeamento só entra na query; o artigo não é traduzido.
 
-O seletor lista 55 especialidades e identifica 54 sociedades (Angiologia e Cirurgia Vascular compartilham a SBACV). Cada especialidade exibe a aba da sociedade ao lado do PubMed. Há 225 documentos catalogados, com conteúdo em 39 especialidades; as demais exibem um estado vazio e acesso ao site oficial, sem afirmar inexistência de diretrizes.
+O seletor lista 55 especialidades e identifica 54 sociedades (Angiologia e Cirurgia Vascular compartilham a SBACV). As 39 especialidades com documentos cadastrados exibem a aba da sociedade ao lado do PubMed, com a quantidade disponível. Há 225 documentos catalogados, com conteúdo em 39 especialidades; as demais continuam com a busca PubMed, sem abas vazias. O cadastro de sociedades conserva os links oficiais para expansão futura.
 
 `GET /api/articles/[id]` carrega o resumo estruturado do PMID, também no idioma original, e a interface aponta o link do PubMed.
 
