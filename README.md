@@ -1,6 +1,6 @@
 # Evidências Médicas
 
-Portal para localizar literatura científica e documentos de sociedades médicas, com foco inicial em Cardiologia e Endocrinologia e Metabologia. O site ajuda a encontrar a fonte original e a guardá-la na biblioteca da conta. A ordenação da busca no PubMed segue a data de publicação ou a relevância da consulta; ela não é uma nota automática de qualidade da evidência.
+Portal para localizar literatura científica e documentos de sociedades médicas, com seleção de documentos de sociedades de diversas especialidades. O site ajuda a encontrar a fonte original e a guardá-la na biblioteca da conta. A ordenação da busca no PubMed segue a data de publicação ou a relevância da consulta; ela não é uma nota automática de qualidade da evidência.
 
 O nome do pacote npm é `evidencias-medicas`.
 
@@ -12,7 +12,7 @@ O nome do pacote npm é `evidencias-medicas`.
 
 Títulos, resumos e o idioma devolvido pelo PubMed permanecem os do registro original. `lib/catalog.ts` mapeia alguns conceitos em português para termos de consulta. Esse mapeamento só entra na query; o artigo não é traduzido.
 
-O seletor lista as especialidades médicas do CFM. Os catálogos de documentos de sociedade existem para Cardiologia (SBC) e Endocrinologia e Metabologia (SBEM). As outras especialidades consultam o PubMed com temas locais.
+O seletor lista 55 especialidades e identifica 54 sociedades (Angiologia e Cirurgia Vascular compartilham a SBACV). Cada especialidade exibe a aba da sociedade ao lado do PubMed. Há 225 documentos catalogados, com conteúdo em 39 especialidades; as demais exibem um estado vazio e acesso ao site oficial, sem afirmar inexistência de diretrizes.
 
 `GET /api/articles/[id]` carrega o resumo estruturado do PMID, também no idioma original, e a interface aponta o link do PubMed.
 
@@ -20,12 +20,14 @@ A busca guarda em memória até 100 respostas por cinco minutos. A chave é um h
 
 `NCBI_CONTACT_EMAIL` e `NCBI_API_KEY` só são enviados à NCBI quando estão preenchidos. Nos exemplos do repositório os dois campos estão vazios.
 
-### Catálogos SBC e SBEM
+### Catálogos de sociedades médicas
 
-`lib/catalog.ts` traz uma seleção estática:
+`data/catalogo/` contém os dados versionados e validados; `lib/catalog.ts` mantém as exportações legadas:
 
 - 32 documentos da SBC em `brazilianGuidelines`, de 2004 a 2026, com tema, tipo, ano e escopo.
 - 17 documentos da SBEM, ou elaborados com participação da sociedade, em `endocrineGuidelines`.
+- 176 documentos adicionais de acesso integral gratuito, conferidos em 27/10/2026 no PubMed Central e nos portais oficiais SBGM, ANAMT, SBMN e Femina/FEBRASGO. Cada item informa fonte, sociedade, ano e data de acesso. Documentos conjuntos aparecem nas especialidades das entidades participantes.
+- [Cobertura por especialidade e critérios de inclusão](data/catalogo/README.md).
 - Três estudos clássicos de cardiologia em `collection` e três de endocrinologia em `endocrinologyCollection`, com link para o registro PubMed.
 
 Os links abrem a publicação original. O repositório não incorpora o texto integral desses documentos. A seleção local não cobre o acervo oficial inteiro. “Registrar revisão editorial” grava a data da revisão; não há fila, versão nem reversão.
@@ -157,7 +159,7 @@ scripts/              instalação, dev, build, prévia e scripts/smoke-test.mjs
 
 ## Estado conhecido
 
-O código contém a busca PubMed, os catálogos SBC/SBEM, o login por código, perfil, favoritos, `/admin` com WebAuthn e as métricas com consentimento.
+O código contém a busca PubMed, os catálogos de sociedades médicas, o login por código, perfil, favoritos, `/admin` com WebAuthn e as métricas com consentimento.
 
 `AUDITORIA.md` e `PROJETO.md`, com revisão datada de 17/10/2026, registram o que foi executado naquela etapa:
 
@@ -193,3 +195,10 @@ Compilar, passar no smoke test local e operar em produção são verificações 
 - [E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25499/)
 - [Vinext](https://github.com/cloudflare/vinext)
 - [Drizzle com D1](https://orm.drizzle.team/docs/get-started/d1-new)
+
+
+## Ampliação dos catálogos — 27/10/2026
+
+A interface usa um cadastro de sociedades por especialidade, com IDs distintos para siglas homônimas. A biblioteca resolve documentos pelo cadastro do servidor, preservando URL, autoria e fonte mesmo quando a entrada do cliente é adulterada. Busca por tema em português, filtros por tipo/ano, métricas consentidas e estudos clássicos foram preservados.
+
+Validação desta alteração: TypeScript, compilação, teste dos 225 registros e das 55 especialidades, e teste do Worker compilado com D1 local (autenticação, isolamento, favoritos e rejeição de fontes adulteradas), sem chamadas externas. ESLint: sem erros; 11 avisos preexistentes. A checagem visual não foi executada: o navegador recusou a abertura da prévia local. A atualização no GitHub não equivale à publicação do site.

@@ -81,13 +81,13 @@ export default function CardioApp() {
   }
 
   function showInitialCollection() {
-    browse.setTab(browse.specialty ? "collection" : "live");
+    browse.setTab(model.hasClassics ? "collection" : model.hasBrazilianCatalog ? "sbc" : "live");
     browse.reset();
   }
 
   function clearResults() {
     browse.reset();
-    if (browse.tab === "saved") browse.setTab(browse.specialty ? "collection" : "live");
+    if (browse.tab === "saved") browse.setTab(model.hasClassics ? "collection" : model.hasBrazilianCatalog ? "sbc" : "live");
   }
 
   function tryGuideExample() {
@@ -164,3 +164,4 @@ export default function CardioApp() {
     </>
   );
 }
+

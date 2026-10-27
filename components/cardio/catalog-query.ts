@@ -1,7 +1,5 @@
 import {
-  brazilianGuidelines,
   collection,
-  endocrineGuidelines,
   endocrinologyCollection,
   generalTopics,
   normalized,
@@ -11,6 +9,9 @@ import {
   type Article,
   type BrazilianGuideline,
 } from "@/lib/catalog";
+
+import { guidelinesForSpecialty } from "@/data/catalogo";
+import { societyById, societyForSpecialty } from "@/data/catalogo/societies";
 
 const QUERY_STOP_WORDS = new Set([
   "e",
@@ -32,8 +33,8 @@ const QUERY_STOP_WORDS = new Set([
   "of",
 ]);
 
-export function guidelineSourceFor(specialty: string): "SBEM" | "SBC" {
-  return specialty === "endocrinology" ? "SBEM" : "SBC";
+export function guidelineSourceFor(specialty: string): string {
+  return societyForSpecialty(specialty)?.id || "local";
 }
 
 export function guidelineTopicsOf(guideline: BrazilianGuideline) {
@@ -60,17 +61,18 @@ function matchesLocalArticle(article: Article, query: string, topic: string, typ
   );
 }
 
-export function guidelineToArticle(guideline: BrazilianGuideline, source: "SBEM" | "SBC"): Article {
+export function guidelineToArticle(guideline: BrazilianGuideline, source: string): Article {
   return {
     id: guideline.id,
     title: guideline.title,
-    journal: source === "SBEM" ? "Archives of Endocrinology and Metabolism" : "Arquivos Brasileiros de Cardiologia",
+    journal: guideline.journal || (source === "SBEM" ? "Archives of Endocrinology and Metabolism" : source === "SBC" ? "Arquivos Brasileiros de Cardiologia" : "Publicação da sociedade"),
     date: String(guideline.year),
-    authors: guideline.authorship || `Sociedade Brasileira de ${source === "SBEM" ? "Endocrinologia e Metabologia" : "Cardiologia"}`,
+    authors: guideline.authorship || societyById(source)?.name || source,
     type: guideline.kind,
     topic: guideline.topic,
     url: guideline.url,
-    source,
+    source: guideline.provenance.society,
+    language: guideline.language,
     year: guideline.year,
   };
 }
@@ -91,9 +93,10 @@ export type BrowseModelInput = {
 
 export function browseModel(input: BrowseModelInput) {
   const guidelineSource = guidelineSourceFor(input.specialty);
-  const hasBrazilianCatalog = input.specialty === "cardiology" || input.specialty === "endocrinology";
+  const society = societyForSpecialty(input.specialty);
+  const hasBrazilianCatalog = Boolean(society);
   const hasClassics = input.specialty === "cardiology" || input.specialty === "endocrinology";
-  const activeGuidelines = input.specialty === "endocrinology" ? endocrineGuidelines : brazilianGuidelines;
+  const activeGuidelines = guidelinesForSpecialty(input.specialty);
   const activeTopics = specialtyTopicSets[input.specialty] || generalTopics;
   const activeCollection = input.specialty === "endocrinology" ? endocrinologyCollection : collection;
   const shown =
@@ -106,7 +109,8 @@ export function browseModel(input: BrowseModelInput) {
     for (const key of guidelineTopicsOf(guideline)) counts[key] = (counts[key] || 0) + 1;
     return counts;
   }, { all: activeGuidelines.length });
-  const sbcVisibleTopics = activeTopics.filter(([value]) => input.tab !== "sbc" || value === "all" || (sbcTopicCounts[value] || 0) > 0);
+  const guidelineTopics = [...activeTopics, ...topics.filter(([key]) => !activeTopics.some(([value]) => value === key) && (sbcTopicCounts[key] || 0) > 0)];
+  const sbcVisibleTopics = (input.tab === "sbc" ? guidelineTopics : activeTopics).filter(([value]) => input.tab !== "sbc" || value === "all" || (sbcTopicCounts[value] || 0) > 0);
   const sbcKinds = Array.from(new Set(activeGuidelines.map((guideline) => guideline.kind))).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const sbcYears = Array.from(new Set(activeGuidelines.map((guideline) => guideline.year))).sort((a, b) => b - a);
   const sbcMatches = activeGuidelines
@@ -136,6 +140,8 @@ export function browseModel(input: BrowseModelInput) {
     (input.free ? 1 : 0);
   return {
     guidelineSource,
+    society,
+    societyLabel: society?.abbreviation || "Sociedade",
     hasBrazilianCatalog,
     hasClassics,
     activeGuidelines,
@@ -152,3 +158,4 @@ export function browseModel(input: BrowseModelInput) {
 }
 
 export type BrowseModel = ReturnType<typeof browseModel>;
+

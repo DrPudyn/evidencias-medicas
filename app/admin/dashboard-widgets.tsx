@@ -1,4 +1,5 @@
 "use client";
+import { societies, societyById } from "@/data/catalogo/societies";
 import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar, BarChart } from "recharts";
 type EventRow = { day: string; event: string; topic: string; source: string; count: number };
@@ -41,7 +42,7 @@ export function SourceChart({ events }: { events: EventRow[] }) {
   const rows = useMemo(() => {
     const totals = new Map<string, number>();
     for (const item of events) totals.set(item.source, (totals.get(item.source) || 0) + Number(item.count || 0));
-    return ["PubMed", "SBC", "local", "all"].filter((source) => totals.has(source)).map((source) => ({ source: source === "all" ? "Geral" : source, count: totals.get(source) || 0 }));
+    return ["PubMed", ...societies.map(s => s.id), "local", "all"].filter((source) => totals.has(source)).map((source) => ({ source: source === "all" ? "Geral" : societyById(source)?.abbreviation || source, count: totals.get(source) || 0 }));
   }, [events]);
   if (!rows.length) return <EmptyMetric>Distribuição por fonte ainda sem dados.</EmptyMetric>;
   const selected = rows.find((row) => row.source === selectedSource);
@@ -84,3 +85,4 @@ export function SystemFlow({ services, catalogChecks, now }: { services: Service
     <div className="admin-flow-detail"><span className={`admin-status-dot status-${active.status}`}/><strong>{active.label}</strong><span>{active.detail}</span></div>
   </div>;
 }
+

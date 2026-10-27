@@ -44,12 +44,12 @@ export function ResultsPanel({
     ...(model.hasClassics ? [["collection", "Estudos clássicos"] as [string, string]] : []),
     ["live", "Artigos PubMed"],
     ...(model.hasBrazilianCatalog
-      ? [["sbc", browse.specialty === "endocrinology" ? "Diretrizes SBEM" : "Diretrizes SBC"] as [string, string]]
+      ? [["sbc", `Diretrizes ${model.societyLabel}`] as [string, string]]
       : []),
     ["saved", "Minha biblioteca"],
   ];
   const totalLabel = browse.tab === "live" ? browse.count.toLocaleString("pt-BR") : browse.tab === "sbc" ? model.sbcMatches.length : model.shown.length;
-  const noun = browse.tab === "live" ? "resultados" : browse.tab === "sbc" ? `documentos ${model.guidelineSource.toLocaleUpperCase("pt-BR")}` : "artigos";
+  const noun = browse.tab === "live" ? "resultados" : browse.tab === "sbc" ? `documentos ${model.societyLabel}` : "artigos";
   const pageCount = Math.min(100, Math.ceil(browse.count / 12));
 
   return (
@@ -65,19 +65,19 @@ export function ResultsPanel({
       <form className="results-search" onSubmit={browse.search}>
         <Search size={18} />
         <input
-          aria-label={browse.tab === "sbc" ? `Buscar nas diretrizes da ${model.guidelineSource}` : "Refinar busca de artigos"}
+          aria-label={browse.tab === "sbc" ? `Buscar nas diretrizes da ${model.societyLabel}` : "Refinar busca de artigos"}
           placeholder={browse.tab === "sbc" ? "Buscar diretriz, tema ou especialidade..." : "Doença, medicamento, autor ou PMID..."}
           value={browse.q}
           onChange={(event) => browse.setQ(event.target.value)}
           maxLength={200}
         />
-        <button aria-label={browse.tab === "sbc" ? `Buscar nas diretrizes ${model.guidelineSource}` : "Pesquisar no PubMed"}>
+        <button aria-label={browse.tab === "sbc" ? `Buscar nas diretrizes ${model.societyLabel}` : "Pesquisar no PubMed"}>
           <ArrowRight size={19} />
         </button>
       </form>
       <div className="results-toolbar">
         <span>
-          {browse.loading ? (
+          {browse.loading && browse.tab === "live" ? (
             "Consultando o PubMed..."
           ) : (
             <>
@@ -210,3 +210,4 @@ export function ResultsPanel({
     </div>
   );
 }
+

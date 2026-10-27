@@ -21,7 +21,7 @@ export function ArticleCard({
   onOpen: (article: Article) => void;
   onToggle: (article: Article) => void;
 }) {
-  const society = article.source === "SBC" || article.source === "SBEM";
+  const society = Boolean(article.source && article.source !== "PubMed" && article.source !== "local");
   return (
     <article className="article-card">
       <div className="article-number">{number}</div>
@@ -74,3 +74,4 @@ export function ArticleCard({
     </article>
   );
 }
+

@@ -6,7 +6,7 @@ import ts from 'typescript';
 const source = readFileSync(new URL('../data/catalogo/schema.ts', import.meta.url), 'utf8');
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
 const { catalogSchema } = await import(`data:text/javascript,${encodeURIComponent(outputText.replace('from "zod"', `from ${JSON.stringify(import.meta.resolve('zod'))}`))}`);
-for (const society of ['sbc', 'sbem']) {
+for (const society of ['sbc', 'sbem', 'additional']) {
   const data = JSON.parse(readFileSync(new URL(`../data/catalogo/${society}.json`, import.meta.url), 'utf8'));
   catalogSchema.parse(data);
   for (const item of data.items) {
@@ -24,3 +24,4 @@ for (const society of ['sbc', 'sbem']) {
   assert.equal(catalogSchema.safeParse(broken).success, false);
   console.log(`PASS: catálogo ${society.toUpperCase()}, ${data.items.length} itens; proveniência obrigatória.`);
 }
+

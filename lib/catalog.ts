@@ -1,5 +1,5 @@
 import { sbcCatalog, sbemCatalog } from "../data/catalogo";
-export type Article = { id: string; title: string; journal: string; date: string; electronicDate?: string; authors: string; type: string; topic: string; doi?: string; url: string; source?: "SBC" | "SBEM" | "PubMed"; year?: number; language?: string };
+export type Article = { id: string; title: string; journal: string; date: string; electronicDate?: string; authors: string; type: string; topic: string; doi?: string; url: string; source?: string; year?: number; language?: string };
 export type AbstractSection = { label: string; text: string };
 export type { BrazilianGuideline } from "../data/catalogo/schema";
 // Specialty names follow the official CME/CFM list. Search aliases are English
@@ -256,7 +256,7 @@ export const specialtyTopicSets: Record<string, readonly ClinicalTopic[]> = {
  cardiology: cardiologyTopics,
  endocrinology: endocrinologyTopics,
 };
-export const topics = [...cardiologyTopics, ...endocrinologyTopics.slice(1), ...Object.values(topicBank)] as const;
+export const topics = [...cardiologyTopics, ...endocrinologyTopics.slice(1), ...Object.values(topicBank), ["med-guidelines", "Outros temas da especialidade", ""]] as const;
 export const states = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
 // Landmark cardiology studies verified against their PubMed records.
 export const collection: Article[] = [
@@ -460,3 +460,4 @@ export function buildPubmedClinicalTerm(specialty: string, topicId: string, inpu
  if (words) terms.push(words);
  return terms.join(" AND ");
 }
+

@@ -1,0 +1,543 @@
+[
+  {
+    "id": "CMBA",
+    "abbreviation": "CMBA",
+    "name": "Colégio Médico Brasileiro de Acupuntura",
+    "specialties": [
+      "acupuncture"
+    ],
+    "url": "https://cmba.org.br/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ASBAI",
+    "abbreviation": "ASBAI",
+    "name": "Associação Brasileira de Alergia e Imunologia",
+    "specialties": [
+      "allergy-immunology"
+    ],
+    "url": "https://asbai.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBA",
+    "abbreviation": "SBA",
+    "name": "Sociedade Brasileira de Anestesiologia",
+    "specialties": [
+      "anesthesiology"
+    ],
+    "url": "https://sbahq.org",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBACV",
+    "abbreviation": "SBACV",
+    "name": "Sociedade Brasileira de Angiologia e de Cirurgia Vascular",
+    "specialties": [
+      "angiology",
+      "vascular-surgery"
+    ],
+    "url": "https://sbacv.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBC",
+    "abbreviation": "SBC",
+    "name": "Sociedade Brasileira de Cardiologia",
+    "specialties": [
+      "cardiology"
+    ],
+    "url": "https://www.portal.cardiol.br/diretrizes",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCCV",
+    "abbreviation": "SBCCV",
+    "name": "Sociedade Brasileira de Cirurgia Cardiovascular",
+    "specialties": [
+      "cardiovascular-surgery"
+    ],
+    "url": "https://sbccv.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCM-hand-surgery",
+    "abbreviation": "SBCM",
+    "name": "Sociedade Brasileira de Cirurgia da Mão",
+    "specialties": [
+      "hand-surgery"
+    ],
+    "url": "https://cirurgiadamao.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCCP",
+    "abbreviation": "SBCCP",
+    "name": "Sociedade Brasileira de Cirurgia de Cabeça e Pescoço",
+    "specialties": [
+      "head-neck-surgery"
+    ],
+    "url": "https://sbccp.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "CBCD",
+    "abbreviation": "CBCD",
+    "name": "Colégio Brasileiro de Cirurgia Digestiva",
+    "specialties": [
+      "digestive-surgery"
+    ],
+    "url": "https://cbcd.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "CBC",
+    "abbreviation": "CBC",
+    "name": "Colégio Brasileiro de Cirurgiões",
+    "specialties": [
+      "general-surgery"
+    ],
+    "url": "https://cbc.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCO",
+    "abbreviation": "SBCO",
+    "name": "Sociedade Brasileira de Cirurgia Oncológica",
+    "specialties": [
+      "surgical-oncology"
+    ],
+    "url": "https://sbco.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "CIPE",
+    "abbreviation": "CIPE",
+    "name": "Sociedade Brasileira de Cirurgia Pediátrica",
+    "specialties": [
+      "pediatric-surgery"
+    ],
+    "url": "https://cipe.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCP-plastic-surgery",
+    "abbreviation": "SBCP",
+    "name": "Sociedade Brasileira de Cirurgia Plástica",
+    "specialties": [
+      "plastic-surgery"
+    ],
+    "url": "https://cirurgiaplastica.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCT",
+    "abbreviation": "SBCT",
+    "name": "Sociedade Brasileira de Cirurgia Torácica",
+    "specialties": [
+      "thoracic-surgery"
+    ],
+    "url": "https://sbct.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCM-internal-medicine",
+    "abbreviation": "SBCM",
+    "name": "Sociedade Brasileira de Clínica Médica",
+    "specialties": [
+      "internal-medicine"
+    ],
+    "url": "https://sbcm.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBCP-coloproctology",
+    "abbreviation": "SBCP",
+    "name": "Sociedade Brasileira de Coloproctologia",
+    "specialties": [
+      "coloproctology"
+    ],
+    "url": "https://sbcp.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBD",
+    "abbreviation": "SBD",
+    "name": "Sociedade Brasileira de Dermatologia",
+    "specialties": [
+      "dermatology"
+    ],
+    "url": "https://sbd.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBEM",
+    "abbreviation": "SBEM",
+    "name": "Sociedade Brasileira de Endocrinologia e Metabologia",
+    "specialties": [
+      "endocrinology"
+    ],
+    "url": "https://www.endocrino.org.br/diretrizes-da-sbem/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SOBED",
+    "abbreviation": "SOBED",
+    "name": "Sociedade Brasileira de Endoscopia Digestiva",
+    "specialties": [
+      "endoscopy"
+    ],
+    "url": "https://sobed.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "FBG",
+    "abbreviation": "FBG",
+    "name": "Federação Brasileira de Gastroenterologia",
+    "specialties": [
+      "gastroenterology"
+    ],
+    "url": "https://fbg.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBGM",
+    "abbreviation": "SBGM",
+    "name": "Sociedade Brasileira de Genética Médica e Genômica",
+    "specialties": [
+      "medical-genetics"
+    ],
+    "url": "https://www.sbgm.org.br/diretrizes.aspx",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBGG",
+    "abbreviation": "SBGG",
+    "name": "Sociedade Brasileira de Geriatria e Gerontologia",
+    "specialties": [
+      "geriatrics"
+    ],
+    "url": "https://sbgg.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "FEBRASGO",
+    "abbreviation": "FEBRASGO",
+    "name": "Federação Brasileira das Associações de Ginecologia e Obstetrícia",
+    "specialties": [
+      "ob-gyn"
+    ],
+    "url": "https://femina.org.br/article-section/febrasgo-position-statement-pt-br/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABHH",
+    "abbreviation": "ABHH",
+    "name": "Associação Brasileira de Hematologia, Hemoterapia e Terapia Celular",
+    "specialties": [
+      "hematology"
+    ],
+    "url": "https://abhhoficial.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "AMHB",
+    "abbreviation": "AMHB",
+    "name": "Associação Médica Homeopática Brasileira",
+    "specialties": [
+      "homeopathy"
+    ],
+    "url": "https://amhb.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBI",
+    "abbreviation": "SBI",
+    "name": "Sociedade Brasileira de Infectologia",
+    "specialties": [
+      "infectious-disease"
+    ],
+    "url": "https://infectologia.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBM",
+    "abbreviation": "SBM",
+    "name": "Sociedade Brasileira de Mastologia",
+    "specialties": [
+      "mastology"
+    ],
+    "url": "https://sbmastologia.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABRAMEDE",
+    "abbreviation": "ABRAMEDE",
+    "name": "Associação Brasileira de Medicina de Emergência",
+    "specialties": [
+      "emergency-medicine"
+    ],
+    "url": "https://portal.abramede.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBMFC",
+    "abbreviation": "SBMFC",
+    "name": "Sociedade Brasileira de Medicina de Família e Comunidade",
+    "specialties": [
+      "family-medicine"
+    ],
+    "url": "https://sbmfc.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ANAMT",
+    "abbreviation": "ANAMT",
+    "name": "Associação Nacional de Medicina do Trabalho",
+    "specialties": [
+      "occupational-medicine"
+    ],
+    "url": "https://www.anamt.org.br/portal/diretrizes/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABRAMET",
+    "abbreviation": "ABRAMET",
+    "name": "Associação Brasileira de Medicina do Tráfego",
+    "specialties": [
+      "traffic-medicine"
+    ],
+    "url": "https://abramet.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBMEE",
+    "abbreviation": "SBMEE",
+    "name": "Sociedade Brasileira de Medicina do Exercício e do Esporte",
+    "specialties": [
+      "sports-medicine"
+    ],
+    "url": "https://medicinadoesporte.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABMFR",
+    "abbreviation": "ABMFR",
+    "name": "Associação Brasileira de Medicina Física e Reabilitação",
+    "specialties": [
+      "physical-rehabilitation"
+    ],
+    "url": "https://abmfr.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "AMIB",
+    "abbreviation": "AMIB",
+    "name": "Associação de Medicina Intensiva Brasileira",
+    "specialties": [
+      "critical-care"
+    ],
+    "url": "https://amib.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABMLPM",
+    "abbreviation": "ABMLPM",
+    "name": "Associação Brasileira de Medicina Legal e Perícia Médica",
+    "specialties": [
+      "forensic-medicine"
+    ],
+    "url": "https://abmlpm.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBMN",
+    "abbreviation": "SBMN",
+    "name": "Sociedade Brasileira de Medicina Nuclear e Imagem Molecular",
+    "specialties": [
+      "nuclear-medicine"
+    ],
+    "url": "https://sbmn.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABRAMPAS",
+    "abbreviation": "ABRAMPAS",
+    "name": "Associação Brasileira de Medicina Preventiva e Administração em Saúde",
+    "specialties": [
+      "preventive-social-medicine"
+    ],
+    "url": "https://abrampas.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBN-nephrology",
+    "abbreviation": "SBN",
+    "name": "Sociedade Brasileira de Nefrologia",
+    "specialties": [
+      "nephrology"
+    ],
+    "url": "https://sbn.org.br/medicos/utilidades/diretrizes-e-posicionamentos-da-sbn/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBN-neurosurgery",
+    "abbreviation": "SBN",
+    "name": "Sociedade Brasileira de Neurocirurgia",
+    "specialties": [
+      "neurosurgery"
+    ],
+    "url": "https://portalsbn.org",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABN",
+    "abbreviation": "ABN",
+    "name": "Academia Brasileira de Neurologia",
+    "specialties": [
+      "neurology"
+    ],
+    "url": "https://abneuro.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABRAN",
+    "abbreviation": "ABRAN",
+    "name": "Associação Brasileira de Nutrologia",
+    "specialties": [
+      "nutrition"
+    ],
+    "url": "https://abran.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "CBO",
+    "abbreviation": "CBO",
+    "name": "Conselho Brasileiro de Oftalmologia",
+    "specialties": [
+      "ophthalmology"
+    ],
+    "url": "https://cbo.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBOC",
+    "abbreviation": "SBOC",
+    "name": "Sociedade Brasileira de Oncologia Clínica",
+    "specialties": [
+      "medical-oncology"
+    ],
+    "url": "https://sboc.org.br/diretrizes-publicas/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBOT",
+    "abbreviation": "SBOT",
+    "name": "Sociedade Brasileira de Ortopedia e Traumatologia",
+    "specialties": [
+      "orthopedics"
+    ],
+    "url": "https://sbot.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABORL-CCF",
+    "abbreviation": "ABORL-CCF",
+    "name": "Associação Brasileira de Otorrinolaringologia e Cirurgia Cérvico-Facial",
+    "specialties": [
+      "otolaryngology"
+    ],
+    "url": "https://aborlccf.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBP-pathology",
+    "abbreviation": "SBP",
+    "name": "Sociedade Brasileira de Patologia",
+    "specialties": [
+      "pathology"
+    ],
+    "url": "https://sbp.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBPC/ML",
+    "abbreviation": "SBPC/ML",
+    "name": "Sociedade Brasileira de Patologia Clínica e Medicina Laboratorial",
+    "specialties": [
+      "laboratory-medicine"
+    ],
+    "url": "https://sbpc.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBP-pediatrics",
+    "abbreviation": "SBP",
+    "name": "Sociedade Brasileira de Pediatria",
+    "specialties": [
+      "pediatrics"
+    ],
+    "url": "https://www.sbp.com.br/documentos-cientificos/consensos-e-diretrizes/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBPT",
+    "abbreviation": "SBPT",
+    "name": "Sociedade Brasileira de Pneumologia e Tisiologia",
+    "specialties": [
+      "pulmonology"
+    ],
+    "url": "https://sbpt.org.br/portal/consensos-e-diretrizes-da-sbpt/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "ABP",
+    "abbreviation": "ABP",
+    "name": "Associação Brasileira de Psiquiatria",
+    "specialties": [
+      "psychiatry"
+    ],
+    "url": "https://abp.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "CBR",
+    "abbreviation": "CBR",
+    "name": "Colégio Brasileiro de Radiologia e Diagnóstico por Imagem",
+    "specialties": [
+      "radiology"
+    ],
+    "url": "https://cbr.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBRT",
+    "abbreviation": "SBRT",
+    "name": "Sociedade Brasileira de Radioterapia",
+    "specialties": [
+      "radiation-oncology"
+    ],
+    "url": "https://sbradioterapia.com.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBR",
+    "abbreviation": "SBR",
+    "name": "Sociedade Brasileira de Reumatologia",
+    "specialties": [
+      "rheumatology"
+    ],
+    "url": "https://www.reumatologia.org.br/conteudo-cientifico/",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  },
+  {
+    "id": "SBU",
+    "abbreviation": "SBU",
+    "name": "Sociedade Brasileira de Urologia",
+    "specialties": [
+      "urology"
+    ],
+    "url": "https://portaldaurologia.org.br",
+    "directorySource": "https://cmba.org.br/sociedades-de-especialidades-filiadas-a-amb/"
+  }
+]

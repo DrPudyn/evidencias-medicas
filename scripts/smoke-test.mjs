@@ -1,5 +1,7 @@
 import './catalog-smoke.mjs';
+import './catalog-browse-smoke.mjs';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 const origin=process.env.SMOKE_ORIGIN || 'http://127.0.0.1:5173';
 async function call(path,method='GET',data,cookie='',customOrigin=origin){const r=await fetch(origin+path,{method,headers:{'Content-Type':'application/json',Origin:customOrigin,...(cookie?{Cookie:cookie}:{})},...(data?{body:JSON.stringify(data)}:{})});if(r.status>=500)throw new Error(`${method} ${path}: HTTP ${r.status}: ${(await r.text()).slice(0,500)}`);return {status:r.status,data:await r.json().catch(()=>({})),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 const p={mode:'register',role:'student',name:'Estudante Teste Local',college:'Faculdade de Demonstração',state:'MG',email:`student-${Date.now()}@example.test`,phone:'',emailNotifications:false,whatsappNotifications:false,privacyConsent:true};
@@ -28,9 +30,23 @@ assert.equal((await call('/api/account/delete','DELETE',{confirmation:'EXCLUIR M
 assert.equal((await call('/api/account','PATCH',{...p,emailNotifications:true},login.cookie)).data.user.emailNotifications,true);
 assert.equal((await call('/api/bookmarks?id=37952131','DELETE',undefined,login.cookie)).status,200);
 assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).data.articles.length,0);
+const extra = JSON.parse(readFileSync(new URL('../data/catalogo/additional.json', import.meta.url), 'utf8')).items;
+for (const society of ['SBA', 'SBP-pediatrics', 'SBGM', 'FEBRASGO']) {
+  const doc = extra.find(item => item.provenance.society === society);
+  assert.ok(doc, society);
+  // A URL e os metadados gravados devem vir do catálogo, mesmo com entrada adulterada.
+  const input = { id: doc.id, source: society, title: 'Título adulterado', url: 'https://invalid.example/phishing' };
+  assert.equal((await call('/api/bookmarks', 'POST', input, login.cookie)).status, 200);
+  const saved = (await call('/api/bookmarks', 'GET', undefined, login.cookie)).data.articles.find(item => item.id === doc.id);
+  assert.equal(saved.url, doc.url); assert.equal(saved.title, doc.title); assert.equal(saved.source, society);
+  assert.equal((await call('/api/bookmarks', 'POST', { ...input, source: 'SBC' }, login.cookie)).status, 400);
+  assert.equal((await call(`/api/bookmarks?id=${doc.id}`, 'DELETE', undefined, login.cookie)).status, 200);
+}
+assert.equal((await call('/api/bookmarks', 'POST', { id: 'soc-inventado', source: 'SBA', title: 'Inválido' }, login.cookie)).status, 400);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'wrong'},login.cookie)).status,400);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'EXCLUIR MINHA CONTA'},login.cookie,'','https://invalid.example')).status,403);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'EXCLUIR MINHA CONTA'},login.cookie)).status,200);
 assert.equal((await call('/api/account','GET',undefined,login.cookie)).data.user,null);
 assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).status,401);
-console.log('PASS: 32 assertions covering account isolation, admin route guards, origin, validation, OTP, replay, cooldown, sessions, favorites, preferences, analytics refusal and confirmed account deletion.');
+console.log('PASS: account isolation, admin route guards, origin, validation, OTP, replay, cooldown, sessions, canonical society favorites, preferences, analytics refusal and confirmed account deletion.');
+

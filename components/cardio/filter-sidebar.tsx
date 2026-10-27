@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight, BookOpen, SlidersHorizontal } from "lucide-react";
+import { societyForSpecialty } from "@/data/catalogo/societies";
 import { medicalSpecialties } from "@/lib/catalog";
 import type { BrowseModel } from "@/components/cardio/catalog-query";
 import type { BrowseState } from "@/hooks/use-browse";
@@ -28,8 +29,11 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
             browse.setQ("");
             browse.setQuery("");
             browse.setPage(1);
-            if ((next === "" || !(next === "cardiology" || next === "endocrinology")) && (browse.tab === "sbc" || browse.tab === "collection")) {
-              browse.setTab("live");
+            browse.setPeriod("all");
+            browse.setFree(false);
+            if (browse.tab === "sbc" && !societyForSpecialty(next)) browse.setTab("live");
+            if (browse.tab === "collection" && next !== "cardiology" && next !== "endocrinology") {
+              browse.setTab(societyForSpecialty(next) ? "sbc" : "live");
             }
           }}
         >
@@ -63,7 +67,7 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
         >
           {browse.tab === "sbc" ? (
             <>
-              <option value="all">Todos os documentos {model.guidelineSource}</option>
+              <option value="all">Todos os documentos {model.societyLabel}</option>
               {model.sbcKinds.map((kind) => (
                 <option key={kind} value={kind}>{kind}</option>
               ))}
@@ -144,3 +148,4 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
     </aside>
   );
 }
+
