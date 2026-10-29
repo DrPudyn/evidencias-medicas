@@ -1,4 +1,5 @@
 "use client";
+import { useLocale } from "@/components/locale-provider";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { trackClinicalEvent } from "@/lib/analytics-client";
 
@@ -33,6 +34,7 @@ function getConsentServerSnapshot() {
 }
 
 export default function AnalyticsConsent() {
+  const { t } = useLocale();
   const stored = useSyncExternalStore(
     subscribeConsent,
     getConsentSnapshot,
@@ -84,7 +86,7 @@ export default function AnalyticsConsent() {
       if (value) trackClinicalEvent("page_view");
     } catch {
       setManageOpen(true);
-      setError("Não foi possível salvar sua escolha agora. Tente novamente.");
+      setError(t("Não foi possível salvar sua escolha agora. Tente novamente."));
     }
   }
 
@@ -92,20 +94,11 @@ export default function AnalyticsConsent() {
   return (
     <aside
       className="analytics-consent"
-      aria-label="Preferência de análise de uso"
+      aria-label={t("Preferência de análise de uso")}
     >
       <div>
-        <strong>Ajude a melhorar o site?</strong>
-        <p>
-          Com sua autorização, contamos eventos diários de página, buscas,
-          filtros, abertura de referências e favoritos, agrupados por tema e
-          fonte. Não guardamos os termos digitados nem o endereço IP, e não
-          associamos métricas à sua conta. Identificadores pseudônimos são
-          removidos na limpeza de até 180 dias; revogar remove esses
-          identificadores, mas contagens já agregadas permanecem. Você pode
-          recusar sem perder funções e alterar a escolha em “Gerenciar métricas
-          de uso”.
-        </p>
+        <strong>{t("Ajude a melhorar o site?")}</strong>
+        <p>{t("Com sua autorização, contamos eventos diários de página, buscas, filtros, abertura de referências e favoritos, agrupados por tema e fonte. Não guardamos os termos digitados nem o endereço IP, e não associamos métricas à sua conta. Identificadores pseudônimos são removidos na limpeza de até 180 dias; revogar remove esses identificadores, mas contagens já agregadas permanecem. Você pode recusar sem perder funções e alterar a escolha em “Gerenciar métricas de uso”.")}</p>
         {error && (
           <p className="analytics-error" role="alert">
             {error}
@@ -113,10 +106,8 @@ export default function AnalyticsConsent() {
         )}
       </div>
       <div className="analytics-actions">
-        <button onClick={() => void choose(false)}>Recusar</button>
-        <button onClick={() => void choose(true)}>
-          Aceitar métricas de uso
-        </button>
+        <button onClick={() => void choose(false)}>{t("Recusar")}</button>
+        <button onClick={() => void choose(true)}>{t("Aceitar métricas de uso")}</button>
       </div>
     </aside>
   );

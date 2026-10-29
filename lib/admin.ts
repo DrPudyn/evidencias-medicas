@@ -4,7 +4,7 @@ import { currentSession, digest, localPreview, randomToken, settings } from "@/l
 
 const ADMIN_EMAIL = "evidenciasmedicas@outlook.com";
 const ADMIN_TTL = 15 * 60 * 1000;
-export function allowedEmails() { return (settings().ADMIN_EMAILS || "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean); }
+export function allowedEmails() { return [ADMIN_EMAIL]; }
 export function isAdminEmail(email: string) { return allowedEmails().includes(email.trim().toLowerCase()) && email.trim().toLowerCase() === ADMIN_EMAIL; }
 export function webauthnContext(req: Request) {
   const url = new URL(req.url);

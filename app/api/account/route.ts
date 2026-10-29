@@ -1,4 +1,13 @@
-import {adminProfileInput,body,currentUser,digest,json,profileInput,sameOrigin,sessionCookie,settings} from "@/lib/server";
+import { currentUser, digest, json, sameOrigin, sessionCookie, settings } from "@/lib/server";
 export async function GET(req:Request){try{return json({user:await currentUser(req)});}catch{return json({error:"Conta temporariamente indisponível."},503);}}
-export async function PATCH(req:Request){if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);try{const user=await currentUser(req);if(!user)return json({error:"Entre para continuar."},401);const input=await body(req);const p=user.role==="admin"?adminProfileInput(input):profileInput(input);const profile={...p,privacyConsentAt:user.privacyConsentAt,notificationConsentAt:Date.now()};await settings().DB.prepare("UPDATE users SET profile=? WHERE id=?").bind(JSON.stringify(profile),user.id).run();return json({user:{...profile,id:user.id,email:user.email}});}catch(e){return json({error:e instanceof Error?e.message:"Não foi possível salvar."},400);}}
-export async function DELETE(req:Request){if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);const token=req.headers.get("cookie")?.match(/(?:^|;\s*)em_session=([a-f0-9]{64})(?:;|$)/)?.[1];if(token)await settings().DB.prepare("DELETE FROM sessions WHERE digest=?").bind(await digest(token)).run();return json({ok:true},200,{"Set-Cookie":sessionCookie("",req,true)});}
+export async function PATCH(){return json({error:"O cadastro utiliza apenas e-mail e senha."},405);}
+export async function DELETE(req:Request){
+  if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);
+  const token=req.headers.get("cookie")?.match(/(?:^|;\s*)em_session=([a-f0-9]{64})(?:;|$)/)?.[1];
+  if(token){
+    const value=await digest(token),db=settings().DB;
+    await db.batch([db.prepare("DELETE FROM admin_sessions WHERE base_session_digest=?").bind(value),db.prepare("DELETE FROM sessions WHERE digest=?").bind(value)]);
+  }
+  const headers=new Headers();headers.append("Set-Cookie",sessionCookie("",req,true));headers.append("Set-Cookie","admin_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0"+(new URL(req.url).protocol==="https:"?"; Secure":""));
+  return json({ok:true},200,headers);
+}

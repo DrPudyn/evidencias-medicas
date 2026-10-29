@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/components/locale-provider";
+
 import type { FormEvent } from "react";
 import { ArrowRight, ArrowUpRight, Bookmark, Check, CheckCircle2, Heart, Search, ShieldCheck } from "lucide-react";
 
@@ -12,38 +14,34 @@ export function HeroSection({
   onQueryChange: (value: string) => void;
   onSearch: (event?: FormEvent) => void;
 }) {
+  const { t } = useLocale();
   return (
     <section className="hero">
       <div className="container hero-grid">
         <div className="hero-copy">
           <div className="eyebrow">
-            <span className="live-dot" /> CONHECIMENTO QUE ACOMPANHA VOCÊ
-          </div>
-          <h1>
-            A ciência avança.<br />Sua prática <em>também.</em>
+            <span className="live-dot" />{" " + t("CONHECIMENTO QUE ACOMPANHA VOCÊ") + " "}</div>
+          <h1>{" " + t("A ciência avança.")}<br />{t("Sua prática") + " "}<em>{t("também.")}</em>
           </h1>
-          <p>Encontre evidências em diferentes especialidades médicas, refine sua busca e mantenha suas próximas leituras sempre por perto.</p>
+          <p>{t("Encontre evidências em diferentes especialidades médicas, refine sua busca e mantenha suas próximas leituras sempre por perto.")}</p>
           <form className="hero-search" onSubmit={onSearch}>
             <Search size={22} />
             <input
-              aria-label="Buscar artigos no PubMed por título, resumo e descritores"
-              placeholder="Ex.: diabetes tipo 2, asma ou câncer de mama"
+              aria-label={t("Buscar artigos no PubMed por título, resumo e descritores")}
+              placeholder={t("Ex.: diabetes tipo 2, asma ou câncer de mama")}
               value={q}
               onChange={(event) => onQueryChange(event.target.value)}
               maxLength={200}
             />
-            <button className="button" type="submit">
-              Buscar <ArrowRight size={18} />
+            <button className="button" type="submit">{" " + t("Buscar") + " "}<ArrowRight size={18} />
             </button>
           </form>
-          <p className="search-hint">A busca considera título, resumo e MeSH. Termos separados usam AND; use OR para alternativas.</p>
+          <p className="search-hint">{t("A busca considera título, resumo e MeSH. Termos separados usam AND; use OR para alternativas.")}</p>
           <div className="hero-trust">
             <span>
-              <CheckCircle2 size={15} /> Gratuito nesta fase
-            </span>
+              <CheckCircle2 size={15} />{" " + t("Gratuito nesta fase") + " "}</span>
             <span>
-              <ShieldCheck size={15} /> Fontes científicas identificadas
-            </span>
+              <ShieldCheck size={15} />{" " + t("Fontes científicas identificadas") + " "}</span>
           </div>
         </div>
         <div className="hero-art" aria-hidden="true">
@@ -54,8 +52,7 @@ export function HeroSection({
           <div className="science-card">
             <div className="science-top">
               <span>
-                <Heart size={15} /> EVIDÊNCIAS MÉDICAS
-              </span>
+                <Heart size={15} />{" " + t("EVIDÊNCIAS MÉDICAS") + " "}</span>
               <span className="tiny-dot" />
             </div>
             <div className="pulse-illustration">
@@ -70,17 +67,12 @@ export function HeroSection({
               </svg>
             </div>
             <div className="science-content">
-              <span className="micro">DA PERGUNTA À EVIDÊNCIA</span>
-              <h3>
-                Mais clareza.<br />Uma leitura de cada vez.
-              </h3>
-              <p>
-                Artigos, fontes e organização<br />em um só lugar.
-              </p>
+              <span className="micro">{t("DA PERGUNTA À EVIDÊNCIA")}</span>
+              <h3>{" " + t("Mais clareza.")}<br />{t("Uma leitura de cada vez.") + " "}</h3>
+              <p>{" " + t("Artigos, fontes e organização")}<br />{t("em um só lugar.") + " "}</p>
               <div className="science-bottom">
                 <span>PubMed</span>
-                <span className="source-pill">
-                  Fonte original <ArrowUpRight size={12} />
+                <span className="source-pill">{" " + t("Fonte original") + " "}<ArrowUpRight size={12} />
                 </span>
               </div>
             </div>
@@ -90,12 +82,12 @@ export function HeroSection({
               <Bookmark size={18} />
             </span>
             <div>
-              <strong>Sua biblioteca, com você</strong>
-              <span>Salve o que vale reler.</span>
+              <strong>{t("Sua biblioteca, com você")}</strong>
+              <span>{t("Salve o que vale reler.")}</span>
             </div>
             <Check size={16} />
           </div>
-          <div className="vertical-label">EVIDÊNCIA · CONTEXTO · CONHECIMENTO</div>
+          <div className="vertical-label">{t("EVIDÊNCIA · CONTEXTO · CONHECIMENTO")}</div>
         </div>
       </div>
     </section>

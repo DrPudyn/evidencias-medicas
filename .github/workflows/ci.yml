@@ -46,6 +46,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Bilingual interface tests
+        run: node --test scripts/i18n-test.mjs scripts/password-test.mjs
+
       - name: Build
         run: npm run build
 
@@ -55,7 +58,8 @@ jobs:
           for file in \
             drizzle/0000_stiff_sabretooth.sql \
             drizzle/0001_fearless_reaper.sql \
-            drizzle/0002_global_integration_limits.sql
+            drizzle/0002_global_integration_limits.sql \
+            drizzle/0003_password_auth.sql
           do
             node --import ./scripts/sites-env.mjs \
               ./node_modules/wrangler/bin/wrangler.js d1 execute DB \

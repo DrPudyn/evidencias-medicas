@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/components/locale-provider";
+
 import { Bell } from "lucide-react";
 import { states } from "@/lib/catalog";
 import type { Profile } from "@/components/cardio/types";
@@ -11,17 +13,16 @@ export function ProfileFields({
   profile: Profile;
   onChange: (key: keyof Profile, value: Profile[keyof Profile]) => void;
 }) {
+  const { t } = useLocale();
   const doctor = profile.role === "doctor";
   return (
     <>
-      <label>
-        Nome completo
-        <input autoComplete="name" value={profile.name} onChange={(event) => onChange("name", event.target.value)} required minLength={3} maxLength={100} placeholder="Como podemos chamar você?" />
+      <label>{" " + t("Nome completo") + " "}<input autoComplete="name" value={profile.name} onChange={(event) => onChange("name", event.target.value)} required minLength={3} maxLength={100} placeholder={t("Como podemos chamar você?")} />
       </label>
       {profile.role !== "admin" && (
         <div className="form-row">
           <label>
-            {doctor ? "Número do CRM" : "Faculdade"}
+            {doctor ? t("Número do CRM") : t("Faculdade")}
             <input
               value={doctor ? profile.crm : profile.college}
               onChange={(event) => onChange(doctor ? "crm" : "college", event.target.value)}
@@ -30,11 +31,11 @@ export function ProfileFields({
               pattern={doctor ? "[0-9]{3,8}" : undefined}
               maxLength={doctor ? 8 : 160}
               minLength={3}
-              placeholder={doctor ? "Somente números" : "Nome da instituição"}
+              placeholder={doctor ? t("Somente números") : t("Nome da instituição")}
             />
           </label>
           <label className="state-field">
-            {doctor ? "UF do CRM" : "Estado"}
+            {doctor ? t("UF do CRM") : t("Estado")}
             <select required value={profile.state} onChange={(event) => onChange("state", event.target.value)}>
               <option value="">UF</option>
               {states.map((state) => (
@@ -45,7 +46,7 @@ export function ProfileFields({
         </div>
       )}
       <label>
-        WhatsApp <span className="optional">opcional</span>
+        WhatsApp <span className="optional">{t("opcional")}</span>
         <input
           autoComplete="tel"
           type="tel"
@@ -58,17 +59,16 @@ export function ProfileFields({
       </label>
       <div className="preferences">
         <p>
-          <Bell size={16} /> Suas preferências de atualização
-        </p>
+          <Bell size={16} />{" " + t("Suas preferências de atualização") + " "}</p>
         <label className="check-label">
           <input type="checkbox" checked={profile.emailNotifications} onChange={(event) => onChange("emailNotifications", event.target.checked)} />
-          <span>Quero receber novidades por e-mail.</span>
+          <span>{t("Quero receber novidades por e-mail.")}</span>
         </label>
         <label className="check-label">
           <input type="checkbox" checked={profile.whatsappNotifications} onChange={(event) => onChange("whatsappNotifications", event.target.checked)} />
-          <span>Autorizo notificações pelo WhatsApp.</span>
+          <span>{t("Autorizo notificações pelo WhatsApp.")}</span>
         </label>
-        <small>Você pode alterar essas escolhas a qualquer momento. O envio de notificações será ativado em uma próxima etapa.</small>
+        <small>{t("Você pode alterar essas escolhas a qualquer momento. O envio de notificações será ativado em uma próxima etapa.")}</small>
       </div>
     </>
   );

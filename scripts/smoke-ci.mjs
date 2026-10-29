@@ -34,18 +34,32 @@ const options = {
 const worker = new Miniflare(options);
 try {
   let origin = (await worker.ready).origin;
-  const profile = { mode: 'register', role: 'student', name: 'Teste CI', college: 'Faculdade CI', state: 'MG', email: 'validation@example.test', privacyConsent: true };
-  for (const [input, status, error] of [
-    [{ ...profile, state: 'ZZ' }, 400, 'Selecione um estado.'],
-    [{ ...profile, whatsappNotifications: true }, 400, 'Informe seu WhatsApp para autorizar notificações.'],
-    [profile, 503, 'O envio de códigos ainda não foi ativado.'],
-  ]) {
-    const response = await fetch(origin + '/api/auth/request', {
-      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(input),
-    });
-    const result = await response.json();
-    assert.equal(response.status, status, `auth validation without preview: ${JSON.stringify(result)}`);
-    assert.ok(result.error.startsWith(error));
+  const db = await worker.getD1Database('DB');
+  const call = async (path, input) => {
+    const response = await fetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(input)});
+    return {status:response.status, data:await response.json(), cookie:response.headers.getSetCookie().map(x=>x.split(';')[0]).join('; ')};
+  };
+  const email = `legacy-${Date.now()}@example.test`, password = 'First access test password 2026';
+  await db.prepare('INSERT INTO users(id,email,profile,created_at) VALUES(?,?,?,?)').bind(crypto.randomUUID(),email,'{}',Date.now()).run();
+  const migrated = await call('/api/auth/password',{email,password,mode:'first-access'});
+  assert.equal(migrated.status,200);
+  assert.ok(migrated.cookie.includes('em_session='));
+  assert.equal((await call('/api/auth/password',{email,password:password+'changed',mode:'first-access'})).status,409);
+  assert.equal((await call('/api/auth/password',{email,password,mode:'login'})).status,200);
+  assert.equal((await call('/api/auth/password',{email:'missing@example.test',password,mode:'first-access'})).status,409);
+  const adminEmail = 'evidenciasmedicas@outlook.com';
+  const admin = await call('/api/auth/password',{email:adminEmail,password,mode:'first-access'});
+  assert.equal(admin.status,200);
+  assert.equal(admin.data.user.role,'admin');
+  assert.ok(admin.cookie.includes('admin_session='));
+  assert.equal((await fetch(origin+'/api/admin/dashboard',{headers:{Cookie:admin.cookie}})).status,200);
+  assert.equal((await call('/api/auth/password',{email:adminEmail,password,mode:'first-access'})).status,409);
+  for (const bindings of [{}, {RESEND_API_KEY:'test-only'}, {EMAIL_FROM:'test@example.test'}]) {
+    await worker.setOptions({...options,bindings:{LOCAL_PREVIEW_ENABLED:'false',...bindings}});
+    origin = (await worker.ready).origin;
+    const result = await call('/api/auth/reset',{email});
+    assert.equal(result.status,503);
+    assert.match(result.data.error,/não está configurada/);
   }
   await worker.setOptions({ ...options, bindings: { LOCAL_PREVIEW_ENABLED: 'true' } });
   origin = (await worker.ready).origin;
