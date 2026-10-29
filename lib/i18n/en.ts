@@ -1,5 +1,11 @@
 // UI translations. Scientific titles and abstracts retain their source language.
 export const english: Record<string,string> = {
+ "Primeiro acesso": "First access",
+ "Esqueci minha senha": "Forgot my password",
+ "Primeiro acesso indisponível. Entre ou use a recuperação de senha.": "First access unavailable. Sign in or use password recovery.",
+ "E-mail ou senha incorretos. Se ainda não tem senha, use Primeiro acesso.": "Incorrect email or password. If you do not have a password yet, use First access.",
+ "A recuperação de senha por e-mail não está configurada. Contate o administrador. Se ainda não tem senha, use Primeiro acesso.": "Email password recovery is not configured. Contact the administrator. If you do not have a password yet, use First access.",
+
   "CONHECIMENTO QUE ACOMPANHA VOCÊ": "KNOWLEDGE THAT KEEPS UP WITH YOU",
   "A ciência avança.": "Science moves forward.",
   "Sua prática": "Your practice",

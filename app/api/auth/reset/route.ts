@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     const email = normalizeEmail(input.email);
     if (!validEmail(email)) return json({ error: "Informe um e-mail válido." }, 400);
     const conf = settings(), preview = localPreview(req);
-    if (!preview && (!conf.RESEND_API_KEY || !conf.EMAIL_FROM)) return json({ error: "Recuperação por e-mail temporariamente indisponível." }, 503);
+    if (!preview && (!conf.RESEND_API_KEY || !conf.EMAIL_FROM)) return json({ error: "A recuperação de senha por e-mail não está configurada. Contate o administrador. Se ainda não tem senha, use Primeiro acesso." }, 503);
     const user = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
     if (!user && email !== ADMIN_EMAIL) return json({message:NOTICE});
     const token = randomToken(), tokenDigest = await digest(token);

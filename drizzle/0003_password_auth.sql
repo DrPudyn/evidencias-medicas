@@ -7,12 +7,5 @@ CREATE TABLE password_resets (
 );
 --> statement-breakpoint
 CREATE INDEX password_resets_email ON password_resets(email);
---> statement-breakpoint
--- Retire sessions and challenges issued by the former code-based login.
-DELETE FROM admin_sessions;
---> statement-breakpoint
-DELETE FROM webauthn_challenges;
---> statement-breakpoint
-DELETE FROM sessions;
---> statement-breakpoint
-DELETE FROM challenges;
+
+-- Existing sessions and challenges retain their original expiration.
