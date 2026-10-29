@@ -18,6 +18,7 @@ export async function DELETE(req: Request) {
       db.prepare("DELETE FROM bookmarks WHERE user_id=?").bind(user.id),
       db.prepare("DELETE FROM sessions WHERE user_id=?").bind(user.id),
       db.prepare("DELETE FROM challenges WHERE email=?").bind(user.email),
+      db.prepare("DELETE FROM password_resets WHERE email=?").bind(user.email),
       db.prepare("DELETE FROM users WHERE id=?").bind(user.id),
     ]);
     return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", req, true) });

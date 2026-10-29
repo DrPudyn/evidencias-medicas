@@ -1,20 +1,11 @@
 "use client";
-
-import { useLocale } from "@/components/locale-provider";
-
 import { Modal } from "@/components/cardio/modal";
-
-export function PrivacyNotice({ onClose }: { onClose: () => void }) {
-  const { t } = useLocale();
-  return (
-    <Modal title={t("Seus dados, com clareza.")} close={onClose}>
-      <p className="modal-intro">{t("Informações da versão de desenvolvimento.")}</p>
-      <div className="prose">
-        <p>{t("O cadastro armazena nome, e-mail, perfil profissional, CRM e UF ou faculdade e estado. O telefone é opcional. A conta também guarda seus artigos favoritos e suas preferências.")}</p>
-        <p>{t("A confirmação do e-mail é necessária para acessar a conta. Ela é diferente das notificações de conteúdo, que são opcionais e começam desmarcadas.")}</p>
-        <p>{t("Na prévia local, um código de demonstração permite experimentar o fluxo sem enviar e-mail. Cadastros feitos aqui ficam no banco local deste projeto. Use dados fictícios durante a avaliação.")}</p>
-        <p>{t("O CRM informado não passa por validação profissional nesta versão. Antes do lançamento, serão definidos o responsável pelo serviço, o contato de privacidade e a política completa.")}</p>
-      </div>
-    </Modal>
-  );
+import { useLocale } from "@/components/locale-provider";
+export function PrivacyNotice({onClose}:{onClose:()=>void}){
+  const {t}=useLocale();
+  return <Modal title={t("Privacidade")} close={onClose}>
+    <div className="prose"><p>{t("O cadastro solicita apenas e-mail e senha. A senha é armazenada como hash com salt individual, nunca em texto puro.")}</p>
+    <p>{t("Sua conta guarda os artigos salvos. Não solicitamos nome, CRM, faculdade, estado ou telefone nesta etapa.")}</p>
+    <p>{t("A recuperação de senha envia um link temporário ao seu e-mail. Definir uma nova senha encerra as sessões anteriores.")}</p></div>
+  </Modal>;
 }

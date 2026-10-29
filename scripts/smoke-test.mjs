@@ -3,21 +3,23 @@ import './catalog-browse-smoke.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const origin=process.env.SMOKE_ORIGIN || 'http://127.0.0.1:5173';
-async function call(path,method='GET',data,cookie='',customOrigin=origin){const r=await fetch(origin+path,{method,headers:{'Content-Type':'application/json',Origin:customOrigin,...(cookie?{Cookie:cookie}:{})},...(data?{body:JSON.stringify(data)}:{})});if(r.status>=500)throw new Error(`${method} ${path}: HTTP ${r.status}: ${(await r.text()).slice(0,500)}`);return {status:r.status,data:await r.json().catch(()=>({})),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
-const p={mode:'register',role:'student',name:'Estudante Teste Local',college:'Faculdade de Demonstração',state:'MG',email:`student-${Date.now()}@example.test`,phone:'',emailNotifications:false,whatsappNotifications:false,privacyConsent:true};
+async function call(path,method='GET',data,cookie='',customOrigin=origin){const r=await fetch(origin+path,{method,headers:{'Content-Type':'application/json',Origin:customOrigin,...(cookie?{Cookie:cookie}:{})},...(data?{body:JSON.stringify(data)}:{})});if(r.status>=500)throw new Error(`${method} ${path}: HTTP ${r.status}: ${(await r.text()).slice(0,500)}`);return {status:r.status,data:await r.json().catch(()=>({})),cookie:r.headers.getSetCookie().map(value=>value.split(';')[0]).join('; ')};}
+const p={mode:'register',email:`reader-${Date.now()}@example.test`,password:'A strong test password 2026'};
 assert.equal((await call('/api/bookmarks')).status,401);
 assert.equal((await call('/api/admin/dashboard')).status,401);
 assert.equal((await call('/api/admin/catalog','POST',{})).status,401);
 const refusal=await call('/api/analytics/consent','POST',{consent:false});assert.equal(refusal.status,200);assert.equal(refusal.data.consent,false);
 assert.equal((await call('/api/analytics/event','POST',{event:'search',topic:'all',source:'PubMed'})).data.recorded,false);
-assert.equal((await call('/api/auth/request','POST',p,'','https://invalid.example')).status,403);
-assert.equal((await call('/api/auth/request','POST',{...p,state:'ZZ'})).status,400);
-assert.equal((await call('/api/auth/request','POST',{...p,whatsappNotifications:true})).status,400);
-const challenge=await call('/api/auth/request','POST',p);assert.equal(challenge.status,200);assert.equal(challenge.data.preview,true);assert.match(challenge.data.previewCode,/^\d{6}$/);
-assert.equal((await call('/api/auth/request','POST',p)).status,429);
-const wrong=challenge.data.previewCode==='000000'?'111111':'000000';assert.equal((await call('/api/auth/verify','POST',{email:p.email,code:wrong})).status,400);
-const login=await call('/api/auth/verify','POST',{email:p.email,code:challenge.data.previewCode});assert.equal(login.status,200);assert.ok(login.cookie);assert.equal(login.data.user.role,'student');
-assert.equal((await call('/api/auth/verify','POST',{email:p.email,code:challenge.data.previewCode})).status,400);
+assert.equal((await call('/api/auth/password','POST',p,'','https://invalid.example')).status,403);
+assert.equal((await call('/api/auth/password','POST',{...p,password:'short'})).status,400);
+assert.equal((await call('/api/auth/password','POST',{...p,email:'not-email'})).status,400);
+assert.equal((await call('/api/auth/request','POST',p)).status,410);
+assert.equal((await call('/api/auth/verify','POST',{email:p.email,code:'000000'})).status,410);
+const login=await call('/api/auth/password','POST',{...p,role:'admin',name:'Ignored',crm:'123456',phone:'999'});
+assert.equal(login.status,200);assert.ok(login.cookie);assert.equal(login.data.user.role,'member');assert.equal(login.data.user.crm,'');
+assert.equal((await call('/api/auth/password','POST',p)).status,409);
+assert.equal((await call('/api/auth/password','POST',{...p,mode:'login',password:'Incorrect password'})).status,401);
+assert.equal((await call('/api/auth/password','POST',{...p,mode:'login'})).status,200);
 assert.equal((await call('/api/account','GET',undefined,login.cookie)).data.user.email,p.email);
 assert.equal((await call('/api/admin/dashboard','GET',undefined,login.cookie)).status,401);
 assert.equal((await call('/api/admin/webauthn/options','POST',{action:'authenticate'},login.cookie)).status,401);
@@ -25,9 +27,11 @@ const article={id:'37952131',title:'Semaglutide and Cardiovascular Outcomes in O
 assert.equal((await call('/api/bookmarks','POST',article,login.cookie)).status,200);
 assert.equal((await call('/api/bookmarks','POST',article,login.cookie)).status,200);
 assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).data.articles.length,1);
-const secondProfile={...p,email:`student-isolation-${Date.now()}@example.test`};const secondChallenge=await call('/api/auth/request','POST',secondProfile);assert.equal(secondChallenge.status,200);const secondLogin=await call('/api/auth/verify','POST',{email:secondProfile.email,code:secondChallenge.data.previewCode});assert.equal(secondLogin.status,200);assert.equal((await call('/api/bookmarks','GET',undefined,secondLogin.cookie)).data.articles.length,0);
+const secondProfile={...p,email:`reader-isolation-${Date.now()}@example.test`};
+const secondLogin=await call('/api/auth/password','POST',secondProfile);assert.equal(secondLogin.status,200);
+assert.equal((await call('/api/bookmarks','GET',undefined,secondLogin.cookie)).data.articles.length,0);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'EXCLUIR MINHA CONTA'},secondLogin.cookie)).status,200);
-assert.equal((await call('/api/account','PATCH',{...p,emailNotifications:true},login.cookie)).data.user.emailNotifications,true);
+assert.equal((await call('/api/account','PATCH',{role:'admin',name:'Ignored'},login.cookie)).status,405);
 assert.equal((await call('/api/bookmarks?id=37952131','DELETE',undefined,login.cookie)).status,200);
 assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).data.articles.length,0);
 const extra = JSON.parse(readFileSync(new URL('../data/catalogo/additional.json', import.meta.url), 'utf8')).items;
@@ -43,10 +47,29 @@ for (const society of ['SBA', 'SBP-pediatrics', 'SBGM', 'FEBRASGO']) {
   assert.equal((await call(`/api/bookmarks?id=${doc.id}`, 'DELETE', undefined, login.cookie)).status, 200);
 }
 assert.equal((await call('/api/bookmarks', 'POST', { id: 'soc-inventado', source: 'SBA', title: 'Inválido' }, login.cookie)).status, 400);
+// Reset links are single-use and invalidate existing sessions.
+const reset=await call('/api/auth/reset','POST',{email:p.email});assert.equal(reset.status,200);
+const token=new URL(reset.data.previewResetUrl).searchParams.get('reset');
+assert.equal((await call('/api/auth/reset','POST',{token,password:'A new strong password 2026'})).status,200);
+assert.equal((await call('/api/auth/reset','POST',{token,password:'A new strong password 2026'})).status,400);
+assert.equal((await call('/api/account','GET',undefined,login.cookie)).data.user,null);
+assert.equal((await call('/api/auth/password','POST',{...p,mode:'login'})).status,401);
+const afterReset=await call('/api/auth/password','POST',{...p,mode:'login',password:'A new strong password 2026'});assert.equal(afterReset.status,200);
+login.cookie=afterReset.cookie;
+const adminEmail='evidenciasmedicas@outlook.com';
+assert.equal((await call('/api/auth/password','POST',{...p,email:adminEmail})).status,409);
+const adminReset=await call('/api/auth/reset','POST',{email:adminEmail});
+const adminToken=new URL(adminReset.data.previewResetUrl).searchParams.get('reset');
+assert.equal((await call('/api/auth/reset','POST',{token:adminToken,password:'Admin test password 2026 only'})).status,200);
+const adminLogin=await call('/api/auth/password','POST',{email:adminEmail,password:'Admin test password 2026 only',mode:'login'});
+assert.equal(adminLogin.status,200);assert.equal(adminLogin.data.user.role,'admin');assert.match(adminLogin.cookie,/admin_session=/);
+assert.equal((await call('/api/admin/dashboard','GET',undefined,adminLogin.cookie)).status,200);
+assert.equal((await call('/api/account','DELETE',undefined,adminLogin.cookie)).status,200);
+assert.equal((await call('/api/admin/dashboard','GET',undefined,adminLogin.cookie)).status,401);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'wrong'},login.cookie)).status,400);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'EXCLUIR MINHA CONTA'},login.cookie,'','https://invalid.example')).status,403);
 assert.equal((await call('/api/account/delete','DELETE',{confirmation:'EXCLUIR MINHA CONTA'},login.cookie)).status,200);
 assert.equal((await call('/api/account','GET',undefined,login.cookie)).data.user,null);
 assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).status,401);
-console.log('PASS: account isolation, admin route guards, origin, validation, OTP, replay, cooldown, sessions, canonical society favorites, preferences, analytics refusal and confirmed account deletion.');
+console.log('PASS: email/password signup, login, account isolation, origin, password reset/replay, session revocation, reserved administrator, panel access and canonical bookmarks.');
 

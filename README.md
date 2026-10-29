@@ -1,3 +1,5 @@
+> Autenticação atual: somente e-mail e senha. Instruções de migração e primeiro acesso administrativo em [docs/password-auth.md](docs/password-auth.md). As seções históricas sobre OTP/chave física abaixo descrevem a implementação anterior.
+
 # Evidências Médicas
 
 Portal para localizar literatura científica e documentos de sociedades médicas, com seleção de documentos de sociedades de diversas especialidades. O site ajuda a encontrar a fonte original e a guardá-la na biblioteca da conta. A ordenação da busca no PubMed segue a data de publicação ou a relevância da consulta; ela não é uma nota automática de qualidade da evidência.

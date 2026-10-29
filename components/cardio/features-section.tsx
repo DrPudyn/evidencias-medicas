@@ -10,7 +10,7 @@ const features: [LucideIcon, string, string, string][] = [
   [Search, "01", t("Encontre com precisão"), t("Busque por doença, tratamento, autor ou PMID. Refine por tema, período e tipo de estudo.")],
   [Bookmark, "02", t("Construa sua biblioteca"), t("Guarde artigos na sua conta e retome a leitura quando fizer sentido para você.")],
   [Compass, "03", t("Pesquise com orientação"), t("Use o guia para transformar dúvidas em buscas mais claras e avaliar cada estudo.")],
-  [Bell, "04", t("Escolha como acompanhar"), t("Defina suas preferências de e-mail e WhatsApp. Notificações em uma próxima etapa.")],
+  [Bell, "04", t("Acesse com simplicidade"), t("Entre com e-mail e senha. Sem nome, CRM ou telefone nesta etapa.")],
 ];
   return (
     <section id="recursos" className="features">

@@ -4,6 +4,7 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   profile: text("profile").notNull(),
+  passwordHash: text("password_hash"),
   createdAt: integer("created_at").notNull(),
 });
 export const challenges = sqliteTable("challenges", {
@@ -124,4 +125,10 @@ export const catalogReviews = sqliteTable("catalog_reviews", {
   id: text("id").primaryKey(),
   reviewerUserId: text("reviewer_user_id").notNull().references(() => users.id),
   reviewedAt: integer("reviewed_at").notNull(),
+});
+
+export const passwordResets = sqliteTable("password_resets", {
+  digest: text("digest").primaryKey(),
+  email: text("email").notNull(),
+  expires: integer("expires").notNull(),
 });

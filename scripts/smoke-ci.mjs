@@ -34,19 +34,8 @@ const options = {
 const worker = new Miniflare(options);
 try {
   let origin = (await worker.ready).origin;
-  const profile = { mode: 'register', role: 'student', name: 'Teste CI', college: 'Faculdade CI', state: 'MG', email: 'validation@example.test', privacyConsent: true };
-  for (const [input, status, error] of [
-    [{ ...profile, state: 'ZZ' }, 400, 'Selecione um estado.'],
-    [{ ...profile, whatsappNotifications: true }, 400, 'Informe seu WhatsApp para autorizar notificações.'],
-    [profile, 503, 'O envio de códigos ainda não foi ativado.'],
-  ]) {
-    const response = await fetch(origin + '/api/auth/request', {
-      method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify(input),
-    });
-    const result = await response.json();
-    assert.equal(response.status, status, `auth validation without preview: ${JSON.stringify(result)}`);
-    assert.ok(result.error.startsWith(error));
-  }
+  const response=await fetch(origin+'/api/auth/reset',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({email:'validation@example.test'})});
+  assert.equal(response.status,503,'Recovery requires configured email service outside local preview');
   await worker.setOptions({ ...options, bindings: { LOCAL_PREVIEW_ENABLED: 'true' } });
   origin = (await worker.ready).origin;
   const code = await new Promise((resolve, reject) => {
