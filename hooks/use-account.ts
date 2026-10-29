@@ -1,4 +1,5 @@
 "use client";
+import { useLocale } from "@/components/locale-provider";
 
 import { useEffect, useState, type FormEvent } from "react";
 import type { Article } from "@/lib/catalog";
@@ -15,6 +16,7 @@ type AccountEnv = {
 };
 
 export function useAccount({ tab, specialty, setTab, setModal, setToast }: AccountEnv) {
+  const { t } = useLocale();
   const [user, setUser] = useState<Profile | null>(null);
   const [saved, setSaved] = useState<Article[]>([]);
   const [saving, setSaving] = useState("");
@@ -164,7 +166,7 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast }: Accou
   }
 
   async function deleteAccount() {
-    if (!window.confirm("Excluir sua conta apagará seu perfil, favoritos e sessões. Essa ação não pode ser desfeita. As métricas já agregadas e sem vínculo com a conta não serão alteradas.")) return;
+    if (!window.confirm(t("Excluir sua conta apagará seu perfil, favoritos e sessões. Essa ação não pode ser desfeita. As métricas já agregadas e sem vínculo com a conta não serão alteradas."))) return;
     setBusy(true);
     try {
       await api("/api/account/delete", { method: "DELETE", body: JSON.stringify({ confirmation: "EXCLUIR MINHA CONTA" }) });

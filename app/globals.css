@@ -46,3 +46,12 @@
 .admin-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.admin-chart-selection{display:flex;align-items:center;gap:9px;color:#b6c6dc;font-size:10px;margin:5px 0 0}.admin-chart-selection strong{color:#e6f2ff}.admin-chart-selection button{border:1px solid #3a4b66;border-radius:5px;background:#121f33;color:#8fe2d7;padding:4px 7px;font:inherit;cursor:pointer}
 
 @media(max-width:600px){.specialty-strip{height:auto;min-height:59px;padding-top:10px;padding-bottom:10px;flex-wrap:wrap;row-gap:8px}.specialty-strip .specialty-pill{white-space:nowrap}}
+
+/* Keep language controls and account actions reachable on narrow screens. */
+@media (max-width: 600px) {
+  .nav { height: auto; min-height: 72px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+  .nav-actions { flex-wrap: wrap; gap: 8px; }
+}
+@media (max-width: 480px) {
+  .nav-actions { width: 100%; justify-content: space-between; }
+}
