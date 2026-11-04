@@ -1,5 +1,8 @@
 "use client";
 
+import { EditorialNote } from "./editorial";
+import { useLocale } from "@/components/locale-provider";
+
 import { ArrowUpRight } from "lucide-react";
 import type { Article } from "@/lib/catalog";
 import { trackClinicalEvent } from "@/lib/analytics-client";
@@ -21,16 +24,17 @@ export function ArticleCard({
   onOpen: (article: Article) => void;
   onToggle: (article: Article) => void;
 }) {
+  const { t, locale } = useLocale();
   const society = Boolean(article.source && article.source !== "PubMed" && article.source !== "local");
   return (
     <article className="article-card">
       <div className="article-number">{number}</div>
       <div className="article-main">
         <div className="article-meta">
-          <span className="type-tag">{article.type}</span>
-          <span>{society ? article.year : `Publicação: ${prettyDate(article.date)}`}</span>
-          {article.source !== "SBC" && article.electronicDate && <span>Online: {prettyDate(article.electronicDate)}</span>}
-          {article.source !== "SBC" && article.language && <span className="language-tag">Idioma original: {languageName(article.language)}</span>}
+          <span className="type-tag">{t(article.type)}</span>
+          <span>{society ? article.year : `${t("Publicação")}: ${prettyDate(article.date, locale)}`}</span>
+          {article.source !== "SBC" && article.electronicDate && <span>Online: {prettyDate(article.electronicDate, locale)}</span>}
+          {article.source !== "SBC" && article.language && <span className="language-tag">{t("Idioma original:")}{" "}{t(languageName(article.language))}</span>}
         </div>
         {society ? (
           <a
@@ -47,18 +51,17 @@ export function ArticleCard({
             {article.title}
           </button>
         )}
+        <EditorialNote articleId={article.id}/>
         <p className="article-authors">{article.authors}</p>
         <div className="article-bottom">
           <span className="journal">
             <span /> {article.journal}
           </span>
           {society ? (
-            <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">
-              Abrir diretriz <ArrowUpRight size={15} />
+            <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">{" " + t("Abrir diretriz") + " "}<ArrowUpRight size={15} />
             </a>
           ) : (
-            <button onClick={() => onOpen(article)}>
-              Ver artigo <ArrowUpRight size={15} />
+            <button onClick={() => onOpen(article)}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
             </button>
           )}
         </div>
@@ -67,8 +70,8 @@ export function ArticleCard({
         saved={saved}
         pending={pending}
         className={saved ? "bookmark-button selected" : "bookmark-button"}
-        label={saved ? `Remover da biblioteca: ${article.title}` : `Salvar artigo: ${article.title}`}
-        title="Salvar na biblioteca"
+        label={saved ? `${t("Remover da biblioteca:")} ${article.title}` : `${t("Salvar artigo:")} ${article.title}`}
+        title={t("Salvar na biblioteca")}
         onClick={() => onToggle(article)}
       />
     </article>

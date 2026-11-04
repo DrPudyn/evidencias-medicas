@@ -1,5 +1,5 @@
 import { sbcCatalog, sbemCatalog } from "../data/catalogo";
-export type Article = { id: string; title: string; journal: string; date: string; electronicDate?: string; authors: string; type: string; topic: string; doi?: string; url: string; source?: string; year?: number; language?: string };
+export type Article = { id: string; title: string; journal: string; date: string; electronicDate?: string; authors: string; type: string; topic: string; doi?: string; url: string; source?: string; year?: number; language?: string; reading?: import("./reading").Reading };
 export type AbstractSection = { label: string; text: string };
 export type { BrazilianGuideline } from "../data/catalogo/schema";
 // Specialty names follow the official CME/CFM list. Search aliases are English

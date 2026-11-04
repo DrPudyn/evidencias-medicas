@@ -1,5 +1,8 @@
 "use client";
 
+import { EditorialNote } from "./editorial";
+import { useLocale } from "@/components/locale-provider";
+
 import { ArrowUpRight, Bookmark } from "lucide-react";
 import type { Article } from "@/lib/catalog";
 import { trackClinicalEvent } from "@/lib/analytics-client";
@@ -27,20 +30,21 @@ export function ArticleDetail({
   onClose: () => void;
   onToggle: (article: Article) => void;
 }) {
+  const { t, locale } = useLocale();
   return (
-    <Modal title="Referência do artigo" close={onClose} wide>
-      <span className="type-tag">{article.type}</span>
+    <Modal title={t("Referência do artigo")} close={onClose} wide>
+      <span className="type-tag">{t(article.type)}</span>
       <h3 className="detail-title">{article.title}</h3>
-      <p className="language-note">Idioma original informado pelo PubMed: {languageName(abstractLanguage || article.language)}. Título e resumo no idioma original da publicação.</p>
+      <p className="language-note">{t("Idioma original informado pelo PubMed:")}{" "}{t(languageName(abstractLanguage || article.language))}{t(". Título e resumo no idioma original da publicação.")}</p>
       <p className="muted">{article.authors}</p>
       <dl className="details">
         <div>
-          <dt>Publicação</dt>
+          <dt>{t("Publicação")}</dt>
           <dd>{article.journal}</dd>
         </div>
         <div>
-          <dt>Data</dt>
-          <dd>{prettyDate(article.date)}</dd>
+          <dt>{t("Data")}</dt>
+          <dd>{prettyDate(article.date, locale)}</dd>
         </div>
         <div>
           <dt>PMID</dt>
@@ -53,34 +57,34 @@ export function ArticleDetail({
           </div>
         )}
       </dl>
+      <EditorialNote articleId={article.id}/>
       <section className="abstract-section" aria-live="polite">
         <div className="abstract-heading">
-          <h4>Resumo</h4>
-          <span>Fonte: PubMed</span>
+          <h4>{t("Resumo")}</h4>
+          <span>{t("Fonte: PubMed")}</span>
         </div>
         {abstractLoading ? (
-          <p className="muted">Carregando resumo…</p>
+          <p className="muted">{t("Carregando resumo…")}</p>
         ) : abstractError ? (
-          <p className="muted">{abstractError}</p>
+          <p className="muted">{t(abstractError)}</p>
         ) : abstract.length ? (
           abstract.map((section, index) => (
             <p className="abstract-paragraph" key={`${section.label}-${index}`}>
-              {section.label !== "Resumo" && <strong>{section.label}: </strong>}
+              {section.label !== t("Resumo") && <strong>{section.label}: </strong>}
               {section.text}
             </p>
           ))
         ) : (
-          <p className="muted">O PubMed não disponibiliza um resumo para esta referência.</p>
+          <p className="muted">{t("O PubMed não disponibiliza um resumo para esta referência.")}</p>
         )}
-        <p className="abstract-note">O resumo é fornecido pela publicação e não substitui a leitura dos métodos, resultados e limitações do artigo completo.</p>
+        <p className="abstract-note">{t("O resumo é fornecido pela publicação e não substitui a leitura dos métodos, resultados e limitações do artigo completo.")}</p>
       </section>
       <div className="inline-actions">
-        <a className="button" href={article.url} target="_blank" rel="noreferrer" onClick={() => trackClinicalEvent("source_click", article.topic || "all", "PubMed")}>
-          Ler no PubMed <ArrowUpRight size={17} />
+        <a className="button" href={article.url} target="_blank" rel="noreferrer" onClick={() => trackClinicalEvent("source_click", article.topic || "all", "PubMed")}>{" " + t("Ler no PubMed") + " "}<ArrowUpRight size={17} />
         </a>
         <button className="button secondary" onClick={() => onToggle(article)} disabled={pending}>
           <Bookmark size={17} />
-          {saved ? "Remover dos salvos" : "Salvar leitura"}
+          {saved ? t("Remover dos salvos") : t("Salvar leitura")}
         </button>
       </div>
     </Modal>

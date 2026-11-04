@@ -15,6 +15,27 @@
       "when": 1792020498418,
       "tag": "0001_fearless_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793298080996,
+      "tag": "0002_global_integration_limits",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793298101785,
+      "tag": "0003_password_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793751462798,
+      "tag": "0004_reading_workspace",
+      "breakpoints": true
     }
   ]
 }

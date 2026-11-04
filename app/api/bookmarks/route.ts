@@ -1,8 +1,20 @@
 import { canonicalGuideline } from "@/data/catalogo";
 import { guidelineToArticle } from "@/components/cardio/catalog-query";
 import {body,currentUser,json,sameOrigin,settings} from "@/lib/server";
+import { readingSchema } from "@/lib/reading";
 
-export async function GET(req:Request){const u=await currentUser(req);if(!u)return json({error:"Entre para ver sua biblioteca."},401);const rows=await settings().DB.prepare("SELECT article FROM bookmarks WHERE user_id=? ORDER BY created_at DESC").bind(u.id).all<{article:string}>();return json({articles:rows.results.map(r=>JSON.parse(r.article))});}
+export async function GET(req:Request){const u=await currentUser(req);if(!u)return json({error:"Entre para ver sua biblioteca."},401);const rows=await settings().DB.prepare("SELECT article,reading FROM bookmarks WHERE user_id=? ORDER BY created_at DESC").bind(u.id).all<{article:string;reading:string}>();return json({articles:rows.results.map(r=>({...JSON.parse(r.article),reading:JSON.parse(r.reading)}))});}
+
+export async function PATCH(req:Request){
+ if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);
+ const u=await currentUser(req);if(!u)return json({error:"Entre para continuar."},401);
+ try {
+  const input=await body(req), reading=readingSchema.parse(input.reading);
+  if(typeof input.id!=="string")return json({error:"Artigo inválido."},400);
+  const result=await settings().DB.prepare("UPDATE bookmarks SET reading=? WHERE user_id=? AND article_id=?").bind(JSON.stringify(reading),u.id,input.id).run();
+  return result.meta.changes?json({ok:true}):json({error:"Salve o artigo antes de organizar a leitura."},404);
+ }catch{return json({error:"Confira a pasta, as etiquetas e as notas."},400);}
+}
 
 export async function POST(req:Request){
  if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);

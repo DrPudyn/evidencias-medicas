@@ -1,5 +1,7 @@
 "use client";
 
+import { ReadingWorkspace } from "@/components/cardio/reading-workspace";
+import { EditorialProvider } from "@/components/cardio/editorial";
 import AnalyticsConsent from "@/components/analytics-consent";
 import { AuthModal } from "@/components/cardio/account-auth";
 import { ProfileModal } from "@/components/cardio/account-profile";
@@ -102,7 +104,7 @@ export default function CardioApp() {
   }
 
   return (
-    <>
+    <EditorialProvider>
       <SiteHeader
         user={account.user}
         onGuide={() => browse.setModal("guide")}
@@ -117,6 +119,7 @@ export default function CardioApp() {
       <main id="inicio">
         <HeroSection q={browse.q} onQueryChange={browse.setQ} onSearch={browse.search} />
         <ExploreSection
+          workspace={account.user ? <ReadingWorkspace key={account.user.id || account.user.email} account={account} browse={browse} /> : null}
           browse={browse}
           model={model}
           saved={account.saved}
@@ -161,7 +164,7 @@ export default function CardioApp() {
       {browse.modal === "profile" && account.user && (
         <ProfileModal account={account} email={account.user.email} onClose={() => browse.setModal(null)} />
       )}
-    </>
+    </EditorialProvider>
   );
 }
 

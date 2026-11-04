@@ -1,9 +1,11 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   profile: text("profile").notNull(),
+  passwordHash: text("password_hash"),
+  emailVerifiedAt: integer("email_verified_at"),
   createdAt: integer("created_at").notNull(),
 });
 export const challenges = sqliteTable("challenges", {
@@ -17,6 +19,7 @@ export const challenges = sqliteTable("challenges", {
 });
 export const sessions = sqliteTable("sessions", {
   digest: text("digest").primaryKey(),
+  authMethod: text("auth_method"),
   userId: text("user_id").notNull().references(() => users.id),
   expires: integer("expires").notNull(),
   createdAt: integer("created_at").notNull().default(0),
@@ -26,6 +29,7 @@ export const bookmarks = sqliteTable("bookmarks", {
   userId: text("user_id").notNull().references(() => users.id),
   articleId: text("article_id").notNull(),
   article: text("article").notNull(),
+  reading: text("reading").notNull().default('{"folder":"","tags":[],"notes":"","status":"later"}'),
   createdAt: integer("created_at").notNull(),
 }, (t) => [primaryKey({ columns: [t.userId, t.articleId] })]);
 export const limits = sqliteTable("request_limits", {
@@ -125,3 +129,25 @@ export const catalogReviews = sqliteTable("catalog_reviews", {
   reviewerUserId: text("reviewer_user_id").notNull().references(() => users.id),
   reviewedAt: integer("reviewed_at").notNull(),
 });
+
+export const passwordResets = sqliteTable("password_resets", {
+  digest: text("digest").primaryKey(),
+  email: text("email").notNull(),
+  expires: integer("expires").notNull(),
+});
+
+export const emailVerifications=sqliteTable("email_verifications",{
+ digest:text("digest").primaryKey(),
+ email:text("email").notNull(),
+ passwordHash:text("password_hash").notNull(),
+ expires:integer("expires").notNull()
+});
+
+export const savedSearches = sqliteTable("saved_searches", {
+ id: text("id").primaryKey(), userId: text("user_id").notNull().references(()=>users.id),
+ name: text("name").notNull(), query: text("query").notNull(), checkedAt: integer("checked_at").notNull(), seenIds: text("seen_ids").notNull().default("[]"),
+}, t => [index("saved_searches_user").on(t.userId)]);
+export const editorialVersions = sqliteTable("editorial_versions", {
+ id: text("id").primaryKey(), articleId: text("article_id").notNull(), actorUserId: text("actor_user_id").notNull().references(()=>users.id),
+ content: text("content").notNull(), status: text("status").notNull(), createdAt: integer("created_at").notNull(),
+}, t => [index("editorial_article").on(t.articleId,t.createdAt)]);

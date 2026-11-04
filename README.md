@@ -1,204 +1,55 @@
 # Evidências Médicas
 
-Portal para localizar literatura científica e documentos de sociedades médicas, com seleção de documentos de sociedades de diversas especialidades. O site ajuda a encontrar a fonte original e a guardá-la na biblioteca da conta. A ordenação da busca no PubMed segue a data de publicação ou a relevância da consulta; ela não é uma nota automática de qualidade da evidência.
+Portal de literatura médica com busca no PubMed, catálogo de sociedades, contas, biblioteca pessoal e fichas clínicas revisadas.
 
-O nome do pacote npm é `evidencias-medicas`.
+## Funcionalidades atuais
 
-## O que o código faz
+- Busca PubMed por texto, especialidade, tema, tipo, período, acesso gratuito e ordenação. A relevância é a do PubMed; não representa avaliação da qualidade da evidência.
+- Catálogo versionado de documentos de sociedades, com links à publicação original e proveniência.
+- Cadastro direto por e-mail e senha, sem coleta de CRM e sem envio de código. E-mail de membro permanece não verificado. Senhas protegidas por scrypt; sessões em cookies HttpOnly.
+- Biblioteca vinculada à conta: favoritos, pasta por leitura, até 12 etiquetas, notas pessoais e status (ler depois, em leitura, lido). Pesquisa por título, etiqueta e nota; filtros por pasta/status.
+- Até 30 buscas salvas por conta. Verificação manual compara até 12 resultados da primeira página com a verificação anterior. Resultados diferentes podem decorrer de reordenação ou filtros de período; não equivalem necessariamente a novas publicações. Sem agendamento, e-mail ou push.
+- Exportação JSON de biblioteca, notas e buscas pelo próprio usuário. O arquivo baixado contém dados pessoais de leitura; guarde-o com cuidado.
+- Administração por senha e sessão administrativa de 15 minutos. Rotas WebAuthn legadas não representam o fluxo atual de entrada.
+- Fichas clínicas em português por documento ou PMID, com pergunta, população, intervenção, comparador, resultados, limitações, aplicabilidade e referências/páginas. Publicar exige preencher os campos, identificar o revisor e confirmar leitura integral. O sistema não confirma automaticamente a qualidade da revisão ou a identidade profissional informada.
+- Histórico editorial imutável: nova gravação gera versão; rascunhos não substituem publicações. Retirada remove a ficha pública. Carregar versão anterior cria um novo rascunho para revisão. Documentos substitutos podem ser identificados por ID/PMID.
+- Fichas publicadas aparecem junto aos artigos/diretrizes. Não há fichas clínicas pré-aprovadas ou conclusões clínicas geradas automaticamente.
+- PWA com instruções de instalação e página offline neutra. Contas, notas e buscas não são armazenadas no cache offline.
+- Interface pública em português/inglês. Conteúdo editorial permanece no idioma escrito pelo revisor; títulos/resumos PubMed permanecem no original.
 
-### Busca no PubMed
+## Executar localmente
 
-`GET /api/articles` consulta o PubMed pelas E-utilities da NCBI (`esearch`, `esummary` e `efetch`) em `app/api/articles/route.ts`. A busca aceita especialidade, tema, período (30, 365 ou 1825 dias), tipo de estudo, texto completo gratuito, ordenação e página. Cada página pede 12 registros.
+Requer Node >=22.13.0. Use `npm ci` (ou `npm run install:ci`). Crie `.openai/hosting.json` com `{"d1":"DB","r2":null}`; este arquivo local não é versionado. Copie os exemplos de ambiente apenas se precisar configurar integrações; nunca versione credenciais.
 
-Títulos, resumos e o idioma devolvido pelo PubMed permanecem os do registro original. `lib/catalog.ts` mapeia alguns conceitos em português para termos de consulta. Esse mapeamento só entra na query; o artigo não é traduzido.
+1. `npm run build`
+2. Aplique, em ordem, os SQL de `drizzle/0000_*.sql` até `0004_*.sql`, apenas uma vez por banco, usando o Wrangler:
 
-O seletor lista 55 especialidades e identifica 54 sociedades (Angiologia e Cirurgia Vascular compartilham a SBACV). As 39 especialidades com documentos cadastrados exibem a aba da sociedade ao lado do PubMed, com a quantidade disponível. Há 225 documentos catalogados, com conteúdo em 39 especialidades; as demais continuam com a busca PubMed, sem abas vazias. O cadastro de sociedades conserva os links oficiais para expansão futura.
-
-`GET /api/articles/[id]` carrega o resumo estruturado do PMID, também no idioma original, e a interface aponta o link do PubMed.
-
-A busca guarda em memória até 100 respostas por cinco minutos. A chave é um hash dos parâmetros enviados à NCBI, e o JSON da busca não devolve o termo digitado. Fora do cache, há no máximo 120 consultas por hora por origem/IP observado: o endereço não fica em claro, o hash expira em uma hora e cabeçalhos de proxy arbitrários não entram nessa chave. As chamadas E-utilities compartilham a tabela `integration_rate_slots`, com intervalo mínimo de 400 ms e fila de até 10 segundos. Falha do PubMed vira resposta de erro, sem detalhe interno.
-
-`NCBI_CONTACT_EMAIL` e `NCBI_API_KEY` só são enviados à NCBI quando estão preenchidos. Nos exemplos do repositório os dois campos estão vazios.
-
-### Catálogos de sociedades médicas
-
-`data/catalogo/` contém os dados versionados e validados; `lib/catalog.ts` mantém as exportações legadas:
-
-- 32 documentos da SBC em `brazilianGuidelines`, de 2004 a 2026, com tema, tipo, ano e escopo.
-- 17 documentos da SBEM, ou elaborados com participação da sociedade, em `endocrineGuidelines`.
-- 176 documentos adicionais de acesso integral gratuito, conferidos em 27/10/2026 no PubMed Central e nos portais oficiais SBGM, ANAMT, SBMN e Femina/FEBRASGO. Cada item informa fonte, sociedade, ano e data de acesso. Documentos conjuntos aparecem nas especialidades das entidades participantes.
-- [Cobertura por especialidade e critérios de inclusão](data/catalogo/README.md).
-- Três estudos clássicos de cardiologia em `collection` e três de endocrinologia em `endocrinologyCollection`, com link para o registro PubMed.
-
-Os links abrem a publicação original. O repositório não incorpora o texto integral desses documentos. A seleção local não cobre o acervo oficial inteiro. “Registrar revisão editorial” grava a data da revisão; não há fila, versão nem reversão.
-
-### Conta, perfil e favoritos
-
-O cadastro distingue médico (nome, e-mail, CRM e UF) e estudante (nome, e-mail, faculdade e estado). O CRM é aceito como número de 3 a 8 dígitos. Não há consulta ao conselho profissional. Telefone é opcional. As preferências de e-mail e WhatsApp nascem desmarcadas, ficam no perfil e não disparam mensagem.
-
-O login pede um código de seis dígitos, válido por dez minutos, com até cinco tentativas e consumo único. Código e sessão são armazenados como hash. O cookie `em_session` é HttpOnly e SameSite=Lax, com Secure em HTTPS, e dura sete dias.
-
-Perfil, preferências e favoritos de artigos PubMed e de itens do catálogo ficam no D1, separados por usuário. A exclusão confirmada em `DELETE /api/account/delete` remove perfil, favoritos, sessões e desafios. A conta administrativa não segue esse fluxo. `DELETE /api/account` encerra a sessão.
-
-Na prévia local em loopback (`NODE_ENV=development` ou `LOCAL_PREVIEW_ENABLED`), o código aparece na interface como demonstração e nenhum e-mail sai. Isso não prova posse do endereço. Fora dessa prévia, sem `RESEND_API_KEY` e `EMAIL_FROM`, `POST /api/auth/request` responde que o envio ainda não foi ativado.
-
-### Administração
-
-`/admin` pede o código de e-mail e, em seguida, uma chave FIDO2/WebAuthn (`@simplewebauthn`). O painel abre depois da verificação da chave. A sessão administrativa dura quinze minutos.
-
-O cadastro local da primeira chave usa a origem `http://localhost:5173`. WebAuthn trata `127.0.0.1` como outra origem. Uma origem de produção exigiria credencial própria. O toque da chave física do responsável ainda não foi exercitado; a presença das rotas não torna o painel operacional.
-
-### Métricas
-
-O banner em `components/analytics-consent.tsx` é opt-in. Com consentimento, o portal conta eventos de página, busca, filtro, ordenação, abertura, clique na fonte e favorito, por dia, tema e fonte. O termo livre da busca não vai para a telemetria, e o evento não fica ligado à conta.
-
-Recusar o consentimento apaga os identificadores pseudônimos daquele navegador e expira os cookies. Contagens já agregadas permanecem. A limpeza de retenção, de 180 dias, roda quando a API de consentimento recebe uma escolha. Não há tarefa agendada.
-
-O painel administrativo lê essas contagens e as médias diárias de `service_metrics`. Percentis, causa do erro, correlation id, acerto de cache e disponibilidade de banco ou autenticação não são coletados.
-
-## Stack
-
-- TypeScript e React 19.2
-- Rotas e componentes no formato do Next.js 16.3, executados pelo Vinext 1.0.0-beta.5 e pelo Vite 8
-- Tailwind CSS 4
-- Drizzle ORM 0.45 com drizzle-kit, e D1 local pelo Wrangler 4
-- WebAuthn administrativo com `@simplewebauthn/browser` e `@simplewebauthn/server`
-
-Node.js `>=22.13.0`, conforme `engines` em `package.json`.
-
-## Como executar
-
-Em um clone novo, o perfil de execução padrão é o portátil: não existe `.sites-runtime/execution-profile.json`.
-
-```sh
-npm ci
+```powershell
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0004_reading_workspace.sql
 ```
 
-`npm run install:ci` é o instalador travado do repositório. No perfil portátil ele também chama `npm ci`, com as dependências de desenvolvimento e opcionais incluídas.
+O comando acima exemplifica a nova migração. Num banco novo aplique também 0000, 0001, 0002 e 0003 antes dela. Não execute uma migração já aplicada. 0004 preserva favoritos e acrescenta organização de leitura, buscas salvas e versões editoriais.
 
-`vite.config.ts` importa `.openai/hosting.json`. A pasta `.openai/` está no `.gitignore`, então o arquivo não vem no clone. Sem ele, o Vite não carrega a configuração e o build não copia o arquivo para `dist/.openai/hosting.json`. Crie o arquivo só na máquina local. `db/index.ts` espera o binding D1 com o nome `DB`. `vite.config.ts` também lê `r2`; a chave precisa existir para o TypeScript aceitar o JSON importado. Com `null`, nenhum bucket R2 é criado. O portal persiste dados no D1:
+3. `npm run preview:local` para servir o Worker compilado em localhost:5173; `npm run dev` para desenvolvimento com recarga.
 
-```json
-{
-  "d1": "DB",
-  "r2": null
-}
-```
+## Validação
 
-```sh
-npm run dev
-```
+- `npm run lint`
+- `npx tsc --noEmit`
+- `node --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/pwa-test.mjs`
+- `npm run build`
+- `node scripts/verify-local.mjs` (banco temporário novo; aplica todas as migrações e executa smoke do Worker, sem credenciais ou rede externa)
 
-No perfil portátil, o comando sobe o Vinext com recarga na porta 5173.
+Smoke cobre autenticação, recuperação local, isolamento entre contas, biblioteca, notas, buscas, publicação/rascunho/retirada de fichas, auditoria, exclusão e rotas bilíngues. Testes locais não demonstram funcionamento em produção nem entrega real de e-mail.
 
-```sh
-npm run build
-npm start
-```
+## Operação sem contratação de serviços
 
-`npm run build` gera o Worker, inclusive `dist/server/wrangler.json`. `npm start` serve esse build com Wrangler em `127.0.0.1`, no estado `.wrangler/state`. O comando não publica o site.
+As novas funções usam o D1 e a hospedagem existentes. Nenhum serviço, assinatura ou recurso pago foi contratado. Uso em hospedagem continua sujeito às cotas e condições da infraestrutura existente.
 
-```sh
-npm run preview:local
-```
+Recuperação de senha por e-mail usa a integração Resend já presente, condicionada a RESEND_API_KEY e EMAIL_FROM. Sem configuração, a API informa indisponibilidade. Na prévia local há links de demonstração. Não há recuperação pública que dispense provar acesso à conta.
 
-A prévia compilada também exige o build. Ela escuta em `http://localhost:5173` e encaminha para o Worker local, com `LOCAL_PREVIEW_ENABLED`. No Windows, `iniciar-site.cmd` chama o build se `dist/server/wrangler.json` ainda não existir e em seguida roda esse script. O cadastro WebAuthn local continua em `http://localhost:5173/admin`.
+Antes de publicar uma versão com estas funções, aplique a migração 0004 no banco correto, preserve uma cópia de segurança e execute o smoke local. A publicação e a migração de produção são ações distintas do build. Nenhuma publicação é feita pelos comandos acima.
 
-Não há `wrangler.jsonc` na raiz. A prévia compilada usa o `wrangler.json` gerado em `dist/`.
+Para backup manual gratuito do banco local, com o Worker parado, use `npm run backup:local`; o script copia o estado local completo para uma nova pasta em `.sites-runtime/backups`, sem sobrescrever arquivos anteriores. Pare o Worker antes da cópia: copiar SQLite em uso não produz um backup atômico. Esse backup contém contas e hashes: não publique e não envie ao Git. Exportar biblioteca pelo site não substitui backup do banco.
 
-## Migrações D1 locais
-
-Depois do build, aplique cada SQL ainda pendente, nesta ordem e uma vez por banco local:
-
-```sh
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_stiff_sabretooth.sql
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_fearless_reaper.sql
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_global_integration_limits.sql
-```
-
-| Arquivo | Conteúdo |
-| --- | --- |
-| `drizzle/0000_stiff_sabretooth.sql` | Contas, desafios de login, sessões, favoritos e limite de pedidos |
-| `drizzle/0001_fearless_reaper.sql` | WebAuthn, auditoria administrativa, métricas, revisões e checagens de link do catálogo |
-| `drizzle/0002_global_integration_limits.sql` | Tabela `integration_rate_slots`, usada pelo limitador do PubMed |
-
-`drizzle/meta/_journal.json` lista somente 0000 e 0001. O arquivo 0002 está no repositório e entra na sequência manual acima. `npm run db:generate` gera SQL novo a partir de `db/schema.ts`; não aplica o banco local. O diretório de estado é `.wrangler/state`. A publicação, se existir, aplica as migrações de produção à parte.
-
-## Variáveis de ambiente
-
-Os nomes e os valores de exemplo estão em `.dev.vars.example` e `.env.example`. Copie para `.dev.vars` e `.env`. Os dois destinos estão no `.gitignore`. Não coloque segredo no Git.
-
-| Variável | Arquivo de exemplo | Uso |
-| --- | --- | --- |
-| `ADMIN_EMAILS` | `.dev.vars.example` | E-mails que podem iniciar a administração. `lib/admin.ts` ainda compara com o endereço fixo desse módulo. |
-| `ADMIN_BOOTSTRAP_ENABLED` | `.dev.vars.example` | Primeiro cadastro da chave, restrito a localhost na prévia local. |
-| `ADMIN_RP_ID` | `.dev.vars.example` | RP ID do WebAuthn. O exemplo traz `localhost`. |
-| `ADMIN_ORIGIN` | `.dev.vars.example` | Origem do WebAuthn. O exemplo traz `http://localhost:5173`. |
-| `NCBI_CONTACT_EMAIL` | `.dev.vars.example` | Contato opcional enviado à NCBI. Vazio no exemplo. |
-| `NCBI_API_KEY` | `.dev.vars.example` | Chave opcional da NCBI. Vazia no exemplo. |
-| `RESEND_API_KEY` | `.env.example` | Envio do código pelo Resend. |
-| `EMAIL_FROM` | `.env.example` | Remetente do código. |
-
-`scripts/preview-local.mjs` lê `.dev.vars` e coloca na linha de comando só `ADMIN_EMAILS`, `ADMIN_BOOTSTRAP_ENABLED` e `NCBI_CONTACT_EMAIL`. `NCBI_API_KEY`, `RESEND_API_KEY` e `EMAIL_FROM` ficam de fora dessa linha. `LOCAL_PREVIEW_ENABLED` é ligada pelo próprio script da prévia compilada.
-
-## Estrutura
-
-```
-app/                  portal (page.tsx, cardio-app.tsx), /admin e app/api
-lib/catalog.ts        especialidades, temas, catálogos e mapeamentos de busca
-lib/server.ts         sessão, perfil e variáveis do Worker
-lib/admin.ts          administração e WebAuthn
-db/schema.ts          esquema Drizzle do portal: contas, sessões, favoritos, admin, métricas e limite de integração
-db/index.ts           cliente Drizzle no binding D1 `DB`
-drizzle/              SQL 0000, 0001 e 0002
-components/           consentimento de métricas e primitivos de interface
-scripts/              instalação, dev, build, prévia e scripts/smoke-test.mjs
-```
-
-`PROJETO.md`, `AUDITORIA.md` e `CONTEXTO-DO-PROJETO.md` registram etapas anteriores. `CONTEXTO-DO-PROJETO.md` (25/10/2026) avisa que parte de `PROJETO.md` ainda descreve fases locais antigas. Quando um número ou um fluxo divergir, vale o código.
-
-## Estado conhecido
-
-O código contém a busca PubMed, os catálogos de sociedades médicas, o login por código, perfil, favoritos, `/admin` com WebAuthn e as métricas com consentimento.
-
-`AUDITORIA.md` e `PROJETO.md`, com revisão datada de 17/10/2026, registram o que foi executado naquela etapa:
-
-- `npx tsc --noEmit` e `npm run build` passaram. O build pode avisar que rotas dinâmicas ficam como `Unknown` na classificação estática, sem falhar.
-- `node scripts/smoke-test.mjs` passou com 32 asserções de autenticação local, isolamento entre contas, favoritos, consentimento e exclusão confirmada.
-- Uma consulta ao endpoint local do PubMed, depois da migração 0002, devolveu registros oficiais, e a resposta não incluía o termo pesquisado.
-- O ESLint focado em `app/api/articles/route.ts` e `app/admin/dashboard-widgets.tsx` passou. O `npm run lint` do repositório inteiro, nessa data, ainda falhava com 27 erros e 12 avisos, em especial `no-explicit-any` e regras de hooks.
-
-O que segue pendente de validação operacional:
-
-- Cerimônia WebAuthn com a chave física e o navegador/origem pretendidos.
-- E-mail de contato da NCBI antes de tráfego público. A API key só entra se a escala justificar.
-- Entrega real de e-mail, com remetente verificado. Sem as credenciais, a rota de código fora da prévia local responde que o envio não foi ativado.
-- Publicação. O histórico citado em `CONTEXTO-DO-PROJETO.md` menciona uma publicação anterior pelo Sites; a disponibilidade dessa URL não foi reconfirmada em 25/10/2026. A cópia no GitHub não publica o site e não configura e-mail, banco de produção nem autenticação.
-- Política de privacidade, responsável e canal do titular. A descrição técnica não afirma conformidade com a LGPD.
-- Acervo completo da SBC, proveniência versionada e observabilidade além da média diária.
-- Alertas de conteúdo. As preferências de e-mail e WhatsApp são gravadas; o envio não está implementado.
-
-Compilar, passar no smoke test local e operar em produção são verificações diferentes. Nesta atualização de documentação, em 26/10/2026, `npx tsc --noEmit` e `npm run build` passaram de novo. O build repetiu o aviso de rotas `Unknown` na classificação estática. `node scripts/smoke-test.mjs` não foi executado outra vez.
-
-## Scripts
-
-- `npm run dev` — desenvolvimento
-- `npm run build` — build do Worker
-- `npm start` — prévia do build com Wrangler
-- `npm run preview:local` — prévia compilada em `localhost:5173`
-- `npm run db:generate` — gera migração Drizzle depois de alterar `db/schema.ts`
-- `npm run lint` — ESLint
-
-## Referências
-
-- [PubMed](https://pubmed.ncbi.nlm.nih.gov/)
-- [E-utilities](https://www.ncbi.nlm.nih.gov/books/NBK25499/)
-- [Vinext](https://github.com/cloudflare/vinext)
-- [Drizzle com D1](https://orm.drizzle.team/docs/get-started/d1-new)
-
-
-## Ampliação dos catálogos — 27/10/2026
-
-A interface usa um cadastro de sociedades por especialidade, com IDs distintos para siglas homônimas. A biblioteca resolve documentos pelo cadastro do servidor, preservando URL, autoria e fonte mesmo quando a entrada do cliente é adulterada. Busca por tema em português, filtros por tipo/ano, métricas consentidas e estudos clássicos foram preservados.
-
-Validação desta alteração: TypeScript, compilação, teste dos 225 registros e das 55 especialidades, e teste do Worker compilado com D1 local (autenticação, isolamento, favoritos e rejeição de fontes adulteradas), sem chamadas externas. ESLint: sem erros; 11 avisos preexistentes. A checagem visual não foi executada: o navegador recusou a abertura da prévia local. A atualização no GitHub não equivale à publicação do site.
+Confirme a instalação e o layout em aparelhos físicos. E-mail real, disponibilidade pública, política de privacidade com responsável/canal e rotina externa de backup dependem da configuração do proprietário. Documentos PROJETO.md, AUDITORIA.md e CONTEXTO-DO-PROJETO.md são registros históricos; os fluxos atuais estão descritos aqui e no código.

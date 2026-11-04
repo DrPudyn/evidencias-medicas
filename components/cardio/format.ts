@@ -1,4 +1,4 @@
-export function prettyDate(value: string) {
+export function prettyDate(value: string, locale: string = "pt") {
   const raw = value.trim().replace(/\s+/g, " ");
   const yearOnly = raw.match(/^(\d{4})$/);
   if (yearOnly) return yearOnly[1];
@@ -10,7 +10,7 @@ export function prettyDate(value: string) {
     const month = monthNames.findIndex((name) => name === match[2].slice(0, 3).toLowerCase());
     if (month >= 0) {
       const date = new Date(Date.UTC(Number(match[1]), month, monthDay ? Number(monthDay[3]) : 1));
-      return new Intl.DateTimeFormat("pt-BR", {
+      return new Intl.DateTimeFormat(locale === "en" ? "en-US" : "pt-BR", {
         ...(monthDay ? { day: "2-digit" as const } : {}),
         month: "short",
         year: "numeric",
@@ -21,7 +21,7 @@ export function prettyDate(value: string) {
   const date = new Date(raw);
   return isNaN(date.getTime())
     ? raw
-    : new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
+    : new Intl.DateTimeFormat(locale === "en" ? "en-US" : "pt-BR", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
 }
 
 export function languageName(code?: string) {

@@ -1,5 +1,7 @@
 "use client";
 
+import { useLocale } from "@/components/locale-provider";
+
 import { useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
@@ -14,6 +16,7 @@ export function Modal({
   close: () => void;
   wide?: boolean;
 }) {
+  const { t } = useLocale();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     ref.current?.showModal();
@@ -34,7 +37,7 @@ export function Modal({
       aria-labelledby="dialog-title"
     >
       <div className="modal-inner">
-        <button className="icon-button close" onClick={close} aria-label="Fechar">
+        <button className="icon-button close" onClick={close} aria-label={t("Fechar")}>
           <X size={20} />
         </button>
         <h2 id="dialog-title">{title}</h2>
