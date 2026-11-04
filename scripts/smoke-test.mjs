@@ -44,6 +44,21 @@ assert.equal((await call('/api/bookmarks','PATCH',{id:article.id,reading:{notes:
 assert.equal((await call('/api/bookmarks','PATCH',{id:article.id,reading:{status:'invalid'}},login.cookie)).status,400);
 assert.equal((await call('/api/bookmarks','PATCH',{id:article.id,reading:{notes:'x'.repeat(10001)}},login.cookie)).status,400);
 assert.equal((await call('/api/bookmarks','PATCH',{id:article.id,reading:{}},login.cookie,'https://invalid.example')).status,403);
+// Undo restores the server's latest metadata, not the article card's stale snapshot.
+const removedReading=await call('/api/bookmarks?id='+article.id,'DELETE',undefined,login.cookie);
+assert.equal(removedReading.status,200);
+assert.deepEqual(removedReading.data.article.reading,{folder:'Cardiologia',tags:['revisar'],notes:'Nota privada',status:'reading'});
+assert.equal((await call('/api/bookmarks?id='+article.id,'DELETE',undefined,secondLogin.cookie)).data.article,null,'Another account cannot retrieve removed reading metadata');
+assert.equal((await call('/api/bookmarks','POST',{...removedReading.data.article,reading:{status:'invalid'}},login.cookie)).status,400);
+const restoredReading=await call('/api/bookmarks','POST',removedReading.data.article,login.cookie);
+assert.equal(restoredReading.status,200);
+assert.deepEqual(restoredReading.data.article.reading,removedReading.data.article.reading);
+assert.deepEqual((await call('/api/bookmarks','GET',undefined,login.cookie)).data.articles[0].reading,removedReading.data.article.reading);
+assert.equal((await call('/api/bookmarks','POST',removedReading.data.article,login.cookie,'https://invalid.example')).status,403);
+assert.equal((await call('/api/bookmarks','GET',undefined,secondLogin.cookie)).data.articles.length,0);
+// A repeated save must not overwrite notes subsequently edited in another tab.
+await call('/api/bookmarks','PATCH',{id:article.id,reading:{notes:'Nota mais recente'}},login.cookie);
+assert.equal((await call('/api/bookmarks','POST',removedReading.data.article,login.cookie)).data.article.reading.notes,'Nota mais recente');
 const savedQuery={q:'heart failure',specialty:'cardiology',topic:'all',type:'all',period:'30',free:true,sort:'recent'};
 assert.equal((await call('/api/saved-searches')).status,401);
 const savedSearch=await call('/api/saved-searches','POST',{name:'Minha busca',query:savedQuery,seenIds:[article.id]},login.cookie);
@@ -96,8 +111,9 @@ assert.equal((await call('/api/admin/editorial','POST',editorial,adminLogin.cook
 assert.equal((await call('/api/admin/editorial','POST',editorial,adminLogin.cookie)).status,200);
 assert.equal((await call('/api/editorial')).data.items.some(x=>x.articleId===article.id),false);
 assert.equal((await call('/api/admin/editorial','POST',{...editorial,status:'published'},adminLogin.cookie)).status,400);
-assert.equal((await call('/api/admin/editorial','POST',{...editorial,status:'published',fullTextReviewed:true},adminLogin.cookie)).status,200);
+assert.equal((await call('/api/admin/editorial','POST',{...editorial,status:'published',fullTextReviewed:true,supersededBy:'12345678'},adminLogin.cookie)).status,200);
 let published=(await call('/api/editorial')).data.items.find(x=>x.articleId===article.id);
+assert.equal(published.supersededBy,'12345678');
 assert.equal(published.sourceUrl,`https://pubmed.ncbi.nlm.nih.gov/${article.id}/`);
 assert.equal((await call('/api/admin/editorial','POST',{...editorial,results:'Novo rascunho'},adminLogin.cookie)).status,200);
 assert.equal((await call('/api/editorial')).data.items.find(x=>x.articleId===article.id).results,editorial.results,'Draft does not hide or replace publication');

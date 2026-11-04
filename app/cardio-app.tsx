@@ -78,8 +78,8 @@ export default function CardioApp() {
       browse.setGuidelineYear("all");
     }
     browse.setTab(value);
-    browse.setPage(1);
-    if (value !== "live") browse.setFree(false);
+    if (value !== "saved" && browse.tab !== "saved") browse.setPage(1);
+    if (value !== "live" && value !== "saved") browse.setFree(false);
   }
 
   function showInitialCollection() {
@@ -135,7 +135,9 @@ export default function CardioApp() {
       </main>
       <SiteFooter onGuide={() => browse.setModal("guide")} onPrivacy={() => browse.setModal("privacy")} />
       <AnalyticsConsent />
-      {toast && <Toast message={toast} onClose={() => setToast("")} />}
+      {account.undoRemoval
+        ? <Toast message={account.undoError || "Artigo removido da biblioteca."} onUndo={() => void account.restoreRemoved()} pending={account.undoBusy} onClose={account.dismissUndo} />
+        : toast && <Toast message={toast} onClose={() => setToast("")} />}
       {browse.modal === "guide" && (
         <SearchGuide
           onClose={() => browse.setModal(null)}

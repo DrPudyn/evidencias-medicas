@@ -4,6 +4,10 @@ Portal de literatura médica com busca no PubMed, catálogo de sociedades, conta
 
 ## Funcionalidades atuais
 
+- A pesquisa e os filtros são preservados na sessão da aba (sessionStorage), inclusive após atualizar a página. Não são armazenados artigos, notas, credenciais ou resultados nesse estado. Abrir/fechar detalhes e visitar a biblioteca conserva a pesquisa.
+- Compartilhar busca copia um link público com termo, filtros, fonte e página; o destinatário não precisa entrar na conta. O link não inclui notas, dados da conta, tokens ou texto ainda não pesquisado. O termo fica visível no link quando o usuário opta por compartilhar. Sem acesso à área de transferência, um campo permite copiar manualmente.
+- Remover um favorito oferece Desfazer por 10 segundos, enquanto a página e a conta permanecem abertas. A restauração preserva pasta, etiquetas, notas e status de leitura.
+- Substituições explicitamente registradas em revisão editorial publicada exibem aviso visível com link ao documento substituto; não se infere substituição pelo ano. Rascunhos e revisões retiradas não geram aviso.
 - Busca PubMed por texto, especialidade, tema, tipo, período, acesso gratuito e ordenação. A relevância é a do PubMed; não representa avaliação da qualidade da evidência.
 - Catálogo versionado de documentos de sociedades, com links à publicação original e proveniência.
 - Cadastro direto por e-mail e senha, sem coleta de CRM e sem envio de código. E-mail de membro permanece não verificado. Senhas protegidas por scrypt; sessões em cookies HttpOnly.
@@ -36,7 +40,7 @@ O comando acima exemplifica a nova migração. Num banco novo aplique também 00
 
 - `npm run lint`
 - `npx tsc --noEmit`
-- `node --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/pwa-test.mjs`
+- `node --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/pwa-test.mjs scripts/reading-journey-test.mjs`
 - `npm run build`
 - `node scripts/verify-local.mjs` (banco temporário novo; aplica todas as migrações e executa smoke do Worker, sem credenciais ou rede externa)
 

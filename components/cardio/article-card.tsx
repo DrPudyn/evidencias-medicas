@@ -1,6 +1,6 @@
 "use client";
 
-import { EditorialNote } from "./editorial";
+import { EditorialNote, SupersededNotice } from "./editorial";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight } from "lucide-react";
@@ -51,6 +51,7 @@ export function ArticleCard({
             {article.title}
           </button>
         )}
+        <SupersededNotice articleId={article.id}/>
         <EditorialNote articleId={article.id}/>
         <p className="article-authors">{article.authors}</p>
         <div className="article-bottom">

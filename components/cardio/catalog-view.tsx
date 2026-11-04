@@ -1,6 +1,6 @@
 "use client";
 
-import { EditorialNote } from "./editorial";
+import { EditorialNote, SupersededNotice } from "./editorial";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight, BookOpen, ExternalLink, Search } from "lucide-react";
@@ -47,6 +47,7 @@ export function GuidelineList({ guidelines, source, saved, saving, onToggle }: {
           {guideline.access === "free-full-text" && <span className="type-tag">{t("Texto completo livre")}</span>}
         </div>
         <a className="article-title" href={guideline.url} target="_blank" rel="noreferrer" onClick={() => trackClinicalEvent("source_click", guideline.topic, guideline.provenance.society)}>{guideline.title}</a>
+        <SupersededNotice articleId={guideline.id}/>
         <EditorialNote articleId={guideline.id}/>
         <p className="article-authors">{guideline.authorship || society?.name || source}</p>
         {guideline.scope && <p className="article-authors guideline-scope"><strong>{t("Escopo:")}</strong> {guideline.scope}</p>}

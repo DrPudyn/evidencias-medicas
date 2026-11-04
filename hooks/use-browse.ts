@@ -6,9 +6,11 @@ import { trackClinicalEvent } from "@/lib/analytics-client";
 import { api } from "@/components/cardio/api";
 import { guidelineSourceFor } from "@/components/cardio/catalog-query";
 import { scrollToExplore } from "@/components/cardio/scroll";
+import { BROWSE_STORAGE_KEY, browseFromLink, sanitizeBrowse, searchLink } from "@/lib/browse-state";
 import type { AppModal } from "@/components/cardio/types";
 
 export function useBrowse() {
+  const [ready, setReady] = useState(false);
   const [q, setQ] = useState("");
   const [query, setQuery] = useState("");
   const [specialty, setSpecialty] = useState("");
@@ -29,8 +31,38 @@ export function useBrowse() {
   const [modal, setModal] = useState<AppModal>(null);
   const [selected, setSelected] = useState<Article | null>(null);
 
+  // Restore once before fetching, so reload never issues an empty replacement search.
   useEffect(() => {
-    if (tab !== "live") return;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      let restored = browseFromLink(new URL(window.location.href));
+      if (!restored) {
+        try { restored = sanitizeBrowse(JSON.parse(sessionStorage.getItem(BROWSE_STORAGE_KEY) || "null")); }
+        catch { restored = sanitizeBrowse(null); }
+      }
+      setQ(restored.draft); setQuery(restored.query); setSpecialty(restored.specialty);
+      setTopic(restored.topic); setType(restored.type); setPeriod(restored.period);
+      setGuidelineYear(restored.guidelineYear); setFree(restored.free); setSort(restored.sort);
+      setPage(restored.page); setTab(restored.tab); setReady(true);
+    });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    const snapshot = { query, draft: q, specialty, topic, type, period, guidelineYear, free, sort, page, tab };
+    try { sessionStorage.setItem(BROWSE_STORAGE_KEY, JSON.stringify(snapshot)); } catch { /* Storage may be disabled. */ }
+    // Keep an explicitly shared URL current without adding search terms to ordinary browsing URLs.
+    const current = new URL(window.location.href);
+    if (current.searchParams.get("search") === "1" && tab !== "saved") {
+      const link = searchLink(current.origin, current.pathname.startsWith("/en") ? "en" : "pt", snapshot);
+      if (link !== current.href) window.history.replaceState(window.history.state, "", link);
+    }
+  }, [ready, q, query, specialty, topic, type, period, guidelineYear, free, sort, page, tab]);
+
+  useEffect(() => {
+    if (!ready || tab !== "live") return;
     const controller = new AbortController();
     let active = true;
     queueMicrotask(() => {
@@ -68,7 +100,7 @@ export function useBrowse() {
       active = false;
       controller.abort();
     };
-  }, [query, topic, type, period, free, sort, page, tab, refresh, specialty]);
+  }, [ready, query, topic, type, period, free, sort, page, tab, refresh, specialty]);
 
   function reset() {
     setQ("");
@@ -107,6 +139,8 @@ export function useBrowse() {
   }
 
   return {
+    ready,
+    snapshot: { query, draft: q, specialty, topic, type, period, guidelineYear, free, sort, page, tab },
     q,
     setQ,
     query,

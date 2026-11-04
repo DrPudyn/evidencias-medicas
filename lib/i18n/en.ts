@@ -1,4 +1,17 @@
 export const english:Record<string,string> = {
+  "A última pesquisa e seus filtros ficam na sessão desta aba. Compartilhar uma busca inclui o termo e os filtros no link, sem notas pessoais ou dados da conta.": "The last search and its filters stay in this tab session. Sharing a search includes the term and filters in the link, without personal notes or account data.",
+  "Compartilhar busca": "Share search",
+  "O link contém apenas o termo e os filtros da pesquisa.": "The link contains only the search term and filters.",
+  "Link copiado": "Link copied",
+  "Link da busca copiado.": "Search link copied.",
+  "Copie este link": "Copy this link",
+  "Desfazer": "Undo",
+  "Restaurando…": "Restoring…",
+  "Leitura restaurada com suas notas e organização.": "Reading restored with your notes and organization.",
+  "Documento substituído": "Superseded document",
+  "Ver versão mais recente cadastrada": "View the newer registered version",
+  "Substituição informada na revisão editorial.": "Replacement recorded in the editorial review.",
+
   "Salvo.": "Saved.",
   "Notas e organização": "Notes and organization",
   "Minhas notas": "My notes",

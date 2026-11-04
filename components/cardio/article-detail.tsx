@@ -1,6 +1,6 @@
 "use client";
 
-import { EditorialNote } from "./editorial";
+import { EditorialNote, SupersededNotice } from "./editorial";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight, Bookmark } from "lucide-react";
@@ -57,7 +57,8 @@ export function ArticleDetail({
           </div>
         )}
       </dl>
-      <EditorialNote articleId={article.id}/>
+      <SupersededNotice articleId={article.id}/>
+        <EditorialNote articleId={article.id}/>
       <section className="abstract-section" aria-live="polite">
         <div className="abstract-heading">
           <h4>{t("Resumo")}</h4>

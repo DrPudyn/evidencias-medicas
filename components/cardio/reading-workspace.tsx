@@ -6,6 +6,7 @@ import type { AccountController } from "@/hooks/use-account";
 import type { BrowseState } from "@/hooks/use-browse";
 import type { Article } from "@/lib/catalog";
 import { emptyReading, type Reading, type SavedSearch, type SavedQuery } from "@/lib/reading";
+import { SupersededNotice } from "./editorial";
 import { api } from "./api";
 import { useLocale } from "@/components/locale-provider";
 
@@ -50,6 +51,7 @@ function ReadingEditor({ article, account, onOpen }: {
     {society
       ? <a className="article-title" href={article.url} target="_blank" rel="noreferrer">{article.title}</a>
       : <button className="article-title" onClick={() => onOpen(article)}>{article.title}</button>}
+    <SupersededNotice articleId={article.id} />
     {reading.notes && <p className="library-note-preview">{reading.notes}</p>}
     <details className="library-edit">
       <summary>{t("Notas e organização")} <ChevronDown size={14} aria-hidden="true" /></summary>

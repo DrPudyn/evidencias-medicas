@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Article } from "@/lib/catalog";
 import { api } from "@/components/cardio/api";
 import { useLocale } from "@/components/locale-provider";
@@ -10,10 +10,19 @@ import type { Reading } from "@/lib/reading";
 type AccountEnv = { tab:string; specialty:string; setTab:(tab:string)=>void; setModal:(modal:AppModal)=>void; setToast:(message:string)=>void };
 export function useAccount({ tab, specialty, setTab, setModal, setToast }: AccountEnv) {
   const { t, locale } = useLocale();
+  const activeUser = useRef<string | null>(null), restoring = useRef(false);
+  const [undoRemoval,setUndoRemoval] = useState<{article:Article;index:number;ownerId:string}|null>(null);
+  const [undoBusy,setUndoBusy] = useState(false), [undoError,setUndoError] = useState("");
   const [user,setUser]=useState<Profile|null>(null), [saved,setSaved]=useState<Article[]>([]), [saving,setSaving]=useState("");
   const [mode,setMode]=useState("login"), [email,setEmail]=useState(""), [password,setPassword]=useState(""), [resetToken,setResetToken]=useState("");
   const [verifyToken,setVerifyToken]=useState(""),[adminReturn,setAdminReturn]=useState(false);
   const [busy,setBusy]=useState(false), [formError,setFormError]=useState(""), [notice,setNotice]=useState(""), [previewResetUrl,setPreviewResetUrl]=useState("");
+  useEffect(() => { activeUser.current = user ? user.id || user.email : null; }, [user]);
+  useEffect(() => {
+    if (!undoRemoval) return;
+    const timer = setTimeout(() => setUndoRemoval(null), 10000);
+    return () => clearTimeout(timer);
+  }, [undoRemoval]);
   useEffect(()=>{
     api<{user:Profile|null}>("/api/account").then(data=>{setUser(data.user);if(data.user)void api<{articles:Article[]}>("/api/bookmarks").then(d=>setSaved(d.articles)).catch(()=>{});}).catch(()=>{});
     const url=new URL(window.location.href), token=url.searchParams.get("reset"),verification=url.searchParams.get("verify");
@@ -52,18 +61,39 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast }: Accou
     }catch(error){setFormError((error as Error).message);}finally{setBusy(false);}
   }
   async function toggleSaved(article:Article){
-    if(!user){openAuth("login");return;}setSaving(article.id);
+    if(!user){openAuth("login");return;}const ownerId=user.id||user.email;setSaving(article.id);
     try{
       if(saved.some(item=>item.id===article.id)){
-        await api(`/api/bookmarks?id=${article.id}`,{method:"DELETE"});setSaved(items=>items.filter(item=>item.id!==article.id));setToast("Artigo removido da biblioteca.");
+        const removed=await api<{article:Article|null}>(`/api/bookmarks?id=${encodeURIComponent(article.id)}`,{method:"DELETE"});
+        if(activeUser.current!==ownerId)return;
+        const index=saved.findIndex(item=>item.id===article.id);
+        setSaved(items=>items.filter(item=>item.id!==article.id));
+        if(removed.article){setUndoError("");setUndoRemoval({article:removed.article,index,ownerId});}
+        setToast("Artigo removido da biblioteca.");
       }else{
-        await api("/api/bookmarks",{method:"POST",body:JSON.stringify(article)});
-        trackClinicalEvent("bookmark",article.topic,article.source||"PubMed");setSaved(items=>[article,...items]);setToast("Artigo salvo na sua biblioteca.");
+        const result=await api<{article:Article}>("/api/bookmarks",{method:"POST",body:JSON.stringify(article)});
+        if(activeUser.current!==ownerId)return;
+        setUndoRemoval(current=>current?.article.id===article.id?null:current);
+        trackClinicalEvent("bookmark",article.topic,article.source||"PubMed");setSaved(items=>[result.article,...items.filter(item=>item.id!==article.id)]);setToast("Artigo salvo na sua biblioteca.");
       }
     }catch(error){setToast((error as Error).message);}finally{setSaving("");}
   }
+  async function restoreRemoved(){
+    const pending=undoRemoval;
+    if(!pending||activeUser.current!==pending.ownerId||restoring.current)return;
+    restoring.current=true;setUndoBusy(true);setUndoError("");
+    try{
+      const result=await api<{article:Article}>("/api/bookmarks",{method:"POST",body:JSON.stringify(pending.article)});
+      if(activeUser.current!==pending.ownerId)return;
+      setSaved(items=>{if(items.some(item=>item.id===result.article.id))return items;const restored=[...items];restored.splice(Math.max(0,pending.index),0,result.article);return restored;});
+      setUndoRemoval(current=>current===pending?null:current);
+      setToast("Leitura restaurada com suas notas e organização.");
+    }catch(error){setUndoError((error as Error).message);}
+    finally{restoring.current=false;setUndoBusy(false);}
+  }
+  function dismissUndo(){setUndoRemoval(null);setToast("");}
   async function logout(){
-    try{await api("/api/account",{method:"DELETE"});setUser(null);setSaved([]);setModal(null);if(tab==="saved")setTab(specialty?"collection":"live");}
+    try{await api("/api/account",{method:"DELETE"});activeUser.current=null;setUndoRemoval(null);setUser(null);setSaved([]);setModal(null);if(tab==="saved")setTab(specialty?"collection":"live");}
     catch(error){setFormError((error as Error).message);}
   }
   async function updateReading(id:string,reading:Reading){
@@ -73,9 +103,9 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast }: Accou
   async function deleteAccount(){
     if(!window.confirm(t("Excluir sua conta apagará seu perfil, favoritos e sessões. Essa ação não pode ser desfeita. As métricas já agregadas e sem vínculo com a conta não serão alteradas.")))return;
     setBusy(true);
-    try{await api("/api/account/delete",{method:"DELETE",body:JSON.stringify({confirmation:"EXCLUIR MINHA CONTA"})});setUser(null);setSaved([]);setModal(null);setToast("Sua conta e seus favoritos foram excluídos.");}
+    try{await api("/api/account/delete",{method:"DELETE",body:JSON.stringify({confirmation:"EXCLUIR MINHA CONTA"})});activeUser.current=null;setUndoRemoval(null);setUser(null);setSaved([]);setModal(null);setToast("Sua conta e seus favoritos foram excluídos.");}
     catch(error){setFormError((error as Error).message);}finally{setBusy(false);}
   }
-  return {user,saved,saving,mode,setMode,email,setEmail,password,setPassword,busy,formError,setFormError,notice,setNotice,previewResetUrl,openAuth,openProfile,submit,toggleSaved,updateReading,logout,deleteAccount};
+  return {undoRemoval,undoBusy,undoError,restoreRemoved,dismissUndo,user,saved,saving,mode,setMode,email,setEmail,password,setPassword,busy,formError,setFormError,notice,setNotice,previewResetUrl,openAuth,openProfile,submit,toggleSaved,updateReading,logout,deleteAccount};
 }
 export type AccountController=ReturnType<typeof useAccount>;

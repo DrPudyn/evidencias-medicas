@@ -6,6 +6,7 @@ import { useLocale } from "@/components/locale-provider";
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, ExternalLink, LoaderCircle, Search, ShieldCheck, SlidersHorizontal, Star } from "lucide-react";
 import type { Article } from "@/lib/catalog";
 import type { BrowseModel } from "@/components/cardio/catalog-query";
+import { ShareSearch } from "./share-search";
 import { ArticleCard } from "@/components/cardio/article-card";
 import { GuidelineEmpty, GuidelineList, GuidelineNotice } from "@/components/cardio/catalog-view";
 import type { BrowseState } from "@/hooks/use-browse";
@@ -96,6 +97,7 @@ export function ResultsPanel({
           )}
         </span>
         <div>
+          <ShareSearch browse={browse} />
           <button className="mobile-filter-button" onClick={() => browse.setMobileFilters((value) => !value)}>
             <SlidersHorizontal size={16} />{" "}{t("Filtros")}{" "}{model.activeFilters || ""}
           </button>
