@@ -45,3 +45,19 @@ test("replacement warnings require an explicit published editorial record, never
   assert.equal(replacementFor("old", [{ ...review, supersededBy: "https://phishing.test" }], catalog), null);
   assert.equal(replacementFor("old", [{ ...review, supersededBy: "12345678" }], catalog).url, "https://pubmed.ncbi.nlm.nih.gov/12345678/");
 });
+
+const {formatReference}=await loadTypeScript("../lib/reference.ts");
+const {linkResult}=await loadTypeScript("../lib/link-check.ts");
+test("references use only source metadata, retain DOI and PMID, and exclude personal reading notes",()=>{
+ const article={id:"12345",title:"A study",authors:"Silva A et al.",journal:"Journal",date:"2024",doi:"10.1/example",url:"https://pubmed.ncbi.nlm.nih.gov/12345/",reading:{notes:"PRIVATE"}};
+ const reference=formatReference(article);assert.match(reference,/Silva A et al/);assert.match(reference,/DOI: 10.1\/example/);assert.match(reference,/PMID: 12345/);assert.ok(!reference.includes("PRIVATE"));
+ assert.equal(formatReference({...article,id:"society-doc",source:"Society",doi:undefined,authors:""}).includes("PMID:"),false);
+ assert.equal(formatReference({...article,doi:undefined}).includes("undefined"),false);
+});
+test("link checking distinguishes missing documents from inconclusive HEAD responses and redirects",()=>{
+ for(const code of [200,204,206])assert.equal(linkResult(code),"ok");
+ for(const code of [404,410])assert.equal(linkResult(code),"not_found");
+ for(const code of [301,302,307])assert.equal(linkResult(code),"redirect");
+ for(const code of [405,501])assert.equal(linkResult(code),"unknown");
+ for(const code of [403,429,500])assert.equal(linkResult(code),"http_error");
+});

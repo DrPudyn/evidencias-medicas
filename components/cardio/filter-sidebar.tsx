@@ -1,5 +1,6 @@
 "use client";
 
+import { FilterHelp } from "./search-context";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowRight, BookOpen, SlidersHorizontal } from "lucide-react";
@@ -140,6 +141,7 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
           <small>{t("Disponibilidade informada pelo PubMed.")}</small>
         </div>
       )}
+      <FilterHelp />
       <div className="sidebar-note">
         <BookOpen size={22} />
         <h4>{t("Leia além do título.")}</h4>

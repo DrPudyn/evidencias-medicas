@@ -8,6 +8,7 @@ import type { Article } from "@/lib/catalog";
 import { emptyReading, type Reading, type SavedSearch, type SavedQuery } from "@/lib/reading";
 import { SupersededNotice } from "./editorial";
 import { api } from "./api";
+import { CopyReference } from "./copy-reference";
 import { useLocale } from "@/components/locale-provider";
 
 const statusLabels = { later: "Ler depois", reading: "Em leitura", read: "Lido" };
@@ -63,6 +64,7 @@ function ReadingEditor({ article, account, onOpen }: {
             {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
           </select></label>
         </div>
+      <CopyReference article={article} />
         <details className="library-extra"><summary>{t("Etiquetas e outras opções")}</summary>
           <label>{t("Etiquetas separadas por vírgula")}<input value={tags} maxLength={490} onChange={event => setTags(event.target.value)} /></label>
           <button className="library-text-action" type="button" disabled={account.saving === article.id} onClick={() => void account.toggleSaved(article)}>{t("Remover da biblioteca")}</button>

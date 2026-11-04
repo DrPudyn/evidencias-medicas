@@ -1,6 +1,7 @@
 "use client";
 
 import { EditorialNote, SupersededNotice } from "./editorial";
+import { CopyReference } from "./copy-reference";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight, BookOpen, ExternalLink, Search } from "lucide-react";
@@ -48,6 +49,7 @@ export function GuidelineList({ guidelines, source, saved, saving, onToggle }: {
         </div>
         <a className="article-title" href={guideline.url} target="_blank" rel="noreferrer" onClick={() => trackClinicalEvent("source_click", guideline.topic, guideline.provenance.society)}>{guideline.title}</a>
         <SupersededNotice articleId={guideline.id}/>
+      <CopyReference article={article} />
         <EditorialNote articleId={guideline.id}/>
         <p className="article-authors">{guideline.authorship || society?.name || source}</p>
         {guideline.scope && <p className="article-authors guideline-scope"><strong>{t("Escopo:")}</strong> {guideline.scope}</p>}

@@ -15,6 +15,9 @@ const modules = (await readdir(root, { recursive: true }))
   .map(file => ({ type: 'ESModule', path: path.join(root, file) }))
   .sort((a, b) => Number(b.path === entry) - Number(a.path === entry));
 const outbound = [];
+const catalogItems=(await Promise.all(['sbc','sbem','additional'].map(async name=>JSON.parse(await readFile(path.join(projectRoot,'data/catalogo',name+'.json'),'utf8')).items))).flat();
+const catalogUrls=[...new Set(catalogItems.map(item=>item.url))];
+const simulatedLinks=[];let simulateCatalog=false;
 const options = {
   modules,
   modulesRoot: root,
@@ -27,6 +30,13 @@ const options = {
   port: 0,
   bindings: { LOCAL_PREVIEW_ENABLED: 'false' },
   outboundService(request) {
+    if(simulateCatalog){
+      assert.ok(catalogUrls.includes(request.url),'Only exact catalog URLs may be checked');
+      assert.equal(request.method,'HEAD');
+      simulatedLinks.push(request.url);
+      const index=catalogUrls.indexOf(request.url),status=[404,405,301,403,200][index%5];
+      return new Response(null,{status,headers:status===301?{Location:'http://127.0.0.1/never-follow'}:{}});
+    }
     outbound.push(new URL(request.url).origin);
     return new Response('External network is forbidden in CI smoke', { status: 599 });
   },
@@ -64,6 +74,28 @@ try {
   assert.equal(code, 0, 'Smoke test process failed');
   assert.deepEqual(outbound, [], 'Smoke attempted external requests (even if the route caught the failure)');
   console.log('PASS: validation without preview/mail credentials; zero external requests.');
+  const login=await fetch(origin+'/api/auth/password',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({email:'evidenciasmedicas@outlook.com',password:'Admin test password 2026 only',mode:'login'})});
+  assert.equal(login.status,200);
+  const cookie=login.headers.getSetCookie().map(value=>value.split(';')[0]).join('; ');
+  const headers={Origin:origin,'Content-Type':'application/json',Cookie:cookie};
+  assert.equal((await fetch(origin+'/api/admin/catalog')).status,401);
+  assert.equal((await fetch(origin+'/api/admin/catalog',{method:'POST',headers:{...headers,Origin:'https://invalid.test'},body:'{}'})).status,403);
+  assert.equal((await fetch(origin+'/api/admin/catalog',{method:'POST',headers,body:JSON.stringify({offset:-1})})).status,400);
+  simulateCatalog=true;
+  let offset=0,done=false;
+  while(!done){
+    const response=await fetch(origin+'/api/admin/catalog',{method:'POST',headers,body:JSON.stringify({offset})});assert.equal(response.status,200);
+    const data=await response.json();assert.ok(data.checked<=10);assert.ok(data.nextOffset>offset);offset=data.nextOffset;done=data.done;
+  }
+  simulateCatalog=false;
+  assert.equal(offset,catalogUrls.length);assert.equal(simulatedLinks.length,catalogUrls.length);assert.equal(new Set(simulatedLinks).size,catalogUrls.length);
+  const report=await (await fetch(origin+'/api/admin/catalog',{headers})).json();
+  assert.equal(report.documents,catalogItems.length);assert.equal(report.items.length,catalogUrls.length);
+  assert.deepEqual(new Set(report.items.map(item=>item.result)),new Set(['ok','not_found','redirect','unknown','http_error']));
+  assert.ok(report.items.some(item=>item.documents.some(document=>document.society!=='SBC')));
+  assert.ok(report.items.every(item=>item.checked_at>0));
+  console.log('PASS: all society links, bounded batches, canonical URLs, status classification, auth and origin; mocked responses only.');
+
 } finally {
   await worker.dispose();
 }

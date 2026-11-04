@@ -57,3 +57,9 @@ Antes de publicar uma versão com estas funções, aplique a migração 0004 no 
 Para backup manual gratuito do banco local, com o Worker parado, use `npm run backup:local`; o script copia o estado local completo para uma nova pasta em `.sites-runtime/backups`, sem sobrescrever arquivos anteriores. Pare o Worker antes da cópia: copiar SQLite em uso não produz um backup atômico. Esse backup contém contas e hashes: não publique e não envie ao Git. Exportar biblioteca pelo site não substitui backup do banco.
 
 Confirme a instalação e o layout em aparelhos físicos. E-mail real, disponibilidade pública, política de privacidade com responsável/canal e rotina externa de backup dependem da configuração do proprietário. Documentos PROJETO.md, AUDITORIA.md e CONTEXTO-DO-PROJETO.md são registros históricos; os fluxos atuais estão descritos aqui e no código.
+
+## Clareza da busca, referências e links
+
+O resumo abaixo da pesquisa identifica fonte, especialidade e filtros aplicados. A ajuda recolhida explica os tipos de estudo e a ordenação. Copiar referência usa apenas os metadados disponíveis (sem inventar volume, páginas ou autores); funciona nos detalhes PubMed, nas diretrizes e na organização da biblioteca. Sem acesso à área de transferência, aparece um campo para cópia manual.
+
+O painel verifica links de todas as sociedades em lotes de 10, com até cinco requisições HEAD simultâneas e timeout de seis segundos, somente para URLs HTTPS presentes no catálogo versionado. Redirecionamentos não são seguidos. A fila reúne documentos não encontrados, erros HTTP, redirecionamentos e verificações inconclusivas, com título, sociedade, link e data. É possível interromper novos lotes; o lote já enviado pode terminar no servidor. Nenhuma checagem é disparada automaticamente e não há serviço pago ou migração nova. Testes usam respostas simuladas, sem consultar sites das sociedades.

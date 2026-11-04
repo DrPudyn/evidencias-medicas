@@ -1,6 +1,7 @@
 "use client";
 
 import { EditorialNote, SupersededNotice } from "./editorial";
+import { CopyReference } from "./copy-reference";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight, Bookmark } from "lucide-react";
@@ -57,6 +58,7 @@ export function ArticleDetail({
           </div>
         )}
       </dl>
+      <CopyReference article={article} />
       <SupersededNotice articleId={article.id}/>
         <EditorialNote articleId={article.id}/>
       <section className="abstract-section" aria-live="polite">

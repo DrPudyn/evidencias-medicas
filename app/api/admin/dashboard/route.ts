@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     db.prepare(previousSessions).bind(previousFrom, from).first(),
     db.prepare("SELECT day,event,topic,source,count FROM analytics_daily_counts WHERE day>=? ORDER BY day DESC,event,topic,source").bind(from).all(),
     db.prepare("SELECT day,service,successes,errors,total_duration_ms FROM service_metrics WHERE day>=? ORDER BY day DESC,service").bind(from).all(),
-    db.prepare("SELECT url,status_code,result,duration_ms,checked_at FROM catalog_link_checks ORDER BY checked_at DESC LIMIT 100").all(),
+    db.prepare("SELECT url,status_code,result,duration_ms,checked_at FROM catalog_link_checks ORDER BY checked_at DESC").all(),
     db.prepare("SELECT reviewed_at FROM catalog_reviews ORDER BY reviewed_at DESC LIMIT 1").first<{ reviewed_at: number }>(),
     db.prepare("SELECT action,outcome,created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT 50").all(),
   ]);

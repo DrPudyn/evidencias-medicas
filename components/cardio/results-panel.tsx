@@ -6,6 +6,7 @@ import { useLocale } from "@/components/locale-provider";
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, ExternalLink, LoaderCircle, Search, ShieldCheck, SlidersHorizontal, Star } from "lucide-react";
 import type { Article } from "@/lib/catalog";
 import type { BrowseModel } from "@/components/cardio/catalog-query";
+import { SearchContext } from "./search-context";
 import { ShareSearch } from "./share-search";
 import { ArticleCard } from "@/components/cardio/article-card";
 import { GuidelineEmpty, GuidelineList, GuidelineNotice } from "@/components/cardio/catalog-view";
@@ -84,6 +85,7 @@ export function ResultsPanel({
           <ArrowRight size={19} />
         </button>
       </form>
+      <SearchContext browse={browse} model={model} />
       {browse.tab === "live" && workspace}
       <div className="results-toolbar">
         <span>
