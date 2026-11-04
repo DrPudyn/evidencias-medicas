@@ -119,7 +119,7 @@ export default function CardioApp() {
       <main id="inicio">
         <HeroSection q={browse.q} onQueryChange={browse.setQ} onSearch={browse.search} />
         <ExploreSection
-          workspace={account.user ? <ReadingWorkspace key={account.user.id || account.user.email} account={account} browse={browse} /> : null}
+          workspace={account.user ? <ReadingWorkspace key={account.user.id || account.user.email} account={account} browse={browse} onOpenArticle={openArticle} /> : null}
           browse={browse}
           model={model}
           saved={account.saved}

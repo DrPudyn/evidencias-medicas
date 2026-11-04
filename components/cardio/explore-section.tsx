@@ -46,10 +46,10 @@ export function ExploreSection({
           <Compass size={18} />{" " + t("Como fazer uma boa busca") + " "}<ArrowUpRight size={16} />
         </button>
       </div>
-      {workspace}
-      <div className="browse-layout">
-        <FilterSidebar browse={browse} model={model} />
+      <div className={browse.tab === "saved" ? "browse-layout library-layout" : "browse-layout"}>
+        {browse.tab !== "saved" && <FilterSidebar browse={browse} model={model} />}
         <ResultsPanel
+          workspace={workspace}
           browse={browse}
           model={model}
           saved={saved}

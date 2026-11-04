@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowLeft, ArrowRight, Bookmark, BookOpen, ExternalLink, LoaderCircle, Search, ShieldCheck, SlidersHorizontal, Star } from "lucide-react";
@@ -22,6 +23,7 @@ function tabIcon(value: string) {
 }
 
 export function ResultsPanel({
+  workspace,
   browse,
   model,
   saved,
@@ -32,6 +34,7 @@ export function ResultsPanel({
   onShowInitialCollection,
   onClearResults,
 }: {
+  workspace?: ReactNode;
   browse: BrowseState;
   model: BrowseModel;
   saved: Article[];
@@ -66,6 +69,7 @@ export function ResultsPanel({
           </button>
         ))}
       </div>
+      {browse.tab === "saved" && workspace ? workspace : <>
       <form className="results-search" onSubmit={browse.search}>
         <Search size={18} />
         <input
@@ -79,6 +83,7 @@ export function ResultsPanel({
           <ArrowRight size={19} />
         </button>
       </form>
+      {browse.tab === "live" && workspace}
       <div className="results-toolbar">
         <span>
           {browse.loading && browse.tab === "live" ? (
@@ -201,6 +206,7 @@ export function ResultsPanel({
           </button>
         </div>
       )}
+      </>}
       <div className="source-foot">
         <ShieldCheck size={14} />{" " + t("Referências com acesso à fonte original. Acesso ao texto completo depende da publicação.") + " "}</div>
     </div>
