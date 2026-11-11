@@ -6,15 +6,6 @@ import { ArrowRight, Search } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import type { ClinicalAnswer } from "@/lib/clinical/types";
 
-type Quota = { plan: string; limit: number; used: number; remaining: number };
-
-const levelLabel: Record<ClinicalAnswer["level"], string> = {
-  alto: "Nível alto",
-  moderado: "Nível moderado",
-  baixo: "Nível baixo",
-  insuficiente: "Evidência insuficiente",
-};
-
 export function ClinicalQuestion({
   q,
   onQueryChange,
@@ -29,7 +20,6 @@ export function ClinicalQuestion({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState<ClinicalAnswer | null>(null);
-  const [quota, setQuota] = useState<Quota | null>(null);
 
   async function ask(event: FormEvent) {
     event.preventDefault();
@@ -44,13 +34,12 @@ export function ClinicalQuestion({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: text }),
       });
-      const data = await response.json() as { error?: string; answer?: ClinicalAnswer; quota?: Quota };
+      const data = await response.json() as { error?: string; answer?: ClinicalAnswer };
       if (!response.ok || !data.answer) {
         setError(data.error || t("Não foi possível responder agora."));
         return;
       }
       setAnswer(data.answer);
-      if (data.quota) setQuota(data.quota);
     } catch {
       setError(t("Não foi possível responder agora."));
     } finally {
@@ -128,57 +117,17 @@ export function ClinicalQuestion({
         )}
         {answer && !pending && (
           <article className="glass-card answer-card">
-            <p className="eyebrow">{t(levelLabel[answer.level])}</p>
-            <h2>{answer.sufficient ? t("Síntese desta busca") : t("Sem conclusão desta busca")}</h2>
-            <p className="answer-conclusion">{answer.conclusion}</p>
-            <p className="level-reason">{answer.levelReason}</p>
-            {answer.claims.length > 0 && (
-              <ul className="claim-list">
-                {answer.claims.map((claim) => (
-                  <li key={claim.text}>
-                    <p>{claim.text}</p>
-                    <span>{claim.pmids.map((pmid) => `PMID ${pmid}`).join(" · ")}</span>
+            <p className="answer-conclusion">{answer.answer}</p>
+            {answer.references.length > 0 && (
+              <ol className="reference-list">
+                {answer.references.map((item) => (
+                  <li key={item.pmid} value={item.n}>
+                    <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
                   </li>
                 ))}
-              </ul>
-            )}
-            {answer.limitations.length > 0 && (
-              <div className="answer-block">
-                <h3>{t("Limitações")}</h3>
-                <ul>{answer.limitations.map((item) => <li key={item}>{item}</li>)}</ul>
-              </div>
-            )}
-            {answer.references.length > 0 && (
-              <div className="answer-block">
-                <h3>{t("Referências citadas")}</h3>
-                <ol className="reference-list">
-                  {answer.references.map((item) => (
-                    <li key={item.pmid}>
-                      <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
-                      <small>{item.type} · {item.journal} · {item.date} · PMID {item.pmid}{item.doi ? ` · DOI ${item.doi}` : ""}</small>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-            {!answer.sufficient && answer.retrieved.length > 0 && (
-              <div className="answer-block">
-                <h3>{t("Registros recuperados, sem conclusão")}</h3>
-                <ol className="reference-list">
-                  {answer.retrieved.map((item) => (
-                    <li key={item.pmid}>
-                      <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
-                      <small>PMID {item.pmid}</small>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-            {answer.discardedCitations.length > 0 && (
-              <p className="discarded">{t("Citações fora da busca foram descartadas:")} {answer.discardedCitations.join(", ")}</p>
+              </ol>
             )}
             <p className="disclaimer">{t(answer.disclaimer)}</p>
-            {quota && <p className="quota-note">{t("Uso de hoje")}: {quota.used}/{quota.limit}</p>}
           </article>
         )}
       </div>

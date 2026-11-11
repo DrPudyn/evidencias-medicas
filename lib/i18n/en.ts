@@ -692,5 +692,5 @@ export const english:Record<string,string> = {
   "A conta gratuita reúne suas leituras e libera 3 perguntas clínicas por dia.": "The free account keeps your reading and allows 3 clinical questions a day.",
   "A conta gratuita não pede cartão.": "The free account does not ask for a card.",
   "Um lugar calmo para a pergunta clínica.": "A quiet place for the clinical question.",
-  "Este texto não substitui o julgamento clínico. Ele só organiza o que veio nos títulos, resumos e metadados recuperados nesta busca no PubMed. Não é uma avaliação GRADE formal nem uma recomendação de conduta.": "This text does not replace clinical judgment. It only organizes titles, abstracts and metadata retrieved in this PubMed search. It is not a formal GRADE assessment or a treatment recommendation."
+  "Este texto não substitui o julgamento clínico. Ele só organiza o que veio nos registros recuperados nesta busca no PubMed.": "This text does not replace clinical judgment. It only organizes what was retrieved in this PubMed search."
 };

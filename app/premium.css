@@ -148,7 +148,9 @@ main#inicio { padding-top: 108px; }
   line-height: 1.05;
 }
 .answer-card h2 { font-size: 2rem; margin: 10px 0 12px; }
-.answer-conclusion { font-size: 1.02rem; margin-top: 8px; }
+.answer-conclusion { font-size: 1.2rem; line-height: 1.55; margin: 0; }
+.reference-list { margin-top: 22px; }
+.reference-list a { font-size: 1rem; line-height: 1.45; }
 .claim-list, .answer-block ul, .plan-card ul { margin: 16px 0 0; padding-left: 18px; display: grid; gap: 12px; }
 .claim-list li { background: rgba(255, 255, 255, 0.55); border-radius: 20px; padding: 14px 16px; list-style: none; }
 .claim-list { padding-left: 0; }

@@ -19,29 +19,20 @@ export async function answerClinicalQuestion(input: {
   if (!terms.length) {
     return insufficientAnswer(
       "Não foi possível montar uma busca no PubMed a partir desta pergunta. Nenhuma conclusão foi completada com conhecimento geral.",
-      [],
-      [],
-      [],
     );
   }
   const records = await input.search(evidenceQuery(terms));
   if (!records.length) {
     return insufficientAnswer(
       "Não encontramos revisões sistemáticas, metanálises ou diretrizes no PubMed para esta pergunta. Não há conclusão clínica a partir desta busca.",
-      [],
-      [],
-      terms,
     );
   }
   try {
     const raw = await input.ai.summarize(question, records);
-    return validateSynthesis(raw, records, terms);
+    return validateSynthesis(raw, records);
   } catch {
     return insufficientAnswer(
       "A busca recuperou registros, mas a síntese falhou. Nenhuma conclusão foi produzida.",
-      records,
-      [],
-      terms,
     );
   }
 }

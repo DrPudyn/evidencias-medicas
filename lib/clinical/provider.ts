@@ -47,7 +47,7 @@ export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): Clinic
       return complete(TERMS_SYSTEM, question, 280);
     },
     summarize(question, records) {
-      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 900);
+      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 400);
     },
   };
 }
@@ -59,21 +59,14 @@ export function createFixtureAi(): ClinicalAi {
       return JSON.stringify({ terms: fallbackSearchTerms(question) });
     },
     async summarize(_question, records: EvidenceRecord[]) {
-      const claims = records.slice(0, 3).map((record) => {
-        const excerpt = (record.abstract || record.title).replace(/\s+/g, " ").trim().slice(0, 320);
-        return {
-          text: `O registro PMID ${record.pmid} (${record.type}) traz: ${excerpt}`,
-          pmids: [record.pmid],
-        };
-      });
-      const hasMeta = records.some((record) => /meta|sistemática|systematic/i.test(record.type));
+      const used = records.slice(0, 3);
+      const marks = used.map((_, index) => `[${index + 1}]`).join(" ");
       return JSON.stringify({
-        sufficient: claims.length > 0,
-        conclusion: claims.map((claim) => claim.text).join(" "),
-        level: hasMeta ? "moderado" : "baixo",
-        levelReason: "Classificação simplificada apenas pelos tipos de publicação recuperados nesta busca. Não é GRADE formal.",
-        limitations: ["Síntese extrativa local: reorganiza trechos dos registros recuperados, sem modelo de linguagem."],
-        claims,
+        sufficient: used.length > 0,
+        answer: used.length
+          ? `As revisões recuperadas nesta busca tratam da pergunta feita, e a leitura que sustenta a resposta está nos artigos citados ${marks}.`
+          : "",
+        citations: used.map((record) => record.pmid),
       });
     },
   };
