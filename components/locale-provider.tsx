@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { BRAND_DESCRIPTION_EN, BRAND_DESCRIPTION_PT, BRAND_TITLE_EN, BRAND_TITLE_PT } from "@/lib/brand";
 import { english } from "@/lib/i18n/en";
 import { resolveLocale } from "@/lib/i18n/locale";
 
@@ -47,11 +48,9 @@ export function LocaleProvider({ children, initialLocale="pt" }: { children: Rea
     document.documentElement.lang = locale === "en" ? "en" : "pt-BR";
     if(window.location.pathname.startsWith("/admin"))return;
     document.querySelector('link[rel="canonical"]')?.setAttribute("href",window.location.origin+"/"+locale);
-    document.title = locale === "en" ? "Medical Evidence · Scientific literature" : "Evidências Médicas · Literatura científica";
+    document.title = locale === "en" ? BRAND_TITLE_EN : BRAND_TITLE_PT;
     const description = document.querySelector('meta[name="description"]');
-    description?.setAttribute("content", locale === "en"
-      ? "Find medical literature, refine your PubMed search and organize your scientific reading."
-      : "Encontre literatura médica, refine sua busca no PubMed e organize suas leituras científicas.");
+    description?.setAttribute("content", locale === "en" ? BRAND_DESCRIPTION_EN : BRAND_DESCRIPTION_PT);
   }, [locale]);
   return <LocaleContext.Provider value={{ locale, setLocale, t: (text) => locale === "en" ? english[text] ?? text : text }}>{children}</LocaleContext.Provider>;
 }
@@ -62,13 +61,12 @@ export function useLocale() {
 
 export function LanguageSwitcher() {
   const { locale, setLocale } = useLocale();
-  return <div role="group" aria-label={locale === "en" ? "Language" : "Idioma"} style={{ display: "flex", flexShrink: 0, gap: 4 }}>
+  return <div className="lang-switch" role="group" aria-label={locale === "en" ? "Language" : "Idioma"}>
     {(["pt", "en"] as const).map((value) => <a key={value} href={"/"+value}
       lang={value === "pt" ? "pt-BR" : "en"}
       aria-label={value === "pt" ? "Português" : "English"}
       aria-current={locale === value ? "page" : undefined}
-      onClick={(event) => {event.preventDefault();setLocale(value);}}
-      style={{ border: "1px solid #b8ccc4", borderRadius: 6, padding: "6px 8px", cursor: "pointer", fontSize: 12, fontWeight: 600, background: locale === value ? "#1d6153" : "transparent", color: locale === value ? "#fff" : "inherit" }}>
+      onClick={(event) => {event.preventDefault();setLocale(value);}}>
       {value.toUpperCase()}
     </a>)}
   </div>;

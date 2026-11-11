@@ -1,6 +1,48 @@
-# Evidências Médicas
+# Busca Evidência
 
-Portal de literatura médica com busca no PubMed, catálogo de sociedades, contas, biblioteca pessoal e fichas clínicas revisadas.
+Portal de literatura médica com pergunta clínica, busca no PubMed, catálogo de sociedades, contas, biblioteca pessoal e fichas clínicas revisadas. O nome **Busca Evidência** é provisório e fica em `lib/brand.ts`.
+
+A origem pública sai de `SITE_ORIGIN`. Sem a variável, o padrão é `https://evidencias-medicas.edsoncarvalho9.workers.dev`.
+
+## Pergunta clínica
+
+`POST /api/clinical-question` recebe `{ "question": "..." }` em português (12 a 500 caracteres). O provedor de IA (padrão: binding Workers AI `AI`, modelo em `WORKERS_AI_MODEL`) só gera termos de busca e a síntese. A busca reutiliza o PubMed e fica restrita a revisões sistemáticas, metanálises e diretrizes. A resposta em português traz conclusão, nível simplificado (alto, moderado, baixo ou insuficiente, com teto pelo tipo de publicação recuperado), limitações e referências com PMID, DOI e link. Afirmações com PMID que não veio da busca são descartadas. Busca vazia ou síntese inválida não é completada com conhecimento geral.
+
+Sem binding `AI` (ou com `CLINICAL_AI_PROVIDER=disabled`) a rota responde 503. `CLINICAL_AI_PROVIDER=fixture` só funciona com `LOCAL_PREVIEW_ENABLED=true` e apenas reorganiza trechos dos registros recuperados.
+
+Limites, no fuso America/Sao_Paulo, gravados no D1 sem o texto da pergunta:
+
+- sem conta: 1 pergunta por dia, chaveada pelo hash do IP
+- conta grátis: 3 por dia
+- assinante ativo: 40 por dia
+
+Há também um teto horário por IP (45) para conter rajadas. Falha do PubMed devolve a tentativa. Evidência insuficiente conta como pergunta feita.
+
+## Planos e Stripe
+
+A seção Planos mostra a faixa provisória `PLAN_PRICE_LABEL` (padrão `R$ 29–49` /mês). Não é preço em vigor. Checkout, portal e webhook ficam desligados sem as variáveis:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_ID`
+
+O webhook `POST /api/billing/webhook` ativa ou cancela o plano no D1. Nada disso chama a Stripe enquanto as chaves não existirem. Hotmart fica para depois.
+
+## Deploy na Cloudflare
+
+Não publique a partir dos testes. O script recusa sem `CONFIRM_DEPLOY=yes`.
+
+1. `npm run build`
+2. `CLOUDFLARE_D1_ID=<id do D1 evidencias-medicas> npm run cf:config`
+3. Aplique `drizzle/0005_plans_and_quota.sql` no D1 remoto só quando for a hora, com backup. Este repositório não aplica essa migração em produção.
+4. `npx wrangler secret put STRIPE_SECRET_KEY` (e os outros nomes acima, se a cobrança for ligada)
+5. `CONFIRM_DEPLOY=yes CLOUDFLARE_D1_ID=<id> npm run deploy:cf`
+
+Bindings: `DB` (D1 `evidencias-medicas`) e `AI` (Workers AI). Vars: `SITE_ORIGIN`, `PLAN_PRICE_LABEL`, `WORKERS_AI_MODEL`, `CLINICAL_AI_PROVIDER=workers-ai`. O modelo versionado fica em `cloudflare/wrangler.template.jsonc` (fora da raiz, para o plugin do Vite não misturar com o binding local). O arquivo que o deploy usa é `dist/server/wrangler.production.json`, gerado depois do build.
+
+## Testar a pergunta clínica
+
+`npm run test:clinical` cobre síntese com PubMed/IA simulados (caso normal, busca vazia, PMID inventado), limites de plano e webhook Stripe com assinatura simulada. Não chama NCBI, Workers AI nem Stripe.
 
 ## Funcionalidades atuais
 
@@ -26,13 +68,13 @@ Portal de literatura médica com busca no PubMed, catálogo de sociedades, conta
 Requer Node >=22.13.0. Use `npm ci` (ou `npm run install:ci`). Crie `.openai/hosting.json` com `{"d1":"DB","r2":null}`; este arquivo local não é versionado. Copie os exemplos de ambiente apenas se precisar configurar integrações; nunca versione credenciais.
 
 1. `npm run build`
-2. Aplique, em ordem, os SQL de `drizzle/0000_*.sql` até `0004_*.sql`, apenas uma vez por banco, usando o Wrangler:
+2. Aplique, em ordem, os SQL de `drizzle/0000_*.sql` até `0005_*.sql`, apenas uma vez por banco, usando o Wrangler:
 
 ```powershell
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0004_reading_workspace.sql
+node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0005_plans_and_quota.sql
 ```
 
-O comando acima exemplifica a nova migração. Num banco novo aplique também 0000, 0001, 0002 e 0003 antes dela. Não execute uma migração já aplicada. 0004 preserva favoritos e acrescenta organização de leitura, buscas salvas e versões editoriais.
+O comando acima exemplifica a migração de planos. Num banco novo aplique também 0000, 0001, 0002, 0003 e 0004 antes dela. Não execute uma migração já aplicada. 0005 acrescenta assinatura, cota diária da pergunta clínica e eventos do webhook. Não aplique 0005 em produção até o deploy combinado.
 
 3. `npm run preview:local` para servir o Worker compilado em localhost:5173; `npm run dev` para desenvolvimento com recarga.
 

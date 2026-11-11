@@ -29,6 +29,7 @@ export function SiteHeader({
         <Logo />
         <nav aria-label={t("Navegação principal")}>
           <a href="#explorar">{t("Explorar artigos")}</a>
+          <a href="#planos">{t("Planos")}</a>
           <button onClick={onGuide}>{t("Guia de busca")}</button>
           <a href="#recursos">{t("A plataforma")}</a>
         </nav>

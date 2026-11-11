@@ -11,7 +11,7 @@ export function SiteFooter({ onGuide, onPrivacy }: { onGuide: () => void; onPriv
     <footer className="container footer">
       <div>
         <Logo />
-        <p>{t("Ciência para acompanhar você.")}</p>
+        <p>{t("Um lugar calmo para a pergunta clínica.")}</p>
       </div>
       <div className="footer-links">
         <button onClick={onGuide}>{t("Guia de busca")}</button>

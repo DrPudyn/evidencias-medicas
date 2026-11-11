@@ -130,7 +130,7 @@ assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).status,
 console.log('PASS: email/password signup, login, account isolation, origin, password reset/replay, session revocation, reserved administrator, panel access and canonical bookmarks.');
 
 
-for(const [lang,title,heading] of [["en","Medical Evidence","Science moves forward."],["pt","Evidências Médicas","A ciência avança."]]){
+for(const [lang,title,heading] of [["en","Busca Evidência","The clinical question"],["pt","Busca Evidência","A pergunta clínica"]]){
  const response=await fetch(origin+"/"+lang);assert.equal(response.status,200);
  const html=await response.text();assert.ok(html.includes(title));assert.ok(html.includes(heading),"localized SSR content");
  assert.ok(html.includes('rel="canonical"'));assert.ok(html.includes("/"+lang));

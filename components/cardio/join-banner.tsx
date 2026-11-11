@@ -12,14 +12,14 @@ export function JoinBanner({ signedIn, onAccount }: { signedIn: boolean; onAccou
         <div>
           <span className="eyebrow">{t("PARA QUEM CUIDA. PARA QUEM ESTUDA.")}</span>
           <h2>{" " + t("Seu próximo passo começa")}<br />{t("com uma boa referência.") + " "}</h2>
-          <p>{t("Uma conta gratuita para reunir suas leituras em diferentes especialidades médicas.")}</p>
+          <p>{t("A conta gratuita reúne suas leituras e libera 3 perguntas clínicas por dia.")}</p>
         </div>
         <div className="join-action">
           <button className="button light" onClick={onAccount}>
             {signedIn ? t("Minha conta") : t("Criar minha conta grátis")}
             <ArrowUpRight size={18} />
           </button>
-          <span>{t("Sem cartão. No seu ritmo.")}</span>
+          <span>{t("A conta gratuita não pede cartão.")}</span>
         </div>
       </div>
     </section>

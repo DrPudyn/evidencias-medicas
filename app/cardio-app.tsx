@@ -11,6 +11,7 @@ import { ExploreSection } from "@/components/cardio/explore-section";
 import { FeaturesSection } from "@/components/cardio/features-section";
 import { HeroSection } from "@/components/cardio/hero-section";
 import { JoinBanner } from "@/components/cardio/join-banner";
+import { PlansSection } from "@/components/cardio/plans-section";
 import { PrivacyNotice } from "@/components/cardio/privacy-notice";
 import { scrollToExplore } from "@/components/cardio/scroll";
 import { SearchGuide } from "@/components/cardio/search-guide";
@@ -131,6 +132,7 @@ export default function CardioApp() {
           onClearResults={clearResults}
         />
         <FeaturesSection />
+        <PlansSection signedIn={Boolean(account.user)} onAccount={() => (account.user ? account.openProfile() : account.openAuth())} />
         <JoinBanner signedIn={Boolean(account.user)} onAccount={() => (account.user ? account.openProfile() : account.openAuth())} />
       </main>
       <SiteFooter onGuide={() => browse.setModal("guide")} onPrivacy={() => browse.setModal("privacy")} />

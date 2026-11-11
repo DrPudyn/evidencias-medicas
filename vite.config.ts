@@ -17,6 +17,13 @@ const managedLinux = readExecutionProfile() === "managed-linux";
 const localBindingConfig = {
   main: "./build/sites-worker.ts",
   compatibility_flags: ["nodejs_compat"],
+  ai: { binding: "AI" },
+  vars: {
+    SITE_ORIGIN: process.env.SITE_ORIGIN || "https://evidencias-medicas.edsoncarvalho9.workers.dev",
+    PLAN_PRICE_LABEL: process.env.PLAN_PRICE_LABEL || "R$ 29–49",
+    WORKERS_AI_MODEL: process.env.WORKERS_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast",
+    CLINICAL_AI_PROVIDER: process.env.CLINICAL_AI_PROVIDER || "workers-ai",
+  },
   d1_databases: d1
     ? [
         {

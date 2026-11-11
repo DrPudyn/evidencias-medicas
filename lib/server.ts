@@ -1,6 +1,25 @@
 import { env } from "cloudflare:workers";
 import { accountIdentity } from "./auth-identity";
-export const settings = () => env as unknown as {DB:D1Database; LOCAL_PREVIEW_ENABLED?:string; RESEND_API_KEY?:string; EMAIL_FROM?:string; NCBI_CONTACT_EMAIL?:string; NCBI_API_KEY?:string; ADMIN_EMAILS?:string; ADMIN_BOOTSTRAP_ENABLED?:string; ADMIN_RP_ID?:string; ADMIN_ORIGIN?:string};
+export const settings = () => env as unknown as {
+  DB: D1Database;
+  AI?: { run: (model: string, input: Record<string, unknown>) => Promise<unknown> };
+  LOCAL_PREVIEW_ENABLED?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_FROM?: string;
+  NCBI_CONTACT_EMAIL?: string;
+  NCBI_API_KEY?: string;
+  ADMIN_EMAILS?: string;
+  ADMIN_BOOTSTRAP_ENABLED?: string;
+  ADMIN_RP_ID?: string;
+  ADMIN_ORIGIN?: string;
+  SITE_ORIGIN?: string;
+  PLAN_PRICE_LABEL?: string;
+  WORKERS_AI_MODEL?: string;
+  CLINICAL_AI_PROVIDER?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_ID?: string;
+};
 export function json(data:unknown,status=200,headers:HeadersInit={}) { const values=new Headers(headers);values.set("Cache-Control","no-store");return Response.json(data,{status,headers:values}); }
 export const digest = async (value:string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 export const randomToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.toString(16).padStart(2,"0")).join("");

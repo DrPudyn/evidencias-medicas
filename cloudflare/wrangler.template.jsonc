@@ -1,0 +1,24 @@
+{
+  // Modelo de deploy. Fica fora da raiz de propósito: o plugin do Vite carrega
+  // wrangler.jsonc da raiz e misturaria este D1 com o banco local.
+  // scripts/prepare-cloudflare-config.mjs gera dist/server/wrangler.production.json
+  // depois do build. Não publique este arquivo direto.
+  "name": "evidencias-medicas",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "evidencias-medicas",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  "ai": { "binding": "AI" },
+  "vars": {
+    "SITE_ORIGIN": "https://evidencias-medicas.edsoncarvalho9.workers.dev",
+    "PLAN_PRICE_LABEL": "R$ 29–49",
+    "WORKERS_AI_MODEL": "@cf/meta/llama-3.1-8b-instruct-fast",
+    "CLINICAL_AI_PROVIDER": "workers-ai"
+  }
+}

@@ -4,6 +4,7 @@ import { CatalogLinks } from "./catalog-links";
 import { EditorialEditor } from "./editorial-editor";
 import Link from "next/link";
 import {Activity,ShieldCheck,KeyRound,Users,Bookmark,Eye,Clock3,LogOut,RefreshCw,AlertCircle,Search,BookOpen} from "lucide-react";
+import { BRAND_NAME } from "@/lib/brand";
 import {ActivityChart,SourceChart,SystemFlow} from "./dashboard-widgets";
 type State={authenticated:boolean;authorized:boolean;emailDeliveryReady:boolean;email?:string};
 type ApiErrorBody={error?:string};
@@ -27,7 +28,7 @@ export default function AdminClient(){
  useEffect(()=>{if(phase!=="dashboard")return;const timer=window.setInterval(()=>{if(document.visibilityState==="visible")void reload();},60000);const onVisibility=()=>{if(document.visibilityState==="visible")void reload();};document.addEventListener("visibilitychange",onVisibility);return()=>{window.clearInterval(timer);document.removeEventListener("visibilitychange",onVisibility);};},[phase,reload]);
  async function catalogAction(path:string){setBusy(true);setError("");try{await call(path,{method:"POST",body:"{}"});setData(await call<DashboardData>(`/api/admin/dashboard?days=${days}`));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  const card=(Icon:ComponentType<{size?:number}>,label:string,value:ReactNode,caption:string)=><div className="admin-card"><span className="admin-icon"><Icon size={20}/></span><small>{label}</small><strong>{value}</strong><p>{caption}</p></div>;
- return <main className="admin-shell"><header className="admin-header"><Link className="admin-brand" href="/"><span><Activity size={21}/></span>Evidências Médicas</Link><span className="admin-tag"><ShieldCheck size={15}/> área restrita</span></header>
+ return <main className="admin-shell"><header className="admin-header"><Link className="admin-brand" href="/"><span><Activity size={21}/></span>{BRAND_NAME}</Link><span className="admin-tag"><ShieldCheck size={15}/> área restrita</span></header>
  {phase!=="dashboard"&&<section className="admin-auth"><span className="admin-kicker">ADMINISTRAÇÃO</span><h1>{phase==="denied"?"Acesso não autorizado":"Acesse o painel"}</h1>
  <p>Entre com o e-mail administrativo e sua senha.</p><p>Primeiro acesso? Use “Definir minha senha”. O link será enviado somente para evidenciasmedicas@outlook.com.</p>{!mailConfigured&&<p role="alert">O envio de e-mails ainda não está configurado. A definição e a recuperação de senha estão indisponíveis até a configuração do remetente.</p>}
  <form className="admin-form" onSubmit={login}><label>E-mail<input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" required maxLength={254}/></label><label>Senha<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password" required maxLength={128}/></label><button className="admin-primary" disabled={busy}>{busy?"Aguarde…":"Entrar"}</button></form>
