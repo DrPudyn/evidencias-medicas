@@ -332,7 +332,7 @@ function stripHedge(line: string) {
 
 /** The code, not the model, decides whether the verb stays indicative or takes pode. */
 export function applyCodeCertainty(line: string, support: string) {
-  if (supportCertainty(support) === "hedge") return hedgeCoordinatedVerbs(line);
+  if (supportCertainty(support) === "hedge") return hedgeCoordinatedVerbs(line) || line;
   return stripHedge(line);
 }
 
@@ -511,7 +511,8 @@ export function firstItemMissedControl(raw: string, records: EvidenceRecord[]) {
 
 export function cuidadosAllowed(line: string, support: string) {
   if (!/^[-•\s]*cuidados\b/i.test(fold(line))) return true;
-  return /\b(omit|avoid|adverse|contraindicat|caution|ketoacidosis|infection|increased risk)\b/i.test(support);
+  const cleaned = support.replace(/major adverse cardiovascular/gi, " ");
+  return /\b(omit|avoid|adverse|contraindicat|caution|ketoacidosis|infection|increased risk)\b/i.test(cleaned);
 }
 
 export function mixesDoseWithProgression(line: string) {
@@ -755,6 +756,72 @@ function sentenceContaining(quote: string, abstract: string) {
   return sentences.find((sentence) => normQuote(sentence).includes(needle)) || quote;
 }
 
+function isFirmEffect(sentence: string) {
+  if (/\bnot\s+significantly\b/i.test(sentence)) return false;
+  if (/\b(suggest(?:ing|s|ed)?|may|might)\b/i.test(sentence)) return false;
+  return /significantly (?:reduced|reduce|lower)|high[ -]certainty|\bdemonstrates\b/i.test(sentence);
+}
+
+/** The sentence that states the cited outcome. A later "may be beneficial" does not replace a firm result. */
+export function outcomeSupport(line: string, abstract: string) {
+  const sentences = resultsAndConclusions(abstract).split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+  const hits = outcomeHits(line);
+  if (!hits.length) {
+    const aligned = sentences.filter((sentence) => /optimal dose|may represent/i.test(sentence));
+    if (aligned.length) return aligned.join(" ");
+  }
+  const related = hits.length ? sentences.filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome))) : [];
+  const pool = related.length ? related : sentences;
+  const firm = pool.filter(isFirmEffect);
+  if (firm.length) return firm.join(" ");
+  return pool.join(" ") || abstract;
+}
+
+export function resultSentence(record: EvidenceRecord) {
+  const sentences = resultsAndConclusions(record.abstract || "").split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 40);
+  const picked = sentences.find((sentence) => /significantly reduced|should omit|omit them|hospitali|cv death|cardiovascular death|placebo/i.test(sentence));
+  return (picked || sentences[0] || record.abstract || "").slice(0, 500);
+}
+
+function specifyCardiovascularDeath(line: string, support: string) {
+  if (!/cv death|cardiovascular death|cardiovascular mortality/i.test(support)) return line;
+  if (/morte cardiovascular|mortalidade cardiovascular/i.test(line)) return line;
+  return line
+    .replace(/\bmortalidade\b(?! cardiovascular)/gi, "mortalidade cardiovascular")
+    .replace(/\bmorte\b(?! cardiovascular)/gi, "morte cardiovascular");
+}
+
+function stripRestatedPopulation(line: string) {
+  const match = line.match(/^(Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i);
+  if (!match) return line;
+  let body = line.slice(match[0].length);
+  const label = match[1].toLowerCase();
+  if (label === "pré-diabetes" || label === "pre-diabetes") {
+    body = body.replace(/\s*,?\s*em (?:pessoas|adultos|pacientes) com pr[eé]-diabetes\b/gi, "");
+  } else if (label === "dm2 com dcv") {
+    body = body.replace(/\s*,?\s*em (?:pessoas|adultos|pacientes) com (?:dm2|diabetes tipo 2) e (?:dcv|doença cardiovascular)\b/gi, "");
+  } else if (label === "dm2 com drc") {
+    body = body.replace(/\s*,?\s*em (?:pessoas|adultos|pacientes) com (?:dm2|diabetes tipo 2) e (?:drc|doença renal crônica|doença renal cronica)\b/gi, "");
+  } else if (label === "dm2") {
+    body = body.replace(/\s*,?\s*em (?:pessoas|adultos|pacientes) com (?:dm2|diabetes tipo 2)\b/gi, "");
+  }
+  return `${match[1]}: ${body}`.replace(/\s{2,}/g, " ").replace(/\s+([.;,])/g, "$1").trim();
+}
+
+function metforminLine(line: string, support: string, question: string) {
+  if (!/metformin/.test(fold(question)) && !/metformina/.test(fold(line))) return line;
+  let text = line;
+  if (/poor methodological quality|interpreted with caution/i.test(support) && !/baixa qualidade/.test(fold(text))) {
+    text = `${text.replace(/[.\s]*$/, "")}, evidência de baixa qualidade.`;
+  }
+  if (/placebo/i.test(support) && !/placebo|controle/.test(fold(text))) {
+    text = `${text.replace(/[.\s]*$/, "")} vs placebo.`;
+  } else if (/control group|usual care|no treatment/i.test(support) && !/placebo|controle/.test(fold(text))) {
+    text = `${text.replace(/[.\s]*$/, "")} vs controle.`;
+  }
+  return text.replace(/\s{2,}/g, " ").trim();
+}
+
 function glycemicEffect(support: string) {
   const cleaned = support.replace(/glyc(?:a)?emic control strateg\w*/gi, " ");
   return /glyc(?:a)?emic-lowering|(?:reduc|improv|lower|decreas)\w*[^.]{0,50}(?:hba1c|glycated|glucose|glycaem|glycemic)/i.test(cleaned);
@@ -866,7 +933,7 @@ export function synthesisNeedsRetry(raw: string, records: EvidenceRecord[]) {
   return !markers.some((marker) => resolveToken(marker, records, byId));
 }
 
-function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = false) {
+function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = false, question = "") {
   const citedText = draft.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
   const sentence = draft.support ? sentenceContaining(draft.support, citedAbstract) : citedAbstract;
@@ -886,16 +953,26 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
     text = withoutStroke;
   }
   const citedTitle = draft.resolved.map((record) => record.title).join("\n");
-  const labeled = alignPopulationLabel(text, `${citedTitle}\n${support}`, citedTitle);
-  if (!labeled) return null;
-  text = labeled;
+  if (isMetforminPrediabetes(question)) {
+    text = text.replace(/^(?:Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+    text = `Pré-diabetes: ${text}`;
+  } else {
+    text = alignPopulationLabel(text, `${citedTitle}\n${support}`, citedTitle) || text;
+    if (!/^(?:cuidados|sim|nao)\b/i.test(text) && !/^(?:Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i.test(text)) {
+      const label = preferredPopulation(studiedPopulations(`${citedTitle}\n${support}`));
+      if (label) text = `${label}: ${text}`;
+    }
+  }
+  text = stripRestatedPopulation(text);
+  text = specifyCardiovascularDeath(text, outcomeSupport(text, citedAbstract));
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
   if (claimOutsideResults(text, citedAbstract) || supportedOnlyByContext(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
   if (creditsClassForSingleDrug(text, support) || unsupportedYes(text, support) || unsupportedDoseClaim(text, support) || ignoresPooledConclusion(text, support)) return null;
+  text = metforminLine(text, citedAbstract, question);
   if (requireControl && missingControlContrast(text, support)) return null;
   if (treatsRankingAsEffect(text, support) || omitsSuperiorAlternative(text, support)) return null;
-  const hedged = ensureModalHedge(text, support);
+  const hedged = ensureModalHedge(text, outcomeSupport(text, citedAbstract));
   if (!hedged) return null;
   text = ensureCertaintyCaveat(hedged, support);
   if (concept && (attributesForeignBenefit(text, support, concept) || leavesOutcomeInEnglish(text))) return null;
@@ -940,7 +1017,7 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
   };
   for (const draft of drafts) {
     if (isCertaintyOnlyCaveat(draft.text)) continue;
-    const accepted = acceptDraft(draft, concept, yesNo && !sawFinding);
+    const accepted = acceptDraft(draft, concept, yesNo && !sawFinding, question);
     if (!accepted) continue;
     const excerpt = accepted.support || accepted.resolved.map((record) => record.abstract || "").join("\n");
     if (!sawFinding && isDoseLine(accepted.text)) {

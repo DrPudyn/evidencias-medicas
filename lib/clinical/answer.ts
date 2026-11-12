@@ -1,11 +1,25 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
-import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
+import { conceptInFocus, isCareGuideline, isHeartFailureSlot, isType2DiabetesTitle, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, metforminPrediabetesQuery, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, resultSentence, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import type { ClinicalAnswer } from "./types";
 
-function stampRelevance(articles: EvidenceRecord[]) {
-  return articles.map((article, index) => ({ ...article, relevance: article.relevance ?? index }));
+function hitCounts(groups: EvidenceRecord[][]) {
+  const counts = new Map<string, number>();
+  for (const group of groups) {
+    const seen = new Set<string>();
+    for (const article of group) {
+      if (seen.has(article.pmid)) continue;
+      seen.add(article.pmid);
+      counts.set(article.pmid, (counts.get(article.pmid) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function withHits(articles: EvidenceRecord[], counts: Map<string, number>) {
+  return articles.map((article) => ({ ...article, hits: counts.get(article.pmid) ?? 1 }));
 }
 
 function uniqueRecords(articles: EvidenceRecord[]) {
@@ -14,6 +28,40 @@ function uniqueRecords(articles: EvidenceRecord[]) {
     if (!byId.has(article.pmid)) byId.set(article.pmid, article);
   }
   return [...byId.values()];
+}
+
+function answerLines(answer: ClinicalAnswer) {
+  const byN = new Map(answer.references.map((item) => [item.n, item.pmid]));
+  return answer.answer.split("\n").flatMap((line) => {
+    const pmids = [...line.matchAll(/\[(\d+)\]/g)].map((match) => byN.get(Number(match[1]))).filter((pmid): pmid is string => Boolean(pmid));
+    const texto = line.replace(/\s*\[\d+\]/g, "").trim();
+    if (!texto || !pmids.length) return [];
+    return pmids.map((pmid) => ({ pmid, texto, care: /^cuidados\b/i.test(texto) }));
+  });
+}
+
+function mergeAnswers(first: ClinicalAnswer, second: ClinicalAnswer, records: EvidenceRecord[], concept: ReturnType<typeof conceptsForQuestion>[number], question: string) {
+  const items = answerLines(first).map((line) => ({ texto: line.texto, pmid: line.pmid }));
+  const seen = new Set(items.map((item) => `${item.pmid}:${item.texto}`));
+  for (const line of answerLines(second)) {
+    const key = `${line.pmid}:${line.texto}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ texto: line.texto, pmid: line.pmid });
+  }
+  if (!items.length) return second.sufficient ? second : first;
+  return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
+}
+
+function reservedWithoutLine(records: EvidenceRecord[], answer: ClinicalAnswer, question: string) {
+  if (!isIndicationQuestion(question)) return [];
+  const lines = answerLines(answer);
+  return records.filter((record) => {
+    const cited = lines.filter((line) => line.pmid === record.pmid);
+    if (isCareGuideline(record)) return !cited.some((line) => line.care);
+    if (isHeartFailureSlot(record) || isType2DiabetesTitle(record.title)) return cited.length === 0;
+    return false;
+  });
 }
 
 const RETRY_WARNING = [
@@ -62,14 +110,15 @@ async function gatherIndications(
       supplemental.push(...extra.flat());
     }
   }
+  const counts = hitCounts([guidelines, metas, recent, cautions, outcomes, dm2Outcomes, heartFailure, prediabetesTrials, supplemental, ...paired]);
   const merged = mergeIndicationRecords({
-    guidelines: stampRelevance(guidelines),
-    metas: stampRelevance(metas),
-    recent: stampRelevance([...recent, ...paired.flat(), ...prediabetesTrials]),
-    supplemental: stampRelevance(supplemental),
-    outcomes: stampRelevance([...dm2Outcomes, ...outcomes]),
-    heartFailure: stampRelevance(heartFailure),
-    cautions,
+    guidelines: withHits(guidelines, counts),
+    metas: withHits(metas, counts),
+    recent: withHits([...recent, ...paired.flat(), ...prediabetesTrials], counts),
+    supplemental: withHits(supplemental, counts),
+    outcomes: withHits([...dm2Outcomes, ...outcomes], counts),
+    heartFailure: withHits(heartFailure, counts),
+    cautions: withHits(cautions, counts),
     concept: main,
     question,
     limit: 6,
@@ -172,9 +221,19 @@ export async function answerClinicalQuestion(input: {
           : missedControl()
             ? "A primeira linha tem de dizer o efeito contra placebo, controle ou sem tratamento."
             : rejectionNote(raw, records);
-        raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
-        answer = validateSynthesis(raw, records, main, question);
+        const retryRaw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
+        answer = mergeAnswers(answer, validateSynthesis(retryRaw, records, main, question), records, main, question);
       }
+    }
+    const missing = reservedWithoutLine(records, answer, question);
+    if (missing.length) {
+      const brief = missing.map((record) => `PMID ${record.pmid}: ${resultSentence(record)}`).join("\n");
+      const extraRaw = await input.ai.summarize(
+        `Escreva só uma linha por PMID, com o desfecho da frase de resultado. Se a frase for de omissão ou suspensão, comece com Cuidados:.\n${brief}`,
+        missing,
+        { direct: false },
+      );
+      answer = mergeAnswers(answer, validateSynthesis(extraRaw, missing, main, question), records, main, question);
     }
     return answer;
   } catch {

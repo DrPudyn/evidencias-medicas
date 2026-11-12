@@ -1,6 +1,6 @@
 import type { Article } from "@/lib/catalog";
 import { settings } from "@/lib/server";
-import { HIGH_LEVEL_EVIDENCE_FILTER, isHighLevelPublication } from "@/lib/evidence-filter";
+import { HIGH_LEVEL_EVIDENCE_FILTER, displayPublicationType, isHighLevelPublication } from "@/lib/evidence-filter";
 import { abstractsByPmid } from "@/lib/pubmed-xml";
 
 export { HIGH_LEVEL_EVIDENCE_FILTER };
@@ -83,14 +83,8 @@ async function ncbi(endpoint: string, params: Record<string, string>): Promise<u
   return response.json();
 }
 
-function publicationType(publicationTypes: string[]) {
-  if (publicationTypes.includes("Meta-Analysis")) return "Meta-análise";
-  if (publicationTypes.includes("Systematic Review")) return "Revisão sistemática";
-  if (publicationTypes.includes("Randomized Controlled Trial")) return "Ensaio clínico randomizado";
-  if (publicationTypes.includes("Clinical Trial")) return "Ensaio clínico";
-  if (publicationTypes.includes("Practice Guideline") || publicationTypes.includes("Guideline")) return "Diretriz";
-  if (publicationTypes.includes("Review")) return "Revisão";
-  return "Artigo científico";
+function publicationType(publicationTypes: string[], title = "") {
+  return displayPublicationType(publicationTypes, title);
 }
 
 async function recordPubmedMetric(ok: boolean, duration: number) {
@@ -145,7 +139,7 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
           date: item.pubdate || item.sortpubdate || item.epubdate || "",
           electronicDate: item.epubdate && item.pubdate && item.epubdate !== item.pubdate ? item.epubdate : undefined,
           authors: (authors.slice(0, 2).map((author) => author.name).join(", ") || "Autores no PubMed") + (authors.length > 2 ? " et al." : ""),
-          type: publicationType(publicationTypes),
+          type: publicationType(publicationTypes, item.title.replace(/<[^>]*>/g, "")),
           publicationTypes,
           topic: "all",
           doi: item.articleids?.find((articleId) => articleId.idtype === "doi")?.value,

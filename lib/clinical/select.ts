@@ -149,10 +149,10 @@ export function isIsolatedHeartFailureMeta(article: Pick<EvidenceRecord, "title"
 }
 
 export function byTypeThenPmidDesc(a: EvidenceRecord, b: EvidenceRecord) {
+  const hits = (b.hits ?? 1) - (a.hits ?? 1);
+  if (hits) return hits;
   const type = typeRank(a.type) - typeRank(b.type);
   if (type) return type;
-  const relevance = (a.relevance ?? Number.MAX_SAFE_INTEGER) - (b.relevance ?? Number.MAX_SAFE_INTEGER);
-  if (relevance) return relevance;
   const pmid = Number(b.pmid) - Number(a.pmid);
   if (pmid) return pmid;
   return a.pmid < b.pmid ? 1 : -1;
@@ -171,8 +171,16 @@ export function isHeartFailureSlot(article: Pick<EvidenceRecord, "title" | "abst
   return !low || firm;
 }
 
+/** A perioperative or safety guideline that should produce a Cuidados line. */
+export function isCareGuideline(article: Pick<EvidenceRecord, "title" | "abstract" | "type">) {
+  const text = `${article.title}\n${article.abstract}`;
+  const guideline = /guideline|consensus|diretriz/i.test(`${article.type} ${article.title}`);
+  return guideline && /peri-?operat|omit them the day before|day of a procedure|before surgery/i.test(text);
+}
+
 /** Drops a special population the question did not name. */
 export function excludedSpecialPopulation(article: Pick<EvidenceRecord, "title">, question: string) {
+  if (/microbiota|microbiome/i.test(article.title) && !/microbiota|microbioma/i.test(question)) return true;
   if (!/metformin|pre-?diabet|impaired glucose|impaired fasting/i.test(question)) return false;
   const asked = question.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
   const title = article.title;

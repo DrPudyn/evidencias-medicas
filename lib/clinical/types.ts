@@ -10,6 +10,8 @@ export type EvidenceRecord = {
   abstract: string;
   /** Position in the PubMed relevance list. Lower is more relevant. */
   relevance?: number;
+  /** How many parallel queries returned this PMID. */
+  hits?: number;
 };
 
 export type ClinicalReference = {
