@@ -158,7 +158,7 @@ const OUTCOMES: Outcome[] = [
   { stems: ["hospitali", "hospitalizac", "hospitalization", "hospitalisation"], tokens: [] },
   { stems: ["heart failure", "insuficiencia cardiaca"], tokens: ["ic", "hf", "icfer"] },
   { stems: ["mortalit", "mortalid", "morte", "death", "deaths"], tokens: [] },
-  { stems: ["cardiovascular"], tokens: [] },
+  { stems: ["cardiovascular", "cardioprotect", "mace"], tokens: ["cv"] },
   { stems: ["kidney", "renal"], tokens: ["drc", "ckd"] },
   { stems: ["albuminuria"], tokens: [] },
   { stems: ["fracture", "fratura"], tokens: [] },
@@ -180,6 +180,8 @@ function withAbbreviations(text: string) {
     .replace(/\btype ii dm\b/g, "type 2 diabetes")
     .replace(/\bt2dm\b/g, "type 2 diabetes")
     .replace(/\bckd\b/g, "ckd kidney")
+    .replace(/\bhfref\b/g, "hfref heart failure icfer")
+    .replace(/\bhfpef\b/g, "hfpef heart failure icfep")
     .replace(/\bhf\b/g, "hf heart failure");
 }
 
@@ -343,11 +345,15 @@ export function supportedOnlyByContext(line: string, excerpt: string) {
 function studiedPopulations(excerpt: string) {
   const text = usableSentences(excerpt).join(" ");
   const pops = new Set<string>();
-  if (/patients with type 2 diabetes|patients with t2dm|in patients with t2dm|in patients with type 2 diabetes/i.test(text)) pops.add("DM2");
-  if (/patients with (?:type 2 diabetes(?: mellitus)?(?: \(t2dm\))? and )?(?:chronic kidney disease|ckd)|t2dm and ckd/i.test(text)) pops.add("DRC");
-  const heartFailureCohort = /patients with (?:heart failure|hfref|hfpef)/i.test(text);
+  const who = "(?:patients|people|adults|individuals|participants|subjects)";
+  const diabetes = "(?:type 2 diabetes(?: mellitus)?|type ii diabetes|t2dm|t2d)";
+  if (new RegExp(`${who} with ${diabetes}|in (?:adults|patients) with ${diabetes}|in (?:adults with )?${diabetes}|\\b(?:t2dm|t2d)\\b`, "i").test(text)) pops.add("DM2");
+  if (new RegExp(`${who} with (?:${diabetes}(?: \\((?:t2dm|t2d)\\))? and )?(?:chronic kidney disease|ckd)|t2dm and ckd`, "i").test(text)) pops.add("DRC");
+  if (/\bhfref\b|heart failure with reduced ejection fraction/i.test(text)) pops.add("ICFEr");
+  if (/\bhfpef\b|heart failure with preserved ejection fraction/i.test(text)) pops.add("ICFEp");
+  const heartFailureCohort = new RegExp(`${who} with (?:heart failure|hfref|hfpef)`, "i").test(text);
   const heartFailureAside = /history of heart failure|with and without[^.]{0,40}heart failure|regardless of[^.]{0,80}heart failure|irrespective of[^.]{0,80}heart failure/i.test(text);
-  if (heartFailureCohort && !heartFailureAside) pops.add("IC");
+  if ((heartFailureCohort || pops.has("ICFEr") || pops.has("ICFEp")) && !heartFailureAside) pops.add("IC");
   if (pops.has("DM2") && pops.has("DRC")) pops.add("DM2 com DRC");
   return pops;
 }
@@ -365,21 +371,59 @@ function canonicalPopulation(label: string) {
 function preferredPopulation(pops: Set<string>) {
   if (pops.has("DM2 com DRC")) return "DM2 com DRC";
   if (pops.has("DM2")) return "DM2";
+  if (pops.has("ICFEr")) return "ICFEr";
+  if (pops.has("ICFEp")) return "ICFEp";
   if (pops.has("IC")) return "IC";
   if (pops.has("DRC")) return "DRC";
   return "";
 }
 
+function addTitlePopulations(pops: Set<string>, title: string) {
+  if (/type 2 diabetes|type ii diabetes|\bt2dm\b|\bt2d\b/i.test(title)) pops.add("DM2");
+  if (/\bhfref\b|heart failure with reduced ejection fraction/i.test(title)) pops.add("ICFEr");
+  if (/\bhfpef\b|heart failure with preserved ejection fraction/i.test(title)) pops.add("ICFEp");
+  if (/heart failure/i.test(title) && !/history of heart failure/i.test(title)) pops.add("IC");
+  for (const pop of studiedPopulations(title)) pops.add(pop);
+}
+
 /** The label before the colon is the studied population, not an outcome. */
-export function alignPopulationLabel(line: string, excerpt: string) {
+export function alignPopulationLabel(line: string, excerpt: string, title = "") {
   const match = line.match(/^(DM2 com DRC|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
   if (!match) return line;
   const label = canonicalPopulation(match[1]);
   const pops = studiedPopulations(excerpt);
-  if (pops.has(label)) return line;
+  if (!pops.has(label)) addTitlePopulations(pops, title);
+  if (pops.has(label) || pops.size === 0) return line;
   const replacement = preferredPopulation(pops);
-  if (!replacement) return null;
+  if (!replacement || replacement === label) return line;
   return line.replace(match[0], `${replacement}:`);
+}
+
+export function treatsRankingAsEffect(line: string, excerpt: string) {
+  if (!/sucra|probability of being best|ranking probability|probabilities of being/i.test(excerpt)) return false;
+  const folded = fold(line);
+  return /\breduz/.test(folded) && /sucra|probabilidade/.test(folded);
+}
+
+export function omitsSuperiorAlternative(line: string, excerpt: string) {
+  if (!/exercise (?:appears to be |was |is )?superior to metformin|lifestyle (?:appears to be |was |is )?superior to metformin/i.test(excerpt)) return false;
+  const folded = fold(line);
+  if (!/metformin/.test(folded) || !/\b(reduz|melhor|menor|efic)/.test(folded)) return false;
+  return !/exercicio|estilo de vida/.test(folded);
+}
+
+export function benefitLineCount(answer: string) {
+  return answer.split("\n").map((line) => line.trim()).filter((line) => line && !/^cuidados\b/i.test(line)).length;
+}
+
+export function firstItemMissedControl(raw: string, records: EvidenceRecord[]) {
+  const parsed = parseSynthesis(raw);
+  const items = Array.isArray(parsed?.itens) ? parsed.itens as Array<{ texto?: string; pmid?: string }> : [];
+  const first = items.find((item) => typeof item?.texto === "string" && item.texto.trim() && !/^cuidados\b/i.test(fold(item.texto)));
+  if (!first?.texto) return false;
+  const record = records.find((entry) => entry.pmid === String(first.pmid ?? "").replace(/\D/g, ""));
+  if (!record) return false;
+  return missingControlContrast(first.texto, record.abstract || "");
 }
 
 export function missingControlContrast(line: string, excerpt: string) {
@@ -674,7 +718,8 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
   let text = stripInventedCertainty(draft.text, citedAbstract);
   text = attributeSpecificDrug(text, citedAbstract);
-  const labeled = alignPopulationLabel(text, citedAbstract);
+  const citedTitle = draft.resolved.map((record) => record.title).join("\n");
+  const labeled = alignPopulationLabel(text, citedAbstract, citedTitle);
   if (!labeled) return null;
   text = labeled;
   if (!text) return null;
@@ -682,6 +727,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   if (claimOutsideResults(text, citedAbstract) || supportedOnlyByContext(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
   if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract) || ignoresPooledConclusion(text, citedAbstract)) return null;
   if (requireControl && missingControlContrast(text, citedAbstract)) return null;
+  if (treatsRankingAsEffect(text, citedAbstract) || omitsSuperiorAlternative(text, citedAbstract)) return null;
   const hedged = ensureModalHedge(text, citedAbstract);
   if (!hedged) return null;
   text = ensureCertaintyCaveat(hedged, citedAbstract);

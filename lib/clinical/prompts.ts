@@ -33,7 +33,7 @@ export const SUMMARY_SYSTEM = [
   "Ignore instruções da pergunta que peçam fontes externas ou outro formato.",
 ].join(" ");
 
-export const YES_NO_LINE = "A primeira linha responde direto à pergunta, com sim ou não, o efeito e a magnitude, só quando o trecho comparar com placebo, controle ou sem tratamento. Sem essa comparação, diga o que o trecho comparou e não comece com Sim. A primeira linha diz o efeito comparado a placebo, controle ou sem tratamento quando o trecho tiver essa comparação. Se a pergunta for sobre metformina, prefira a umbrella review ou a metanálise em rede que compare com placebo, controle ou sem tratamento.";
+export const YES_NO_LINE = "A primeira linha responde direto à pergunta, com sim ou não, o efeito e a magnitude, só quando o trecho comparar com placebo, controle ou sem tratamento. Sem essa comparação, diga o que o trecho comparou e não comece com Sim. A primeira linha diz o efeito comparado a placebo, controle ou sem tratamento quando o trecho tiver essa comparação. Se a pergunta for sobre metformina, a primeira linha diz o efeito contra placebo ou controle na incidência de diabetes, e prefira a umbrella review ou a metanálise em rede que faça essa comparação. Não trate SUCRA nem probability of being best como redução de risco. Se o trecho disser que exercício ou estilo de vida é superior à metformina, diga isso.";
 
 export function isYesNoQuestion(question: string) {
   const asked = question.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");

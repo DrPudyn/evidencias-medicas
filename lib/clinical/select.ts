@@ -139,6 +139,15 @@ export function isHeartFailureTitle(title: string) {
   return /heart failure|\bhfref\b|\bhfpef\b/i.test(title);
 }
 
+/** An SGLT2-versus-placebo heart-failure meta-analysis, not a multi-drug regimen network. */
+export function isIsolatedHeartFailureMeta(article: Pick<EvidenceRecord, "title" | "abstract">) {
+  const conclusion = conclusionText(article.abstract || "");
+  const blob = `${article.title}\n${conclusion}`;
+  if (/quadruple|quintuple|network of regimens|\bcombination\b/i.test(blob)) return false;
+  const classNamed = /sglt-?2|sodium[-\s]?glucose|gliflozin/i.test(blob);
+  return classNamed && isHeartFailureTitle(blob);
+}
+
 export function byTypeThenPmidDesc(a: EvidenceRecord, b: EvidenceRecord) {
   const type = typeRank(a.type) - typeRank(b.type);
   if (type) return type;
@@ -260,7 +269,7 @@ export function mergeIndicationRecords(input: {
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
   const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title)).sort(byTypeThenPmidDesc);
-  const hfMetas = [...outcomes, ...metas].filter((article) => isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
+  const hfMetas = [...outcomes, ...metas].filter((article) => isIsolatedHeartFailureMeta(article)).sort(byTypeThenPmidDesc);
   const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title) && !isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
   const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];

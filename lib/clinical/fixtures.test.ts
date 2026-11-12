@@ -28,6 +28,13 @@ const PMIDs = [
   "33031522",
   "30697905",
   "33441402",
+  "39899304",
+  "30653708",
+  "34693515",
+  "40892608",
+  "40813122",
+  "28941313",
+  "39242178",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -86,6 +93,11 @@ test("fixtures reais trazem os resumos do PubMed", () => {
   assert.match(fixture("33031522").title, /Type 2 Diabetes/);
   assert.match(fixture("30697905").title, /type 2 diabetes mellitus and chronic kidney disease/i);
   assert.match(fixture("33441402").abstract, /placebo/);
+  assert.match(fixture("39899304").abstract, /individuals with typ/);
+  assert.match(fixture("30653708").abstract, /adults with Type 2 diabetes/i);
+  assert.match(fixture("40892608").abstract, /quadruple therapy/);
+  assert.match(fixture("28941313").abstract, /Ranking probability/);
+  assert.match(fixture("39242178").abstract, /superior to metformin/);
 });
 
 test("35404670: hospitalização por IC e infecção genital ficam sem ressalva", () => {
@@ -253,6 +265,97 @@ test("30424892 e 33031522 ocupam a vaga de DM2 e a metanálise de IC não", () =
     limit: 6,
   }).map((item) => item.pmid);
   assert.deepEqual(reversed, ids);
+});
+
+test("população em adults, people ou título não descarta a frase de DM2", () => {
+  const cardiovascular = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2: pode reduzir eventos CV.", pmid: "39899304" }],
+  }), [fixture("39899304")], ["sglt2 inhibitors"]);
+  assert.equal(cardiovascular.sufficient, true);
+  assert.match(cardiovascular.answer, /^DM2:/);
+  assert.match(cardiovascular.answer, /eventos CV/);
+  for (const pmid of ["30653708", "34693515"]) {
+    const heartFailure = validateSynthesis(JSON.stringify({
+      itens: [{ texto: "DM2: pode reduzir a internação por IC.", pmid }],
+    }), [fixture(pmid)], ["sglt2 inhibitors"]);
+    assert.equal(heartFailure.sufficient, true, pmid);
+    assert.match(heartFailure.answer, /^DM2:/);
+    assert.match(heartFailure.answer, /internação por IC/);
+  }
+  const reduced = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "ICFEr: pode reduzir a morte.", pmid: "40892608" }],
+  }), [fixture("40892608")], ["sglt2 inhibitors"]);
+  assert.equal(reduced.sufficient, true);
+  assert.match(reduced.answer, /^ICFEr:/);
+  const unknown = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2: Os inibidores de SGLT2 reduzem a hospitalização por IC.", pmid: "35404670" }],
+  }), [fixture("35404670")], ["sglt2 inhibitors"]);
+  assert.equal(unknown.sufficient, true);
+  assert.match(unknown.answer, /hospitalização por IC/);
+});
+
+test("terapia quádrupla não ocupa a vaga de IC", () => {
+  const merged = mergeIndicationRecords({
+    guidelines: [fixture("35961754")],
+    metas: [],
+    outcomes: [fixture("40892608"), fixture("32877652"), fixture("30424892"), fixture("33031522")],
+    recent: [],
+    supplemental: [],
+    cautions: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  });
+  const ids = merged.map((item) => item.pmid);
+  assert.equal(ids[3], "32877652");
+  assert.equal(ids.includes("40892608"), false);
+});
+
+test("card só com cuidados pede outra síntese", async () => {
+  let calls = 0;
+  const answer = await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+      },
+      async summarize() {
+        calls += 1;
+        if (calls === 1) {
+          return JSON.stringify({ itens: [{ texto: "Cuidados: suspender antes da cirurgia.", pmid: "39899304" }] });
+        }
+        return JSON.stringify({
+          itens: [
+            { texto: "DM2: pode reduzir eventos CV.", pmid: "39899304" },
+            { texto: "DM2: pode reduzir eventos CV em pessoas mais velhas.", pmid: "39899304" },
+          ],
+        });
+      },
+    },
+    search: async () => [fixture("39899304")],
+  });
+  assert.ok(calls >= 2);
+  assert.match(answer.answer, /eventos CV/);
+  assert.ok(answer.answer.split("\n").filter((line) => line.trim() && !/^Cuidados\b/.test(line.trim())).length >= 1);
+});
+
+test("ranqueamento não vira redução e a superioridade do exercício aparece", () => {
+  const ranking = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "A metformina reduz o risco, com probabilidade de 87% de ser a melhor.", pmid: "28941313" }],
+  }), [fixture("28941313")], ["metformin"]);
+  assert.equal(ranking.sufficient, false);
+  const exercise = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "A metformina reduz a glicemia no pré-diabetes.", pmid: "39242178" }],
+  }), [fixture("39242178")], ["metformin"]);
+  assert.equal(exercise.sufficient, false);
+  const named = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "O exercício é superior à metformina no pré-diabetes.", pmid: "39242178" }],
+  }), [fixture("39242178")], ["metformin"]);
+  assert.equal(named.sufficient, true);
+  assert.match(named.answer, /exercício/);
+  assert.match(YES_NO_LINE, /incidência de diabetes/);
+  assert.match(YES_NO_LINE, /SUCRA/);
+  assert.match(YES_NO_LINE, /exercício ou estilo de vida/);
 });
 
 test("36351458 não usa o contexto de benefício cardiovascular já estabelecido", () => {

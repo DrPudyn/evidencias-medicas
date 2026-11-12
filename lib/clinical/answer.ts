@@ -2,7 +2,7 @@ import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types"
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, metforminPrediabetesQuery, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
   const byId = new Map<string, EvidenceRecord>();
@@ -155,9 +155,19 @@ export async function answerClinicalQuestion(input: {
       raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
     }
     let answer = validateSynthesis(raw, records, main, question);
-    if (!answer.sufficient && !retried && !synthesisIsEmpty(raw)) {
-      raw = await input.ai.summarize(`${question}\n\n${rejectionNote(raw, records)}`, records, { direct: false });
-      answer = validateSynthesis(raw, records, main, question);
+    const tooThin = () => answer.sufficient && (benefitLineCount(answer.answer) === 0 || (isIndicationQuestion(question) && benefitLineCount(answer.answer) < 2));
+    const missedControl = () => isYesNoQuestion(question) && firstItemMissedControl(raw, records);
+    if ((!answer.sufficient && !synthesisIsEmpty(raw)) || tooThin() || missedControl()) {
+      if (!retried) {
+        retried = true;
+        const note = tooThin()
+          ? "A resposta ficou só com Cuidados ou com menos de duas linhas de benefício. Reescreva com pelo menos duas frases de efeito, cada uma com a população do trecho."
+          : missedControl()
+            ? "A primeira linha tem de dizer o efeito contra placebo, controle ou sem tratamento."
+            : rejectionNote(raw, records);
+        raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
+        answer = validateSynthesis(raw, records, main, question);
+      }
     }
     return answer;
   } catch {
