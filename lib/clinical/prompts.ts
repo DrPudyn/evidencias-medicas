@@ -13,7 +13,7 @@ export const TERMS_SYSTEM = [
 
 export const SUMMARY_SYSTEM = [
   "Responda a um médico usando somente os artigos enviados. Cada artigo tem PMID e um trecho de resultados ou conclusão.",
-  "JSON com a chave itens, no máximo 6 objetos {\"texto\":\"...\",\"pmid\":\"12345678\",\"trecho\":\"...\"}. Cada texto é uma frase completa, de até 40 palavras.",
+  "JSON com a chave itens, no máximo 4 objetos {\"texto\":\"...\",\"pmid\":\"12345678\",\"trecho\":\"...\"}. Cada texto é uma frase completa, de até 40 palavras. As vagas reservadas são preenchidas pelo código: escreva só as linhas extras.",
   "pmid é o PMID do artigo que sustenta essa frase, um dos PMIDs recebidos. Não escreva [n] nem /pmid no texto.",
   "trecho é uma frase copiada literalmente dos resultados ou da conclusão, nunca do título, do objetivo, do background ou de uma ressalva (should be regarded, should be interpreted, exploratory), sem reticências. O verbo do texto fica no indicativo. Não escreva pode: o código aplica pode quando a frase que contém o trecho tiver suggest, may, might, likely, associated, linked ou certeza baixa. associated ou linked também pode ficar como associa-se. Frase negativa não recebe pode.",
   "Não escolha o rótulo da população. O código deriva DM2, DM2 com DRC, DM2 com IC, DM2 com DCV, IC, ICFEr ou ICFEp do título e da frase completa. Não transforme interação por idade em indicação. Se o trecho tiver combination, quadruple, regimen ou together with, nomeie essa combinação. Doença cardiovascular como população não é desfecho. Não escreva é indicado nem indicado para, salvo se o trecho for uma recomendação de diretriz. Não use uma conclusão genérica sem fármaco e sem desfecho. Não escreva vs placebo se o trecho não tiver placebo, control ou usual care.",

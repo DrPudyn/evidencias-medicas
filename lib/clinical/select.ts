@@ -139,11 +139,25 @@ export function isHeartFailureTitle(title: string) {
   return /heart failure|\bhfref\b|\bhfpef\b/i.test(title);
 }
 
+const COMBINATION_HF = /quadruple|quintuple|\bregimens?\b|\bcombination\b|together with/i;
+
+/** A multi-drug regimen is not the isolated SGLT2 heart-failure slot. */
+export function isCombinationPaper(article: Pick<EvidenceRecord, "title" | "abstract">) {
+  return COMBINATION_HF.test(`${article.title}\n${conclusionText(article.abstract || "")}`);
+}
+
+/** An SGLT2 heart-failure paper from the dedicated search, before any combination article. */
+export function isIsolatedHeartFailureCandidate(article: Pick<EvidenceRecord, "title" | "abstract">) {
+  if (isCombinationPaper(article) || HEART_FAILURE_NICHE.test(article.title)) return false;
+  const blob = `${article.title}\n${article.abstract}`;
+  return /sglt-?2|sodium[-\s]?glucose|gliflozin/i.test(blob) && isHeartFailureTitle(article.title);
+}
+
 /** An SGLT2-versus-placebo heart-failure meta-analysis, not a multi-drug regimen network. */
 export function isIsolatedHeartFailureMeta(article: Pick<EvidenceRecord, "title" | "abstract">) {
+  if (!isIsolatedHeartFailureCandidate(article)) return false;
   const conclusion = conclusionText(article.abstract || "");
   const blob = `${article.title}\n${conclusion}`;
-  if (/quadruple|quintuple|\bregimens?\b|\bcombination\b|together with/i.test(blob)) return false;
   const classNamed = /sglt-?2|sodium[-\s]?glucose|gliflozin/i.test(blob);
   return classNamed && isHeartFailureTitle(blob);
 }
@@ -224,7 +238,18 @@ export function prediabetesPriority(article: EvidenceRecord, question: string) {
 function byDateThenPmid(a: EvidenceRecord, b: EvidenceRecord) {
   const byDate = publicationStamp(b.date) - publicationStamp(a.date);
   if (byDate) return byDate;
-  return Number(a.pmid) - Number(b.pmid);
+  return byTypeThenPmidDesc(a, b);
+}
+
+/** A generic conclusion without a drug or an outcome, or a cancer paper the question did not ask for. */
+export function excludedFromSelection(article: Pick<EvidenceRecord, "title" | "abstract">, question: string) {
+  const asked = foldText(question);
+  if (!/cancer|neoplas/.test(asked) && /cancer|neoplas/.test(foldText(article.title))) return true;
+  const conclusion = conclusionText(article.abstract || "");
+  const hasDrug = /sglt|gliflozin|metformin|glp-?1|semaglutide|liraglutide|orlistat|acarbose/i.test(conclusion);
+  const hasOutcome = /death|mortalit|hospitali|kidney|renal|hba1c|incidence|incident|stroke|\bmace\b|infarction/i.test(conclusion);
+  if (hasDrug || hasOutcome) return false;
+  return /these findings|this review|underscore the value|personalized approach|multidimensional/i.test(conclusion);
 }
 
 /** Guidelines, meta-analyses and reviews are interleaved. Date only orders inside each type. */
@@ -259,7 +284,7 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
   const focused = mainConcept.length ? humans.filter((article) => conceptInFocus(article, mainConcept, question)) : humans;
   const passing = mainConcept.length ? humans.filter((article) => mentionsConcept(article, mainConcept)) : humans;
   let pool = focused.length ? focused : (passing.length ? [] : humans);
-  pool = pool.filter((article) => matchesAskedCondition(article, question) && !excludedSpecialPopulation(article, question));
+  pool = pool.filter((article) => matchesAskedCondition(article, question) && !excludedSpecialPopulation(article, question) && !excludedFromSelection(article, question));
   if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
     const narrowed = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
     if (narrowed.length || !pool.length) pool = narrowed;
@@ -290,7 +315,7 @@ export function mergeIndicationRecords(input: {
     const out: EvidenceRecord[] = [];
     const seen = new Set<string>();
     for (const article of [...list].sort(byTypeThenPmidDesc)) {
-      if (seen.has(article.pmid) || isVeterinary(article.title) || excludedSpecialPopulation(article, input.question) || !matchesAskedCondition(article, input.question)) continue;
+      if (seen.has(article.pmid) || isVeterinary(article.title) || excludedSpecialPopulation(article, input.question) || excludedFromSelection(article, input.question) || !matchesAskedCondition(article, input.question)) continue;
       const onTopic = !input.concept.length || conceptInFocus(article, input.concept, input.question);
       if (!onTopic) continue;
       if (!precaution && notAnIndication(article)) continue;
@@ -312,15 +337,23 @@ export function mergeIndicationRecords(input: {
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
   const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title)).sort(byTypeThenPmidDesc);
-  const hfMetas = [...keep(input.heartFailure || []), ...outcomes, ...metas]
-    .filter((article) => isHeartFailureSlot(article))
+  const isolated = [...(input.heartFailure || [])]
+    .filter((article) => !isVeterinary(article.title) && (!input.concept.length || mentionsConcept(article, input.concept)) && isIsolatedHeartFailureCandidate(article))
+    .sort(byTypeThenPmidDesc);
+  const hfMetas = [...isolated, ...keep(input.heartFailure || []), ...outcomes, ...metas]
+    .filter((article) => isHeartFailureSlot(article) || isolated.some((item) => item.pmid === article.pmid))
     .sort(byTypeThenPmidDesc);
   const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title) && !isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
   const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];
   const used = new Set<string>();
+  const deferred: EvidenceRecord[] = [];
   const take = (article?: EvidenceRecord) => {
     if (!article || used.has(article.pmid) || picked.length >= limit) return;
+    if (isolated[0] && !used.has(isolated[0].pmid) && article.pmid !== isolated[0].pmid && isCombinationPaper(article)) {
+      deferred.push(article);
+      return;
+    }
     used.add(article.pmid);
     picked.push(article);
   };
@@ -344,5 +377,6 @@ export function mergeIndicationRecords(input: {
       if (picked.length >= limit) break;
     }
   }
+  for (const article of deferred) take(article);
   return picked;
 }

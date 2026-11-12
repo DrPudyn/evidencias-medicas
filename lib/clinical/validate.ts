@@ -1,7 +1,8 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
 import { isMetforminPrediabetes, type SearchConcept } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { classAliases, conceptNeedles } from "./select";
+import { conclusionText } from "../pubmed-xml";
+import { classAliases, conceptNeedles, isIsolatedHeartFailureCandidate } from "./select";
 import { CLINICAL_DISCLAIMER } from "./types";
 
 const ANSWER_MAX = 2200;
@@ -987,7 +988,27 @@ export function reservedCodeLine(record: EvidenceRecord) {
   if (/moderate to high certainty evidence confirms the well established cardiovascular and kidney benefits of sodium-glucose cotransporter-2/i.test(abstract)) {
     return "DM2: confirma o benefício cardiovascular e renal.";
   }
-  return "";
+  return isolatedHeartFailureLine(record);
+}
+
+function isolatedHeartFailureLine(record: EvidenceRecord) {
+  if (!isIsolatedHeartFailureCandidate(record)) return "";
+  const sentence = conclusionText(record.abstract || "");
+  const hosp = /hospitali|\bhfh\b/i.test(sentence);
+  const death = /death|mortalit/i.test(sentence);
+  if (!hosp && !death) return "";
+  if (/\b(?:did not|not significantly)\s+(?:significantly\s+)?reduce/i.test(sentence) && !/however|totality|pooled/i.test(sentence)) return "";
+  const hedge = /\b(may|might|suggest(?:ed|ing|s)?|associated|linked)\b/i.test(sentence) || (/low[ -]certainty/i.test(sentence) && !/moderate|high/i.test(sentence));
+  const firm = /significantly (?:reduced|reduce)|reduced the risk|reduces? (?:the )?(?:risk|composite|hospitali|cardiovascular)/i.test(sentence);
+  const verb = hedge && !firm ? "pode reduzir" : "reduz";
+  const outcome = hosp && death ? "a internação por IC e a morte cardiovascular" : hosp ? "a internação por IC" : "a morte cardiovascular";
+  const title = record.title || "";
+  const label = /type 2 diabetes|t2dm|\bt2d\b/i.test(title) && /heart failure/i.test(title)
+    ? "DM2 com IC"
+    : /\bhfref\b|reduced ejection/i.test(title) ? "ICFEr"
+      : /\bhfpef\b|preserved ejection/i.test(title) ? "ICFEp"
+        : "IC";
+  return `${label}: ${verb} ${outcome}.`;
 }
 
 function glycemicEffect(support: string) {

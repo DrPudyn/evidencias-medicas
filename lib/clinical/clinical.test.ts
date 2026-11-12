@@ -1114,7 +1114,7 @@ test("provedor fixture só na prévia e Workers AI lê response objeto, string e
   assert.match(JSON.stringify(calls[0]), /json_schema/);
   assert.match(await ai.summarize("asma na atenção primária?", []), /sufficient/);
   assert.match(JSON.stringify(calls[1]), /itens/);
-  assert.equal((calls[1] as { max_tokens: number }).max_tokens, 800);
+  assert.equal((calls[1] as { max_tokens: number }).max_tokens, 300);
   assert.match(JSON.stringify(calls[1]), /maxItems/);
   assert.equal(model, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
   const fallback = createWorkersAi({

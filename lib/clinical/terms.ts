@@ -357,7 +357,7 @@ export type ApprovedCard = {
 
 const approvedCards = new Map<string, { card: ApprovedCard; at: number }>();
 
-export const CARD_PIPELINE = "12";
+export const CARD_PIPELINE = "13";
 
 export function cardCacheKey(question: string) {
   return `card|${CARD_PIPELINE}|${normalizeQuestion(question)}`;

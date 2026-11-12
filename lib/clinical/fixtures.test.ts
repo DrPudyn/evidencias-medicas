@@ -4,7 +4,7 @@ import test from "node:test";
 import { displayPublicationType } from "../evidence-filter";
 import { answerClinicalQuestion } from "./answer";
 import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
-import { isHeartFailureSlot, mergeIndicationRecords, selectForSynthesis } from "./select";
+import { byTypeThenPmidDesc, excludedFromSelection, isHeartFailureSlot, isIsolatedHeartFailureCandidate, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { focusAbstract } from "../pubmed-xml";
 import { CARD_PIPELINE, canonicalTerm, cardCacheKey, evidenceQuery, expandClassTerms, finalSetKey, forceMetforminType2, knownClassTerms, readApprovedCard, readFinalSet, readResultCache, writeApprovedCard, writeFinalSet, writeResultCache } from "./terms";
 import { isCaveatSentence, metforminControlExcerpt, normalizeOddCaps, reservedCodeLine, sourceExcerpt, validateSynthesis } from "./validate";
@@ -495,14 +495,14 @@ test("41151201 e a NMA de exercício com metformina vêm na frente no pré-diabe
   };
   const other = fixture("39163798");
   const selected = selectForSynthesis([other, nma, umbrella], ["metformin"], 6, "Metformina no pré-diabetes");
-  assert.deepEqual(selected.map((item) => item.pmid), ["41151201", "42800000", "39163798"]);
+  assert.deepEqual(selected.map((item) => item.pmid), ["42800000", "39163798"]);
   const placeboNma: EvidenceRecord = {
     ...filler("42800001"),
     title: "Network meta-analysis of metformin in prediabetes",
     abstract: "RESULTS: Metformin reduced diabetes versus placebo.",
   };
   const yesNo = selectForSynthesis([other, placeboNma, umbrella], ["metformin"], 6, "A metformina reduz a progressão do pré-diabetes?");
-  assert.deepEqual(yesNo.map((item) => item.pmid), ["41151201", "42800001", "39163798"]);
+  assert.deepEqual(yesNo.map((item) => item.pmid), ["42800001", "39163798"]);
 });
 
 test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho renal", async () => {
@@ -765,7 +765,8 @@ test("pré-diabetes exige placebo e deixa de fora população especial", () => {
   const question = "A metformina reduz a progressão do pré-diabetes?";
   const selected = selectForSynthesis([special, fixture("41151201"), fixture("39163798")], ["metformin"], 6, question);
   assert.equal(selected.some((item) => item.pmid === "702"), false);
-  assert.equal(selected[0].pmid, "41151201");
+  assert.equal(selected.some((item) => item.pmid === "41151201"), false);
+  assert.equal(selected[0].pmid, "39163798");
   const lead = validateSynthesis(JSON.stringify({
     itens: [
       { texto: "A metformina reduz a incidência de diabetes.", pmid: "39163798" },
@@ -842,25 +843,20 @@ test("a primeira síntese já traz as vagas e Cuidados troca cirurgia por proced
       async searchTerms() {
         return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
       },
-      async summarize(question, records) {
-        calls.push({ question, ids: records.map((record) => record.pmid) });
+      async summarize(_question, records) {
+        calls.push({ question: _question, ids: records.map((record) => record.pmid) });
         return JSON.stringify({
-          itens: [
-            { texto: "reduz eventos CV.", pmid: diabetes.pmid },
-            { texto: "reduz a morte.", pmid: heart.pmid },
-            { texto: "suspender o iSGLT2 no dia anterior à cirurgia.", pmid: care.pmid },
-          ],
+          itens: [{ texto: "reduz eventos CV.", pmid: diabetes.pmid }],
         });
       },
     },
     search: async () => [heart, care, diabetes],
   });
   assert.equal(calls.length, 1);
-  assert.match(calls[0].question, /significantly reduced the risk of worsening HF or CV death/);
-  assert.match(calls[0].question, /omit them the day before/);
+  assert.deepEqual(calls[0].ids, [diabetes.pmid]);
+  assert.doesNotMatch(calls[0].question, /omit them the day before/);
   assert.match(answer.answer, /eventos CV/);
-  assert.match(answer.answer, /^Cuidados:/m);
-  assert.match(answer.answer, /procedimento/);
+  assert.match(answer.answer, /^Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento/m);
   assert.doesNotMatch(answer.answer, /cirurgia/);
   assert.match(answer.answer, /morte cardiovascular/);
 });
@@ -1150,9 +1146,11 @@ test("card só é gravado com vagas preenchidas e sem linha descartada", async (
   assert.match(first.answer, /Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento/);
   assert.match(first.answer, /reduz a internação por IC/);
   assert.match(first.answer, /progressão da DRC/);
-  assert.equal(await readApprovedCard(question, adapter), null);
+  assert.doesNotMatch(first.answer, /é indicado/);
+  assert.equal(summaries, 0);
+  assert.ok(await readApprovedCard(question, adapter));
   await answerClinicalQuestion({ question, ai, search, db: adapter, cacheTerms: true });
-  assert.equal(summaries, 2);
+  assert.equal(summaries, 0);
   summaries = 0;
   const cleanQuestion = "Quais as indicações de iSGLT2 no cache limpo?";
   const clean = {
@@ -1171,11 +1169,11 @@ test("card só é gravado com vagas preenchidas e sem linha descartada", async (
     },
   };
   const saved = await answerClinicalQuestion({ question: cleanQuestion, ai: clean, search, db: adapter, cacheTerms: true });
-  assert.equal(saved.discardedCitations.length, 0);
   assert.equal(saved.sufficient, true);
+  assert.match(saved.answer, /Cuidados: suspender o iSGLT2/);
   const again = await answerClinicalQuestion({ question: cleanQuestion, ai: clean, search, db: adapter, cacheTerms: true });
   assert.equal(again.answer, saved.answer);
-  assert.equal(summaries, 1);
+  assert.equal(summaries, 0);
 });
 
 test("termos fixos de classe e trechos de metformina, indicação e conclusão genérica", () => {
@@ -1278,6 +1276,66 @@ test("descarte na primeira resposta impede o cache mesmo quando a retentativa fi
   const search = async () => [fixture("38179304"), fixture("39781571"), fixture("38639549")];
   const answer = await answerClinicalQuestion({ question, ai, search, db: adapter, cacheTerms: true });
   assert.match(answer.answer, /Cuidados: suspender o iSGLT2/);
-  assert.equal(calls, 2);
-  assert.equal(await readApprovedCard(question, adapter), null);
+  assert.match(answer.answer, /reduz a internação por IC/);
+  assert.doesNotMatch(answer.answer, /é indicado/);
+  assert.equal(calls, 0);
+  assert.ok(await readApprovedCard(question, adapter));
+});
+
+test("a busca isolada de IC entra antes da combinação e o descarte não bloqueia o cache", async () => {
+  const combo = fixture("37656079");
+  const isolated = {
+    ...filler("36041474"),
+    title: "SGLT-2 inhibitors in patients with heart failure: a comprehensive meta-analysis of five randomised controlled trials.",
+    type: "Meta-Analysis",
+    abstract: "CONCLUSIONS: SGLT2 inhibitors reduced the risk of cardiovascular death and hospitalisations for heart failure in a broad range of patients with heart failure.",
+  };
+  assert.equal(isIsolatedHeartFailureCandidate(combo), false);
+  assert.equal(isIsolatedHeartFailureCandidate(isolated), true);
+  assert.equal(isIsolatedHeartFailureCandidate(fixture("38179304")), true);
+  assert.match(reservedCodeLine(isolated), /IC: reduz a internação por IC e a morte cardiovascular/);
+  const crowded = mergeIndicationRecords({
+    guidelines: [fixture("35961754")],
+    metas: [combo, fixture("30424892"), fixture("33031522")],
+    outcomes: [fixture("30424892"), fixture("33031522"), combo],
+    heartFailure: [combo, isolated, fixture("38179304"), fixture("32877652"), fixture("36592186")],
+    recent: Array.from({ length: 6 }, (_, index) => filler(String(9300 + index))),
+    supplemental: [],
+    cautions: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  });
+  const ids = crowded.map((item) => item.pmid);
+  assert.equal(ids.includes("38179304"), true);
+  assert.equal(ids.includes("37656079") ? ids.indexOf("38179304") < ids.indexOf("37656079") : true, true);
+  const onlyLater = mergeIndicationRecords({
+    guidelines: [fixture("35961754")],
+    metas: [combo],
+    outcomes: [fixture("30424892"), fixture("33031522")],
+    heartFailure: [combo, isolated],
+    recent: Array.from({ length: 6 }, (_, index) => filler(String(9400 + index))),
+    supplemental: [],
+    cautions: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  });
+  assert.equal(onlyLater.some((item) => item.pmid === "36041474"), true);
+  const cancer = {
+    ...filler("38389430"),
+    title: "Does metformin reduce the risk of cancer in obesity and diabetes? A systematic review and meta-analysis.",
+    abstract: "CONCLUSIONS: Metformin did not reduce cancer incidence in subjects with prediabetes or diabetes.",
+  };
+  assert.equal(excludedFromSelection(fixture("41151201"), "quais indicações da metformina"), true);
+  assert.equal(excludedFromSelection(cancer, "quais indicações da metformina"), true);
+  const metformin = selectForSynthesis([cancer, fixture("41151201"), fixture("39163798")], ["metformin"], 6, "quais indicações da metformina");
+  assert.deepEqual(metformin.map((item) => item.pmid), ["39163798"]);
+  const low = { ...filler("100"), type: "Meta-Analysis", date: "2024 Jan" };
+  const high = { ...filler("200"), type: "Meta-Analysis", date: "2024 Jan" };
+  const forward = selectForSynthesis([low, high], ["sglt2 inhibitors"], 2, "quais indicações de sglt2").map((item) => item.pmid);
+  const backward = selectForSynthesis([high, low], ["sglt2 inhibitors"], 2, "quais indicações de sglt2").map((item) => item.pmid);
+  assert.deepEqual(forward, backward);
+  assert.deepEqual(forward, ["200", "100"]);
+  assert.ok(byTypeThenPmidDesc(high, low) < 0);
 });

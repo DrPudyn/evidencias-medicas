@@ -2,6 +2,7 @@ import { answerClinicalQuestion } from "@/lib/clinical/answer";
 import { createClinicalAi } from "@/lib/clinical/provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "@/lib/clinical/quota";
 import type { ClinicalSearchOptions, EvidenceRecord } from "@/lib/clinical/types";
+import { byTypeThenPmidDesc } from "@/lib/clinical/select";
 import { queryForKind, readResultCache, resultCacheKey, writeResultCache } from "@/lib/clinical/terms";
 import { queryPubmed } from "@/lib/pubmed";
 import { body, currentUser, json, rateLimit, sameOrigin, settings } from "@/lib/server";
@@ -36,6 +37,7 @@ async function searchHighLevel(term: string, options?: ClinicalSearchOptions): P
     const order = new Map(cached.map((id, index) => [id, index]));
     articles = articles.filter((article) => order.has(article.pmid)).sort((a, b) => (order.get(a.pmid) ?? 0) - (order.get(b.pmid) ?? 0));
   } else if (articles.length) {
+    articles.sort(byTypeThenPmidDesc);
     await writeResultCache(key, articles.map((article) => article.pmid), settings().DB);
   }
   return articles;

@@ -1,8 +1,8 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
-import { conceptInFocus, isCareGuideline, isHeartFailureSlot, isType2DiabetesTitle, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
+import { byTypeThenPmidDesc, conceptInFocus, isCareGuideline, isHeartFailureSlot, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { canonicalTerm, conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, finalSetKey, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, knownClassTerms, metforminPrediabetesQuery, pairQueries, parseJsonObject, readApprovedCard, readFinalSet, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeApprovedCard, writeFinalSet, writeTermCache, type FinalSetItem, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, reservedCodeLine, resultSentence, sourceExcerpt, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, reservedCodeLine, sourceExcerpt, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 import type { ClinicalAnswer } from "./types";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
@@ -39,16 +39,11 @@ function mergeAnswers(first: ClinicalAnswer, second: ClinicalAnswer, records: Ev
   return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
 }
 
-function normLine(value: string) {
-  return value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[^a-z0-9]+/g, " ").trim();
-}
-
 function withReservedLines(
   answer: ClinicalAnswer,
   records: EvidenceRecord[],
   concept: ReturnType<typeof conceptsForQuestion>[number],
   question: string,
-  onReplace: () => void,
 ) {
   const order: string[] = [];
   const texts = new Map<string, string>();
@@ -60,16 +55,18 @@ function withReservedLines(
   for (const record of records) {
     const text = reservedCodeLine(record);
     if (!text) continue;
-    const current = texts.get(record.pmid);
-    if (current && normLine(current) !== normLine(text)) onReplace();
     if (!texts.has(record.pmid)) order.push(record.pmid);
-    if (current === text) continue;
+    if (texts.get(record.pmid) === text) continue;
     texts.set(record.pmid, text);
     changed = true;
   }
   if (!changed) return answer;
   const items = order.map((pmid) => ({ texto: texts.get(pmid) || "", pmid }));
   return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
+}
+
+function isReservedRecord(record: EvidenceRecord) {
+  return Boolean(reservedCodeLine(record)) || isCareGuideline(record) || isHeartFailureSlot(record);
 }
 
 function reservedSlotsFilled(records: EvidenceRecord[], answer: ClinicalAnswer, question: string) {
@@ -118,7 +115,7 @@ async function gatherIndications(
     ...pairs.map((term) => search(term, { kind: "high-level", sort: "relevance" })),
   ]);
   const supplemental: EvidenceRecord[] = [];
-  const guide = guidelines.find((article) => !isVeterinary(article.title) && conceptInFocus(article, main));
+  const guide = [...guidelines].sort(byTypeThenPmidDesc).find((article) => !isVeterinary(article.title) && conceptInFocus(article, main));
   if (guide) {
     const conditions = conditionsFromGuideline(guide, question);
     if (conditions.length) {
@@ -242,44 +239,33 @@ export async function answerClinicalQuestion(input: {
   try {
     input.onStage?.("reading");
     input.onStage?.("writing");
-    const reserved = records.filter((record) => isCareGuideline(record) || isHeartFailureSlot(record) || isType2DiabetesTitle(record.title));
-    const brief = reserved.length
-      ? `\n\nEscreva uma linha para cada vaga, com o desfecho da frase. Não comece com Cuidados: o código coloca o rótulo. Não troque procedure por cirurgia.\n${reserved.map((record) => `PMID ${record.pmid}: ${resultSentence(record)}`).join("\n")}`
-      : "";
-    let raw = await input.ai.summarize(`${question}${brief}`, records, { direct: isYesNoQuestion(question) });
-    let tainted = false;
+    const extras = records.filter((record) => !isReservedRecord(record));
+    let raw = "{\"itens\":[]}";
     let retried = false;
-    if (synthesisNeedsRetry(raw, records)) {
-      if (validateSynthesis(raw, records, main, question).discardedCitations.length) tainted = true;
-      retried = true;
-      const ids = records.map((record) => record.pmid).join(", ");
-      const note = synthesisIsEmpty(raw)
-        ? "A lista itens veio vazia. Responda de novo com um item por achado que o trecho sustente. Não comece por sim ou não."
-        : `${RETRY_WARNING} PMIDs: ${ids}.`;
-      raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
-    }
-    const checked = (value: ClinicalAnswer) => {
-      if (value.discardedCitations.length) tainted = true;
-      return value;
-    };
-    let answer = checked(validateSynthesis(raw, records, main, question));
-    answer = withReservedLines(answer, records, main, question, () => { tainted = true; });
-    const tooThin = () => answer.sufficient && (benefitLineCount(answer.answer) === 0 || (isIndicationQuestion(question) && benefitLineCount(answer.answer) < 2));
-    const missedControl = () => isYesNoQuestion(question) && firstItemMissedControl(raw, records);
-    if ((!answer.sufficient && !synthesisIsEmpty(raw)) || tooThin() || missedControl()) {
-      if (!retried) {
+    if (extras.length) {
+      raw = await input.ai.summarize(question, extras, { direct: isYesNoQuestion(question) });
+      if (synthesisNeedsRetry(raw, extras)) {
         retried = true;
-        const note = tooThin()
-          ? "A resposta ficou só com Cuidados ou com menos de duas linhas de benefício. Reescreva com pelo menos duas frases de efeito, cada uma com a população do trecho."
-          : missedControl()
-            ? "A primeira linha tem de dizer o efeito contra placebo, controle ou sem tratamento."
-            : rejectionNote(raw, records);
-        const retryRaw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
-        answer = checked(mergeAnswers(answer, checked(validateSynthesis(retryRaw, records, main, question)), records, main, question));
-        answer = withReservedLines(answer, records, main, question, () => { tainted = true; });
+        const ids = extras.map((record) => record.pmid).join(", ");
+        const note = synthesisIsEmpty(raw)
+          ? "A lista itens veio vazia. Responda de novo com um item por achado que o trecho sustente. Não comece por sim ou não."
+          : `${RETRY_WARNING} PMIDs: ${ids}.`;
+        raw = await input.ai.summarize(`${question}\n\n${note}`, extras, { direct: false });
       }
     }
-    if (input.db && answer.sufficient && !tainted && reservedSlotsFilled(records, answer, question)) {
+    let answer = withReservedLines(validateSynthesis(raw, records, main, question), records, main, question);
+    const tooThin = () => answer.sufficient && (benefitLineCount(answer.answer) === 0 || (isIndicationQuestion(question) && benefitLineCount(answer.answer) < 2));
+    const missedControl = () => isYesNoQuestion(question) && firstItemMissedControl(raw, extras);
+    if (extras.length && !retried && ((!answer.sufficient && !synthesisIsEmpty(raw)) || tooThin() || missedControl())) {
+      const note = tooThin()
+        ? "A resposta ficou só com Cuidados ou com menos de duas linhas de benefício. Reescreva com pelo menos duas frases de efeito, cada uma com a população do trecho."
+        : missedControl()
+          ? "A primeira linha tem de dizer o efeito contra placebo, controle ou sem tratamento."
+          : rejectionNote(raw, extras);
+      const retryRaw = await input.ai.summarize(`${question}\n\n${note}`, extras, { direct: false });
+      answer = withReservedLines(mergeAnswers(answer, validateSynthesis(retryRaw, records, main, question), records, main, question), records, main, question);
+    }
+    if (input.db && answer.sufficient && reservedSlotsFilled(records, answer, question)) {
       await writeApprovedCard(question, { ...answer, sufficient: true }, input.db);
     }
     return answer;
