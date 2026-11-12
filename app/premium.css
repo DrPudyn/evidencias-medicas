@@ -230,6 +230,18 @@ body:has(.admin-shell)::before { display: none; }
   .feature:nth-child(2), .feature:nth-child(3) { padding-left: 22px; border-left: 1px solid rgba(42, 33, 28, 0.08); }
 }
 
+@media (max-width: 800px) {
+  .analytics-consent {
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    z-index: 1;
+    margin: 16px;
+    max-width: none;
+  }
+}
+
 @media (max-width: 600px) {
   main#inicio { padding-top: 156px; }
   .clinical-form { padding: 16px; }

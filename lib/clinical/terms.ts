@@ -4,8 +4,13 @@ const STOP = new Set([
   "para", "como", "qual", "quais", "sobre", "entre", "essa", "esse", "esta", "este", "uma", "com",
   "dos", "das", "que", "por", "mais", "menos", "existe", "existem", "devo", "usar", "uso", "paciente",
   "pacientes", "clinico", "clinica", "pergunta", "tratamento", "melhor", "conduta", "evidencia",
-  "evidencias", "revisao", "diretriz", "estudo", "estudos", "sobre", "quando", "onde", "porque",
-  "adultos", "adulto", "criancas", "idade", "anos",
+  "evidencias", "revisao", "diretriz", "estudo", "estudos", "quando", "onde", "porque",
+  "adultos", "adulto", "criancas", "idade", "anos", "indicacoes", "indicacao",
+  "use", "uses", "using", "indication", "indications", "healthcare", "health", "treatment", "treatments",
+  "patient", "patients", "therapy", "therapies", "management", "study", "studies", "review", "reviews",
+  "guideline", "guidelines", "systematic", "meta", "analysis", "outcome", "outcomes", "effect", "effects",
+  "benefit", "benefits", "role", "adult", "adults", "clinical", "update", "based", "the", "and", "or",
+  "for", "with", "in", "of", "on", "to", "from", "a", "an",
 ]);
 
 const PT_EN: Array<[string, string]> = [
@@ -53,28 +58,74 @@ const PT_EN: Array<[string, string]> = [
   ["dpoc", "COPD"],
   ["câncer", "cancer"],
   ["cancer", "cancer"],
+  ["inibidores de sglt2", "sglt2 inhibitors"],
+  ["isglt2", "sglt2 inhibitors"],
+  ["sglt2", "sglt2 inhibitors"],
+  ["gliflozina", "gliflozin"],
+  ["gliflozinas", "gliflozin"],
+  ["saúde da família", "family practice"],
+  ["saude da familia", "family practice"],
+  ["atenção primária", "primary health care"],
+  ["atencao primaria", "primary health care"],
 ];
+
+export type SearchConcept = string[];
+
+const MAX_CONCEPTS = 3;
+const MAX_SYNONYMS = 4;
 
 function fold(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 }
 
-export function sanitizeTerms(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const terms: string[] = [];
-  for (const item of raw) {
-    if (typeof item !== "string") continue;
-    const clean = item
-      .replace(/[\[\]"]/g, " ")
-      .replace(/\b(AND|OR|NOT)\b/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (clean.length < 2 || clean.length > 80) continue;
-    if (!/^[\p{L}\p{N} .,'’+/-]+$/u.test(clean)) continue;
-    terms.push(clean.toLowerCase());
-    if (terms.length === 6) break;
+function cleanSynonym(value: string) {
+  const words = value
+    .replace(/[\[\]"()]/g, " ")
+    .replace(/\b(AND|NOT)\b/gi, " ")
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9+-]+|[^a-z0-9+-]+$/gi, ""))
+    .filter((word) => word && !STOP.has(fold(word)));
+  const phrase = words.join(" ").trim().toLowerCase();
+  if (phrase.length < 2 || phrase.length > 80) return "";
+  if (!/^[\p{L}\p{N} .,'’+/-]+$/u.test(phrase)) return "";
+  return phrase;
+}
+
+function conceptFrom(value: unknown): SearchConcept {
+  const pieces = Array.isArray(value) ? value : [value];
+  const synonyms: string[] = [];
+  for (const piece of pieces) {
+    if (typeof piece !== "string") continue;
+    for (const alternative of piece.split(/\s+OR\s+/i)) {
+      const cleaned = cleanSynonym(alternative);
+      if (!cleaned || synonyms.includes(cleaned)) continue;
+      synonyms.push(cleaned);
+      if (synonyms.length === MAX_SYNONYMS) break;
+    }
+    if (synonyms.length === MAX_SYNONYMS) break;
   }
-  return [...new Set(terms)];
+  return synonyms;
+}
+
+export function sanitizeConcepts(raw: unknown): SearchConcept[] {
+  const record = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const source = Array.isArray(raw)
+    ? raw
+    : Array.isArray(record.concepts)
+      ? record.concepts
+      : Array.isArray(record.terms)
+        ? record.terms
+        : [];
+  const concepts: SearchConcept[] = [];
+  for (const item of source) {
+    const concept = conceptFrom(item);
+    if (!concept.length) continue;
+    const key = concept.join("|");
+    if (concepts.some((current) => current.join("|") === key)) continue;
+    concepts.push(concept);
+    if (concepts.length === MAX_CONCEPTS) break;
+  }
+  return concepts;
 }
 
 export function fallbackSearchTerms(question: string): string[] {
@@ -95,15 +146,41 @@ export function fallbackSearchTerms(question: string): string[] {
       found.push(word);
     }
   }
-  return [...new Set(found)].slice(0, 6);
+  return [...new Set(found)].slice(0, MAX_CONCEPTS);
 }
 
-export function evidenceQuery(terms: string[]): string {
-  const parts = terms.map((term) => {
-    const quoted = `"${term.replace(/"/g, "")}"`;
-    return `(${quoted}[Title/Abstract] OR ${quoted}[MeSH Terms])`;
+function quoteTerm(term: string) {
+  return `"${term.replace(/"/g, "")}"`;
+}
+
+export function publicationDateClause(today: string) {
+  return `("1900/01/01"[Date - Publication] : "${today}"[Date - Publication])`;
+}
+
+export function evidenceQuery(concepts: SearchConcept[], today?: string) {
+  const groups = concepts.map((concept) => {
+    const synonyms = concept.map((term) => {
+      const quoted = quoteTerm(term);
+      return `(${quoted}[Title/Abstract] OR ${quoted}[MeSH Terms])`;
+    });
+    return `(${synonyms.join(" OR ")})`;
   });
-  return `${parts.join(" AND ")} AND ${HIGH_LEVEL_EVIDENCE_FILTER}`;
+  const typed = `${groups.join(" AND ")} AND ${HIGH_LEVEL_EVIDENCE_FILTER}`;
+  return today ? `${typed} AND ${publicationDateClause(today)}` : typed;
+}
+
+/** Most specific query first, then fewer concepts, and a last try of the main concept without the date window. */
+export function searchAttempts(concepts: SearchConcept[], today: string) {
+  const attempts: string[] = [];
+  for (let count = concepts.length; count >= 1; count -= 1) {
+    attempts.push(evidenceQuery(concepts.slice(0, count), today));
+  }
+  attempts.push(evidenceQuery(concepts.slice(0, 1)));
+  return attempts;
+}
+
+export function saoPauloPublicationDay(now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(now).replaceAll("-", "/");
 }
 
 export function parseJsonObject(raw: string): Record<string, unknown> | null {

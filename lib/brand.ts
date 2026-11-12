@@ -5,7 +5,7 @@ export const BRAND_MARK = "Evidência";
 
 export const DEFAULT_SITE_ORIGIN = "https://evidencias-medicas.edsoncarvalho9.workers.dev";
 export const DEFAULT_PLAN_PRICE_LABEL = "R$ 29–49";
-export const DEFAULT_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
+export const DEFAULT_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 export const BRAND_DESCRIPTION_PT =
   "Faça uma pergunta clínica em português. A busca usa revisões sistemáticas, metanálises e diretrizes do PubMed e resume somente o que esses registros trazem.";

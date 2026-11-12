@@ -12,7 +12,7 @@ const vars = {
   ...(base.vars || {}),
   SITE_ORIGIN: process.env.SITE_ORIGIN || "https://evidencias-medicas.edsoncarvalho9.workers.dev",
   PLAN_PRICE_LABEL: process.env.PLAN_PRICE_LABEL || "R$ 29–49",
-  WORKERS_AI_MODEL: process.env.WORKERS_AI_MODEL || "@cf/meta/llama-3.1-8b-instruct-fast",
+  WORKERS_AI_MODEL: process.env.WORKERS_AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   CLINICAL_AI_PROVIDER: "workers-ai",
 };
 delete vars.LOCAL_PREVIEW_ENABLED;

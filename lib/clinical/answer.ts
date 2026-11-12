@@ -1,5 +1,5 @@
 import type { ClinicalAi, EvidenceRecord } from "./types";
-import { evidenceQuery, fallbackSearchTerms, parseJsonObject, sanitizeTerms } from "./terms";
+import { fallbackSearchTerms, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
 import { insufficientAnswer, validateSynthesis } from "./validate";
 
 export async function answerClinicalQuestion(input: {
@@ -8,20 +8,25 @@ export async function answerClinicalQuestion(input: {
   search: (term: string) => Promise<EvidenceRecord[]>;
 }) {
   const question = input.question.trim();
-  let terms: string[] = [];
+  let concepts = [] as ReturnType<typeof sanitizeConcepts>;
   try {
     const raw = await input.ai.searchTerms(question);
-    terms = sanitizeTerms(parseJsonObject(raw)?.terms);
+    concepts = sanitizeConcepts(parseJsonObject(raw));
   } catch {
-    terms = [];
+    concepts = [];
   }
-  if (!terms.length) terms = fallbackSearchTerms(question);
-  if (!terms.length) {
+  if (!concepts.length) concepts = sanitizeConcepts({ terms: fallbackSearchTerms(question) });
+  if (!concepts.length) {
     return insufficientAnswer(
       "Não foi possível montar uma busca no PubMed a partir desta pergunta. Nenhuma conclusão foi completada com conhecimento geral.",
     );
   }
-  const records = await input.search(evidenceQuery(terms));
+  const attempts = searchAttempts(concepts, saoPauloPublicationDay());
+  let records: EvidenceRecord[] = [];
+  for (const term of attempts) {
+    records = await input.search(term);
+    if (records.length) break;
+  }
   if (!records.length) {
     return insufficientAnswer(
       "Não encontramos revisões sistemáticas, metanálises ou diretrizes no PubMed para esta pergunta. Não há conclusão clínica a partir desta busca.",

@@ -5,20 +5,16 @@ import type { EvidenceRecord } from "@/lib/clinical/types";
 import { queryPubmed } from "@/lib/pubmed";
 import { body, currentUser, json, rateLimit, sameOrigin, settings } from "@/lib/server";
 
-function publicationWindow() {
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).replaceAll("-", "/");
-  return `("1900/01/01"[Date - Publication] : "${today}"[Date - Publication])`;
-}
-
 async function searchHighLevel(term: string): Promise<EvidenceRecord[]> {
   const result = await queryPubmed({
-    term: `${term} AND ${publicationWindow()}`,
+    term,
     sort: "relevance",
     page: 1,
-    retmax: 6,
+    retmax: 20,
     abstracts: true,
+    highLevelOnly: true,
   });
-  return result.articles.map((article) => ({
+  return result.articles.slice(0, 6).map((article) => ({
     pmid: article.id,
     title: article.title,
     journal: article.journal,

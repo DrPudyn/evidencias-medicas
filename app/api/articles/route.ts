@@ -40,7 +40,12 @@ export async function GET(req: Request) {
 
   try {
     const result = await queryPubmed(params);
-    const articles = result.articles.map((article) => ({ ...article, topic: topic?.[0] || "all", abstract: undefined }));
+    const articles = result.articles.map((article) => {
+    const published = { ...article, topic: topic?.[0] || "all" };
+    delete published.publicationTypes;
+    delete published.abstract;
+    return published;
+  });
     const data = { articles, count: result.count, page, source: "PubMed", fetchedAt: new Date().toISOString() };
     if (cache.size >= 100) cache.delete(cache.keys().next().value!);
     cache.set(key, { time: Date.now(), data });

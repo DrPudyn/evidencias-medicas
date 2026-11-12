@@ -1,4 +1,7 @@
+import { isHighLevelPublication } from "./evidence-filter";
+
 export type AbstractSection = { label: string; text: string };
+export type PubmedArticleDetails = { abstract: string; language?: string; publicationTypes: string[] };
 
 export function decodeXml(value: string) {
   return value
@@ -33,16 +36,29 @@ export function abstractPlainText(xml: string, max = 4000) {
   return text.slice(0, max);
 }
 
-/** Maps PMID to the abstract text found inside one efetch document. */
-export function abstractsByPmid(xml: string): Record<string, { abstract: string; language?: string }> {
-  const result: Record<string, { abstract: string; language?: string }> = {};
+export function publicationTypesFromArticle(xml: string) {
+  return [...xml.matchAll(/<PublicationType\b[^>]*>([^<]*)<\/PublicationType>/gi)]
+    .map((match) => decodeXml(match[1]))
+    .filter(Boolean);
+}
+
+/** Maps PMID to the abstract and PublicationType list from one efetch document. */
+export function abstractsByPmid(xml: string): Record<string, PubmedArticleDetails> {
+  const result: Record<string, PubmedArticleDetails> = {};
   for (const match of xml.matchAll(/<PubmedArticle>([\s\S]*?)<\/PubmedArticle>/gi)) {
     const id = match[1].match(/<PMID[^>]*>([^<]+)<\/PMID>/i)?.[1]?.trim();
     if (!id) continue;
     result[id] = {
       abstract: abstractPlainText(match[1]),
       language: extractLanguage(match[1]),
+      publicationTypes: publicationTypesFromArticle(match[1]),
     };
   }
   return result;
+}
+
+export function highLevelPmids(xml: string) {
+  return Object.entries(abstractsByPmid(xml))
+    .filter(([, detail]) => isHighLevelPublication(detail.publicationTypes))
+    .map(([pmid]) => pmid);
 }

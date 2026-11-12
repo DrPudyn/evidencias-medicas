@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
-import { fallbackSearchTerms } from "./terms";
+import { highLevelPmids } from "../pubmed-xml";
+import { fallbackSearchTerms, sanitizeConcepts, searchAttempts } from "./terms";
 import { createClinicalAi, createWorkersAi } from "./provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "./quota";
 import type { ClinicalAi, EvidenceRecord } from "./types";
@@ -61,6 +62,75 @@ function memoryDb() {
 
 test("termos de reserva não misturam sobras em português", () => {
   assert.deepEqual(fallbackSearchTerms("A metformina reduz complicações no diabetes tipo 2?").sort(), ["metformin", "type 2 diabetes"]);
+});
+
+test("termos genéricos saem e sinônimos com OR ficam no mesmo conceito", () => {
+  assert.deepEqual(sanitizeConcepts({
+    terms: ["sGLT2 inhibitors OR gliflozins", "primary care", "family medicine", "indications", "use", "healthcare"],
+  }), [
+    ["sglt2 inhibitors", "gliflozins"],
+    ["primary care"],
+    ["family medicine"],
+  ]);
+});
+
+test("busca vazia refaz a consulta só com o conceito principal", async () => {
+  const seen: string[] = [];
+  const ai: ClinicalAi = {
+    async searchTerms() {
+      return JSON.stringify({
+        concepts: [["SGLT2 inhibitors", "gliflozin"], ["primary care"], ["family medicine"]],
+      });
+    },
+    async summarize() {
+      return JSON.stringify({
+        sufficient: true,
+        answer: "As indicações descritas estão nos artigos citados [1].",
+        citations: ["12345678"],
+      });
+    },
+  };
+  const answer = await answerClinicalQuestion({
+    question: "Quais as indicações de uso de iSGLT2 na prática de saúde da família?",
+    ai,
+    search: async (term) => {
+      seen.push(term);
+      return /primary care|family medicine/i.test(term) ? [] : [record("12345678")];
+    },
+  });
+  assert.equal(answer.sufficient, true);
+  assert.equal(seen.length, 3);
+  assert.match(seen[0], /sglt2 inhibitors/);
+  assert.match(seen[0], / OR /);
+  assert.match(seen[0], /primary care/);
+  assert.match(seen[2], /sglt2 inhibitors/);
+  assert.doesNotMatch(seen[2], /primary care|family medicine/);
+  assert.match(seen[2], /1900\/01\/01/);
+  const attempts = searchAttempts([["sglt2 inhibitors"], ["primary care"]], "2026/11/11");
+  assert.equal(attempts.length, 3);
+  assert.doesNotMatch(attempts[2], /1900\/01\/01/);
+});
+
+test("efetch descarta caso-controle e mantém revisão sistemática", () => {
+  const xml = `
+    <PubmedArticle><MedlineCitation><PMID>35100355</PMID>
+      <Article><PublicationTypeList>
+        <PublicationType>Journal Article</PublicationType>
+        <PublicationType>Case-Control Studies</PublicationType>
+      </PublicationTypeList></Article>
+    </MedlineCitation></PubmedArticle>
+    <PubmedArticle><MedlineCitation><PMID>11111111</PMID>
+      <Article><PublicationTypeList>
+        <PublicationType>Systematic Review</PublicationType>
+        <PublicationType>Journal Article</PublicationType>
+      </PublicationTypeList></Article>
+    </MedlineCitation></PubmedArticle>
+    <PubmedArticle><MedlineCitation><PMID>22222222</PMID>
+      <Article><PublicationTypeList>
+        <PublicationType>Practice Guideline</PublicationType>
+      </PublicationTypeList></Article>
+    </MedlineCitation></PubmedArticle>`;
+  assert.deepEqual(highLevelPmids(xml), ["11111111", "22222222"]);
 });
 
 test("pergunta clínica normal cita só PMIDs recuperados", async () => {
@@ -214,14 +284,28 @@ test("limites de plano: anônimo, grátis, assinante e outro dia", async () => {
   assert.equal((await reserveClinicalQuota(refundDb, { ip: "198.51.100.4" }, day)).allowed, true);
 });
 
-test("provedor fixture só na prévia e Workers AI lê o texto do binding", async () => {
+test("provedor fixture só na prévia e Workers AI lê response objeto, string e choices", async () => {
   assert.equal(createClinicalAi({ CLINICAL_AI_PROVIDER: "fixture" }), null);
   assert.equal(createClinicalAi({}), null);
   assert.ok(createClinicalAi({ CLINICAL_AI_PROVIDER: "fixture", LOCAL_PREVIEW_ENABLED: "true" }));
+  const calls: unknown[] = [];
+  let model = "";
   const ai = createWorkersAi({
+    async run(name, input) {
+      model = name;
+      calls.push(input);
+      if (calls.length === 1) return { response: { concepts: [["asthma"]] } };
+      return { choices: [{ message: { content: { sufficient: false, answer: "", citations: [] } } }] };
+    },
+  }, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+  assert.match(await ai.searchTerms("asma"), /asthma/);
+  assert.match(JSON.stringify(calls[0]), /json_schema/);
+  assert.match(await ai.summarize("asma na atenção primária?", []), /sufficient/);
+  assert.equal(model, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
+  const fallback = createWorkersAi({
     async run() {
-      return { response: "{\"terms\":[\"asthma\"]}" };
+      throw new Error("JSON Mode couldn't be met");
     },
   });
-  assert.match(await ai.searchTerms("asma"), /asthma/);
+  await assert.rejects(() => fallback.searchTerms("asma"));
 });

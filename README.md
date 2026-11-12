@@ -6,7 +6,7 @@ A origem pública sai de `SITE_ORIGIN`. Sem a variável, o padrão é `https://e
 
 ## Pergunta clínica
 
-`POST /api/clinical-question` recebe `{ "question": "..." }` em português (12 a 500 caracteres). O provedor de IA (padrão: binding Workers AI `AI`, modelo em `WORKERS_AI_MODEL`) só gera termos de busca e a síntese. A busca reutiliza o PubMed e fica restrita a revisões sistemáticas, metanálises e diretrizes. A resposta em português traz conclusão, nível simplificado (alto, moderado, baixo ou insuficiente, com teto pelo tipo de publicação recuperado), limitações e referências com PMID, DOI e link. Afirmações com PMID que não veio da busca são descartadas. Busca vazia ou síntese inválida não é completada com conhecimento geral.
+`POST /api/clinical-question` recebe `{ "question": "..." }` em português (12 a 500 caracteres). O provedor de IA (padrão: binding Workers AI `AI`, modelo em `WORKERS_AI_MODEL`, hoje `@cf/meta/llama-3.3-70b-instruct-fp8-fast`) só gera termos de busca e a síntese. A busca usa 1 a 3 conceitos e, se não houver resultado, repete com menos termos. A busca reutiliza o PubMed e só mantém revisão sistemática, metanálise ou diretriz confirmadas no PublicationType do efetch. A resposta é um texto curto em português, com citações numeradas e links para o PubMed. Afirmações com PMID que não veio da busca são descartadas. Busca vazia ou síntese inválida não é completada com conhecimento geral.
 
 Sem binding `AI` (ou com `CLINICAL_AI_PROVIDER=disabled`) a rota responde 503. `CLINICAL_AI_PROVIDER=fixture` só funciona com `LOCAL_PREVIEW_ENABLED=true` e apenas reorganiza trechos dos registros recuperados.
 

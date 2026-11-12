@@ -1,6 +1,6 @@
 import type { Article } from "@/lib/catalog";
 import { settings } from "@/lib/server";
-import { HIGH_LEVEL_EVIDENCE_FILTER } from "@/lib/evidence-filter";
+import { HIGH_LEVEL_EVIDENCE_FILTER, isHighLevelPublication } from "@/lib/evidence-filter";
 import { abstractsByPmid } from "@/lib/pubmed-xml";
 
 export { HIGH_LEVEL_EVIDENCE_FILTER };
@@ -16,7 +16,7 @@ type ESummaryItem = {
 };
 type ESummaryResponse = { error?: string; result?: Record<string, ESummaryItem> };
 
-export type PubmedHit = Article & { abstract?: string };
+export type PubmedHit = Article & { abstract?: string; publicationTypes?: string[] };
 
 export type PubmedSearchInput = {
   term: string;
@@ -25,6 +25,8 @@ export type PubmedSearchInput = {
   retmax: number;
   reldate?: number;
   abstracts?: boolean;
+  /** When set, only articles whose efetch PublicationType is review, meta-analysis or guideline. */
+  highLevelOnly?: boolean;
 };
 
 async function reserveNcbiSlot() {
@@ -125,14 +127,16 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
       const summaryPromise = ncbi("esummary", { id: ids.join(",") }) as Promise<ESummaryResponse>;
       const detailPromise = eutils("efetch", { id: ids.join(","), retmode: "xml" })
         .then(async (response) => abstractsByPmid(await response.text()))
-        .catch(() => ({} as Record<string, { abstract: string; language?: string }>));
+        .catch(() => ({} as Record<string, { abstract: string; language?: string; publicationTypes: string[] }>));
       const [summary, details] = await Promise.all([summaryPromise, detailPromise]);
       if (summary.error || !summary.result) throw new Error("Resposta inválida do PubMed");
       const summaryItems = summary.result;
       articles = ids.map((id) => {
         const item = summaryItems[id];
         if (!item?.title) return null;
-        const publicationTypes = item.pubtype || [];
+        const summaryTypes = item.pubtype || [];
+        const publicationTypes = details[id]?.publicationTypes?.length ? details[id].publicationTypes : summaryTypes;
+        if (input.highLevelOnly && !isHighLevelPublication(details[id]?.publicationTypes || [])) return null;
         const authors = item.authors || [];
         const hit: PubmedHit = {
           id,
@@ -142,6 +146,7 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
           electronicDate: item.epubdate && item.pubdate && item.epubdate !== item.pubdate ? item.epubdate : undefined,
           authors: (authors.slice(0, 2).map((author) => author.name).join(", ") || "Autores no PubMed") + (authors.length > 2 ? " et al." : ""),
           type: publicationType(publicationTypes),
+          publicationTypes,
           topic: "all",
           doi: item.articleids?.find((articleId) => articleId.idtype === "doi")?.value,
           url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,

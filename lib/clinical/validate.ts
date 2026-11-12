@@ -1,7 +1,7 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
 import { CLINICAL_DISCLAIMER } from "./types";
 
-const ANSWER_MAX = 700;
+const ANSWER_MAX = 1400;
 
 export function toReference(record: EvidenceRecord, n: number): ClinicalReference {
   return {
