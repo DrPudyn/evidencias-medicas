@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
-import { SUMMARY_SYSTEM } from "./prompts";
+import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
 import { mergeIndicationRecords, selectForSynthesis } from "./select";
 import { evidenceQuery, expandClassTerms } from "./terms";
-import { validateSynthesis } from "./validate";
+import { normalizeOddCaps, validateSynthesis } from "./validate";
 import type { EvidenceRecord } from "./types";
 
 const PMIDs = [
@@ -23,6 +23,9 @@ const PMIDs = [
   "41202026",
   "41203232",
   "40884036",
+  "32877652",
+  "30424892",
+  "33031522",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -76,6 +79,9 @@ test("fixtures reais trazem os resumos do PubMed", () => {
   assert.match(fixture("41203232").abstract, /\(CKD\)/);
   assert.match(fixture("40884036").abstract, /totality of randomized clinical trial data/);
   assert.match(fixture("42914763").abstract, /type II DM/);
+  assert.match(fixture("32877652").abstract, /suggest that these agents also improve renal outcomes/);
+  assert.match(fixture("30424892").title, /type 2 diabetes/);
+  assert.match(fixture("33031522").title, /Type 2 Diabetes/);
 });
 
 test("35404670: hospitalização por IC e infecção genital ficam sem ressalva", () => {
@@ -89,7 +95,7 @@ test("35404670: hospitalização por IC e infecção genital ficam sem ressalva"
   assert.equal(answer.sufficient, true);
   assert.match(answer.answer, /hospitalizações por IC/);
   assert.match(answer.answer, /infecção genital/);
-  assert.doesNotMatch(answer.answer, /certeza limitada|certeza baixa|cautela/);
+  assert.doesNotMatch(answer.answer, /certeza limitada|certeza baixa|cautela|\bpode\b/);
 });
 
 test("42914763: MASH com DM2 passa e a ressalva não vira item de Cuidados", () => {
@@ -121,12 +127,17 @@ test("38583093: hospitalização por IC só da introdução é rejeitada", () =>
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(rejected.sufficient, false);
   const kept = validateSynthesis(JSON.stringify({
-    itens: [{ texto: "IniciaÇÃO com inibidores de SGLT2 reduz a morte cardiovascular.", pmid: "38583093" }],
+    itens: [{ texto: "IniciaÇÃO com iSGLT2, eGFR, SGLT2i e HbA1c reduz a morte cardiovascular.", pmid: "38583093" }],
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(kept.sufficient, true);
   assert.match(kept.answer, /Iniciação/);
+  assert.match(kept.answer, /iSGLT2/);
+  assert.match(kept.answer, /eGFR/);
+  assert.match(kept.answer, /SGLT2i/);
+  assert.match(kept.answer, /HbA1c/);
   assert.match(kept.answer, /morte cardiovascular/);
-  assert.doesNotMatch(kept.answer, /IniciaÇÃO|hospitaliza/);
+  assert.doesNotMatch(kept.answer, /IniciaÇÃO|isglt2|hospitaliza/);
+  assert.equal(normalizeOddCaps("IniciaÇÃO de iSGLT2, eGFR, SGLT2i e HbA1c"), "Iniciação de iSGLT2, eGFR, SGLT2i e HbA1c");
 });
 
 test("42811398 mantém o qualificador associado à metformina", () => {
@@ -187,6 +198,42 @@ test("32036861 continua selecionável pelo cotransportador sem o algarismo 2", (
   assert.deepEqual(selected.map((item) => item.pmid), ["32036861"]);
 });
 
+test("32877652 e 39163798 recebem pode quando o trecho diz suggest ou may", () => {
+  const renal = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 melhoram os desfechos renais.", pmid: "32877652" }],
+  }), [fixture("32877652")], ["sglt2 inhibitors"]);
+  assert.equal(renal.sufficient, true);
+  assert.match(renal.answer, /podem melhorar os desfechos renais/);
+  const already = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 sugerem melhora dos desfechos renais.", pmid: "32877652" }],
+  }), [fixture("32877652")], ["sglt2 inhibitors"]);
+  assert.equal(already.sufficient, true);
+  assert.match(already.answer, /sugerem melhora/);
+  assert.doesNotMatch(already.answer, /pode sugerem|podem sugerem/);
+  const dose = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "750 mg/dia representa a dose ótima.", pmid: "39163798" }],
+  }), [fixture("39163798")], ["metformin"]);
+  assert.equal(dose.sufficient, true);
+  assert.match(dose.answer, /pode representar a dose ótima/);
+});
+
+test("30424892 e 33031522 ocupam a vaga de DM2 e a metanálise de IC não", () => {
+  const merged = mergeIndicationRecords({
+    guidelines: [fixture("35961754")],
+    metas: [],
+    outcomes: [fixture("32877652"), fixture("30424892"), fixture("33031522")],
+    recent: Array.from({ length: 6 }, (_, index) => filler(String(9200 + index))),
+    supplemental: [],
+    cautions: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  });
+  const ids = merged.map((item) => item.pmid);
+  assert.deepEqual(ids.slice(1, 3), ["30424892", "33031522"]);
+  assert.ok(!ids.slice(1, 3).includes("32877652"));
+});
+
 test("41202026 mantém benefício renal, hospitalização e mortalidade com ou sem diabetes", () => {
   const answer = validateSynthesis(JSON.stringify({
     itens: [{ texto: "Os inibidores de SGLT2 trazem benefícios renais, de hospitalização e de mortalidade independentemente de diabetes.", pmid: "41202026" }],
@@ -245,6 +292,13 @@ test("41151201 e a NMA de exercício com metformina vêm na frente no pré-diabe
   const other = fixture("39163798");
   const selected = selectForSynthesis([other, nma, umbrella], ["metformin"], 6, "Metformina no pré-diabetes");
   assert.deepEqual(selected.map((item) => item.pmid), ["41151201", "42800000", "39163798"]);
+  const placeboNma: EvidenceRecord = {
+    ...filler("42800001"),
+    title: "Network meta-analysis of metformin in prediabetes",
+    abstract: "RESULTS: Metformin reduced diabetes versus placebo.",
+  };
+  const yesNo = selectForSynthesis([other, placeboNma, umbrella], ["metformin"], 6, "A metformina reduz a progressão do pré-diabetes?");
+  assert.deepEqual(yesNo.map((item) => item.pmid), ["41151201", "42800001", "39163798"]);
 });
 
 test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho renal", async () => {
@@ -279,5 +333,10 @@ test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho 
   assert.match(SUMMARY_SYSTEM, /até 40 palavras/);
   assert.match(SUMMARY_SYSTEM, /associado à metformina/);
   assert.match(SUMMARY_SYSTEM, /comparando doses, 750 mg\/dia/);
+  assert.match(SUMMARY_SYSTEM, /DM2 de alto risco cardiovascular não se funde com DRC/);
+  assert.match(YES_NO_LINE, /umbrella review ou a metanálise em rede/);
   assert.doesNotMatch(SUMMARY_SYSTEM, /curta/);
+  const dm2Query = seen.find((item) => item.kind === "meta" && /type 2 diabetes/i.test(item.term) && /T2DM/.test(item.term) && /cardiovascular/i.test(item.term) && /renal/i.test(item.term));
+  assert.ok(dm2Query);
+  assert.equal(dm2Query.sort, "relevance");
 });

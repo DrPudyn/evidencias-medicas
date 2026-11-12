@@ -25,9 +25,18 @@ export function insufficientAnswer(message: string, discarded: string[] = []): C
   };
 }
 
+const WORD_LETTERS = "A-Za-zÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç";
+
+/** Fixes IniciaÇÃO. Leaves iSGLT2, eGFR, SGLT2i and HbA1c alone. */
+export function normalizeOddCaps(text: string) {
+  return text.replace(new RegExp(`[${WORD_LETTERS}]{5,}`, "g"), (word) => {
+    if (!new RegExp(`[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][a-záàâãéêíóôõúç]+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]`).test(word)) return word;
+    return word.replace(/([a-záàâãéêíóôõúç])([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{2,})/g, (_match, lower: string, upper: string) => lower + upper.toLowerCase());
+  });
+}
+
 function tidy(text: string) {
-  return text
-    .replace(/([a-záàâãéêíóôõúç])([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{2,})/g, (_match, lower: string, upper: string) => lower + upper.toLowerCase())
+  return normalizeOddCaps(text)
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/\(\s*\)/g, "")
     .replace(/[ \t]{2,}/g, " ")
@@ -181,6 +190,117 @@ function textHasOutcome(text: string, outcome: Outcome) {
 
 function outcomeHits(line: string) {
   return OUTCOMES.filter((outcome) => textHasOutcome(line, outcome));
+}
+
+function firstOutcomeAt(text: string, outcome: Outcome) {
+  const folded = withAbbreviations(text);
+  let at = -1;
+  for (const stem of outcome.stems) {
+    const index = folded.indexOf(stem);
+    if (index >= 0 && (at < 0 || index < at)) at = index;
+  }
+  for (const token of outcome.tokens) {
+    const match = new RegExp(`(?:^|[^a-z0-9])${token}(?:[^a-z0-9]|$)`).exec(folded);
+    if (match && (at < 0 || match.index < at)) at = match.index;
+  }
+  return at;
+}
+
+function hedgeAt(text: string) {
+  const folded = withAbbreviations(text);
+  const match = /\b(suggests?|may|might|could|possibly)\b/.exec(folded);
+  if (!match) return -1;
+  const window = folded.slice(match.index, match.index + match[0].length + 4);
+  if (/^(?:could|may|might) not\b/.test(window)) return -1;
+  return match.index;
+}
+
+const SOFTEN_VERBS: Array<[RegExp, string]> = [
+  [/\bmelhoraram\b/i, "podem melhorar"],
+  [/\bmelhorou\b/i, "pode melhorar"],
+  [/\bmelhoram\b/i, "podem melhorar"],
+  [/\bmelhora\b/i, "pode melhorar"],
+  [/\breduziram\b/i, "podem reduzir"],
+  [/\breduziu\b/i, "pode reduzir"],
+  [/\breduzem\b/i, "podem reduzir"],
+  [/\breduz\b/i, "pode reduzir"],
+  [/\baumentaram\b/i, "podem aumentar"],
+  [/\baumentou\b/i, "pode aumentar"],
+  [/\baumentam\b/i, "podem aumentar"],
+  [/\baumenta\b/i, "pode aumentar"],
+  [/\brepresentam\b/i, "podem representar"],
+  [/\brepresenta\b/i, "pode representar"],
+  [/\bsão\b/i, "podem ser"],
+  [/\bé\b/i, "pode ser"],
+];
+
+const ALIGNMENT: Array<[string, string, number]> = [
+  ["reduz", "reduc", 3],
+  ["melhor", "improv", 3],
+  ["represent", "represent", 3],
+  ["otim", "optimal", 3],
+  ["incidenc", "incidenc", 2],
+  ["diabetes", "diabet", 1],
+  ["dose", "dose", 1],
+  ["750", "750", 2],
+  ["renal", "renal", 2],
+];
+
+function alignmentScore(line: string, sentence: string) {
+  const left = fold(line);
+  const right = fold(sentence);
+  return ALIGNMENT.reduce((score, [portuguese, english, weight]) => (
+    left.includes(portuguese) && right.includes(english) ? score + weight : score
+  ), 0);
+}
+
+function sentenceHedgesAligned(line: string, sentence: string) {
+  const at = hedgeAt(sentence);
+  if (at < 0) return false;
+  const folded = withAbbreviations(sentence);
+  return ALIGNMENT.some(([portuguese, english]) => {
+    if (!fold(line).includes(portuguese)) return false;
+    const index = folded.indexOf(english);
+    return index > at;
+  });
+}
+
+/** The supporting sentence hedges the claim with suggest, may, might, could or possibly. */
+export function claimNeedsHedge(line: string, excerpt: string) {
+  const sentences = excerpt.split(/\n+|(?<=[.!?])\s+/);
+  const hits = outcomeHits(line);
+  if (hits.length) {
+    return sentences.some((sentence) => {
+      const at = hedgeAt(sentence);
+      if (at < 0) return false;
+      return hits.some((outcome) => {
+        const outcomeAt = firstOutcomeAt(sentence, outcome);
+        return outcomeAt > at;
+      });
+    });
+  }
+  const scored = sentences
+    .map((sentence) => ({ sentence, score: alignmentScore(line, sentence) }))
+    .filter((item) => item.score > 0);
+  if (!scored.length) return false;
+  const best = Math.max(...scored.map((item) => item.score));
+  const top = scored.filter((item) => item.score === best);
+  return top.length > 0 && top.every((item) => sentenceHedgesAligned(line, item.sentence));
+}
+
+function softenVerb(line: string) {
+  for (const [pattern, replacement] of SOFTEN_VERBS) {
+    if (pattern.test(line)) return line.replace(pattern, replacement);
+  }
+  return line;
+}
+
+/** Adds pode when the supporting sentence is only a suggestion. */
+export function ensureModalHedge(line: string, excerpt: string) {
+  if (!claimNeedsHedge(line, excerpt)) return line;
+  if (/\b(sugere\w*|pode|podem|possivelmente)\b/.test(fold(line))) return line;
+  const softened = softenVerb(line);
+  return softened === line ? null : softened;
 }
 
 function sentenceHasClass(sentence: string, needles: string[]) {
@@ -470,7 +590,9 @@ function acceptDraft(draft: Draft, concept?: SearchConcept) {
   if (echoesPrompt(text, citedText)) return null;
   if (claimOutsideResults(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
   if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract) || ignoresPooledConclusion(text, citedAbstract)) return null;
-  text = ensureCertaintyCaveat(text, citedAbstract);
+  const hedged = ensureModalHedge(text, citedAbstract);
+  if (!hedged) return null;
+  text = ensureCertaintyCaveat(hedged, citedAbstract);
   if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };
 }

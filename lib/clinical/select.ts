@@ -1,5 +1,6 @@
 import { conclusionText } from "../pubmed-xml";
 import type { EvidenceRecord } from "./types";
+import { isYesNoQuestion } from "./prompts";
 import { requiredConditionMarks, type SearchConcept } from "./terms";
 
 const WEAK_TOKENS = new Set([
@@ -129,6 +130,23 @@ function notAnIndication(article: EvidenceRecord) {
   return /sarcopenia|muscle mass|massa muscular|skeletal muscle/i.test(article.title);
 }
 
+/** The reserved cardiovascular or renal slot is for type 2 diabetes, not a heart-failure meta-analysis. */
+export function isType2DiabetesTitle(title: string) {
+  return /type 2 diabetes|type ii diabetes|\bt2dm\b|\bt2d\b/i.test(title);
+}
+
+function synthesisRank(article: EvidenceRecord, question: string) {
+  const asked = foldText(question);
+  if (isYesNoQuestion(question) && /metformin/.test(asked)) {
+    const title = foldText(article.title);
+    const body = foldText(`${article.title} ${article.abstract}`);
+    const control = /placebo|controle|control group|grupo controle|no treatment|sem tratamento|untreated/.test(body);
+    if (control && /umbrella/.test(title)) return 0;
+    if (control && /network meta/.test(body)) return 1;
+  }
+  return 10 + prediabetesPriority(article, question);
+}
+
 /** Umbrella reviews and exercise-versus-metformin network meta-analyses lead prediabetes questions. */
 export function prediabetesPriority(article: EvidenceRecord, question: string) {
   const asked = foldText(question);
@@ -184,7 +202,7 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
     if (narrowed.length || !pool.length) pool = narrowed;
   }
   return mixTypes(pool)
-    .sort((a, b) => prediabetesPriority(a, question) - prediabetesPriority(b, question))
+    .sort((a, b) => synthesisRank(a, question) - synthesisRank(b, question))
     .slice(0, limit);
 }
 
@@ -229,6 +247,8 @@ export function mergeIndicationRecords(input: {
   const extra = keep(input.supplemental);
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
+  const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title));
+  const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title));
   const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];
   const used = new Set<string>();
@@ -238,11 +258,12 @@ export function mergeIndicationRecords(input: {
     picked.push(article);
   };
   take(guides[0]);
-  take(outcomes[0]);
-  take(outcomes[1]);
+  take(dm2Outcomes[0]);
+  take(dm2Outcomes[1]);
+  take(otherOutcomes[0]);
   take(cautions[0]);
   take(metas[0]);
-  const lanes = [guides.slice(1), outcomes.slice(2), metas.slice(1), extra, recent];
+  const lanes = [guides.slice(1), otherOutcomes.slice(1), dm2Outcomes.slice(2), metas.slice(1), extra, recent];
   let pending = true;
   while (pending && picked.length < limit) {
     pending = false;
@@ -255,5 +276,5 @@ export function mergeIndicationRecords(input: {
       if (picked.length >= limit) break;
     }
   }
-  return picked.sort((a, b) => prediabetesPriority(a, input.question) - prediabetesPriority(b, input.question));
+  return picked.sort((a, b) => synthesisRank(a, input.question) - synthesisRank(b, input.question));
 }

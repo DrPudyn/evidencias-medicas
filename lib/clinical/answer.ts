@@ -31,12 +31,14 @@ async function gatherIndications(
   const pairs = pairQueries(scoped, today).filter((term) => term !== classQuery);
   const safetyQuery = evidenceQuery([searchClass, ["adverse effects", "perioperative"]], today);
   const outcomeQuery = evidenceQuery([searchClass, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
-  const [guidelines, metas, recent, cautions, outcomes, ...paired] = await Promise.all([
+  const dm2OutcomeQuery = evidenceQuery([searchClass, ["type 2 diabetes", "T2DM"], ["cardiovascular", "kidney", "renal"]], today);
+  const [guidelines, metas, recent, cautions, outcomes, dm2Outcomes, ...paired] = await Promise.all([
     search(classQuery, { kind: "guideline", sort: "relevance" }),
     search(classQuery, { kind: "meta", sort: "relevance" }),
     search(classQuery, { kind: "high-level", sort: "pub_date" }),
     search(safetyQuery, { kind: "high-level", sort: "relevance" }),
     search(outcomeQuery, { kind: "meta", sort: "relevance" }),
+    search(dm2OutcomeQuery, { kind: "meta", sort: "relevance" }),
     ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
   ]);
   const supplemental: EvidenceRecord[] = [];
@@ -55,7 +57,7 @@ async function gatherIndications(
     metas,
     recent: [...recent, ...paired.flat()],
     supplemental,
-    outcomes,
+    outcomes: [...dm2Outcomes, ...outcomes],
     cautions,
     concept: main,
     question,
