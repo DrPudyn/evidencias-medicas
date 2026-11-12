@@ -43,6 +43,7 @@ const SUMMARY_SCHEMA = {
   properties: {
     itens: {
       type: "array",
+      maxItems: 6,
       items: {
         type: "object",
         properties: {
@@ -83,7 +84,7 @@ export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): Clinic
       return complete(TERMS_SYSTEM, question, 280, TERMS_SCHEMA, 0);
     },
     summarize(question, records, options) {
-      return complete(summarySystem(question, options?.direct !== false), summaryUser(question, records), 420, SUMMARY_SCHEMA, 0.2);
+      return complete(summarySystem(question, options?.direct !== false), summaryUser(question, records), 800, SUMMARY_SCHEMA, 0.2);
     },
   };
 }

@@ -180,6 +180,7 @@ export function mergeIndicationRecords(input: {
   metas: EvidenceRecord[];
   recent: EvidenceRecord[];
   supplemental: EvidenceRecord[];
+  outcomes?: EvidenceRecord[];
   cautions?: EvidenceRecord[];
   concept: SearchConcept;
   question: string;
@@ -208,6 +209,7 @@ export function mergeIndicationRecords(input: {
   const metas = keep(input.metas);
   const extra = keep(input.supplemental);
   const recent = keep(input.recent);
+  const outcomes = keep(input.outcomes || []);
   const cautions = keep(input.cautions || [], true);
   const picked: EvidenceRecord[] = [];
   const used = new Set<string>();
@@ -217,6 +219,7 @@ export function mergeIndicationRecords(input: {
     picked.push(article);
   };
   take(guides[0]);
+  take(outcomes[0]);
   take(cautions[0]);
   take(metas[0]);
   const lanes = [guides.slice(1), metas.slice(1), extra, recent];

@@ -5,6 +5,13 @@ import { ArrowRight, Search } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import type { ClinicalAnswer } from "@/lib/clinical/types";
 
+function AnswerLine({ line }: { line: string }) {
+  const cleaned = line.replace(/^[-•]\s+/, "");
+  const caution = cleaned.match(/^(Cuidados:)\s*(.*)$/i);
+  if (!caution) return <>{cleaned}</>;
+  return <><strong>{caution[1]}</strong> {caution[2]}</>;
+}
+
 function AnswerText({ text }: { text: string }) {
   const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
   const blocks: ReactNode[] = [];
@@ -15,12 +22,13 @@ function AnswerText({ text }: { text: string }) {
     items = [];
     blocks.push(
       <ul className="answer-list" key={key}>
-        {list.map((item, index) => <li key={`${key}-${index}`}>{item.replace(/^[-•]\s+/, "")}</li>)}
+        {list.map((item, index) => <li key={`${key}-${index}`}><AnswerLine line={item} /></li>)}
       </ul>,
     );
   }
   lines.forEach((line, index) => {
-    if (/^[-•]\s+/.test(line)) {
+    const body = line.replace(/^[-•]\s+/, "");
+    if (/^[-•]\s+/.test(line) || /^cuidados:/i.test(body)) {
       items.push(line);
       return;
     }

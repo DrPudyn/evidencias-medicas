@@ -588,7 +588,7 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
   });
   assert.ok(seen.filter((item) => item.kind === "guideline" && item.sort === "relevance").length >= 1);
   assert.ok(seen.some((item) => /heart failure/i.test(item.term) && /HFrEF|reduced ejection/i.test(item.term)));
-  assert.equal(seen.filter((item) => item.kind === "meta" && item.sort === "relevance").length, 1);
+  assert.ok(seen.filter((item) => item.kind === "meta" && item.sort === "relevance").length >= 2);
   assert.equal(seen.some((item) => /heart failure/i.test(item.term) && /sglt2/i.test(item.term)), true);
   assert.equal(answer.sufficient, true);
   assert.ok(answer.references.some((item) => item.pmid === "11"));
@@ -950,6 +950,92 @@ test("cache de termos persiste no D1 e cai para a memória", async () => {
   assert.match(row.concepts, /metformin/);
 });
 
+const MASH_ABSTRACT = "SGLT2i significantly improved hepatic, metabolic, cardiometabolic risk, and most histological parameters; compared to baseline. SGLT2i might be a potential clinical therapeutic strategy for patients with biopsy-proven MASH, particularly those with concurrent type II DM. Owing to the limited certainty of evidence and heterogeneity among studies, these findings should be interpreted cautiously.";
+
+test("resumo real do MASH 42914763 recebe a ressalva genérica", () => {
+  const article = record("42914763", "Meta-análise", "SGLT2 inhibitors in diabetic biopsy proven MASH");
+  article.abstract = MASH_ABSTRACT;
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 melhoraram os parâmetros hepáticos e metabólicos.", pmid: "42914763" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  assert.match(answer.answer, /hepáticos/);
+  assert.match(answer.answer, /certeza limitada/);
+});
+
+test("json cortado aproveita os itens completos", () => {
+  const article = record("11", "Diretriz", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  const raw = "{\"itens\":[{\"texto\":\"Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca.\",\"pmid\":\"11\"},{\"texto\":\"corte";
+  const answer = validateSynthesis(raw, [article], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  assert.equal(answer.references[0]?.pmid, "11");
+  assert.match(answer.answer, /hospitalização/);
+});
+
+test("validador pede outra resposta quando todo item cai", async () => {
+  const prompts: string[] = [];
+  const article = record("93", "Revisão sistemática", "metformin doses");
+  article.abstract = "Metformin 750 mg compared with other doses lowered glucose.";
+  const answer = await answerClinicalQuestion({
+    question: "A metformina reduz a glicose?",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["metformin"]] });
+      },
+      async summarize(question) {
+        prompts.push(question);
+        if (prompts.length === 1) {
+          return JSON.stringify({ itens: [{ texto: "Sim, a metformina reduz a glicose.", pmid: "93" }] });
+        }
+        return JSON.stringify({ itens: [{ texto: "A metformina 750 mg reduziu a glicose em comparação com outras doses.", pmid: "93" }] });
+      },
+    },
+    search: async () => [article],
+  });
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /Não comece com Sim/);
+  assert.equal(answer.sufficient, true);
+  assert.doesNotMatch(answer.answer, /^Sim,/);
+});
+
+test("indicação sempre busca diretriz e desfechos cardiovasculares ou renais", async () => {
+  const seen: Array<{ term: string; kind?: string; sort?: string }> = [];
+  await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+      },
+      async summarize() {
+        return JSON.stringify({ itens: [] });
+      },
+    },
+    search: async (term, options) => {
+      seen.push({ term, kind: options?.kind, sort: options?.sort });
+      return [];
+    },
+  });
+  assert.equal(seen.some((item) => item.kind === "guideline" && item.sort === "relevance"), true);
+  assert.equal(seen.some((item) => /cardiovascular outcomes/i.test(item.term) && /kidney outcomes/i.test(item.term) && /mortality/i.test(item.term) && item.kind === "meta" && item.sort === "relevance"), true);
+  const guide = record("1", "Diretriz", "sglt2 inhibitors heart failure");
+  const outcome = record("2", "Meta-análise", "sglt2 inhibitors cardiovascular outcomes");
+  const merged = mergeIndicationRecords({
+    guidelines: [guide],
+    metas: [],
+    outcomes: [outcome],
+    recent: [record("3", "Revisão sistemática", "sglt2 inhibitors bone safety")],
+    supplemental: [],
+    concept: ["sglt2 inhibitors"],
+    question: "indicações de sglt2",
+    limit: 6,
+  });
+  assert.deepEqual(merged.slice(0, 2).map((item) => item.pmid), ["1", "2"]);
+  const screen = readFileSync(new URL("../../components/cardio/clinical-question.tsx", import.meta.url), "utf8");
+  assert.match(screen, /Cuidados:/);
+  assert.match(screen, /<strong>/);
+});
+
 test("frase que copia o exemplo do prompt sai quando o resumo não diz isso", () => {
   const article = record("12345678", "Revisão sistemática", "sglt2");
   article.abstract = "Reduced hospitalization for heart failure.";
@@ -1019,6 +1105,8 @@ test("provedor fixture só na prévia e Workers AI lê response objeto, string e
   assert.match(JSON.stringify(calls[0]), /json_schema/);
   assert.match(await ai.summarize("asma na atenção primária?", []), /sufficient/);
   assert.match(JSON.stringify(calls[1]), /itens/);
+  assert.equal((calls[1] as { max_tokens: number }).max_tokens, 800);
+  assert.match(JSON.stringify(calls[1]), /maxItems/);
   assert.equal(model, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
   const fallback = createWorkersAi({
     async run() {

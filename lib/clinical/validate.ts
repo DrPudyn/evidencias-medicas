@@ -153,6 +153,11 @@ const OUTCOME_PAIRS: Array<[string, string]> = [
   ["myocardial", "infarto"],
   ["infection", "infec"],
   ["genital", "genital"],
+  ["hepatic", "hepatic"],
+  ["metabolic", "metabolic"],
+  ["liver", "figad"],
+  ["steatosis", "esteatose"],
+  ["histolog", "histolog"],
 ];
 
 const OTHER_DRUGS = ["semaglutide", "liraglutide", "dulaglutide", "tirzepatide", "exenatide", "insulin", "sitagliptin"];
@@ -190,19 +195,39 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
 
 const LIMITED_CERTAINTY = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i;
 
-/** Adds the caveat only when the sentence that supports this outcome states limited certainty. */
+function hasGenericCaveat(excerpt: string) {
+  return LIMITED_CERTAINTY.test(excerpt)
+    && /these findings|these results|overall|owing to the limited|should be interpreted/i.test(excerpt);
+}
+
+/** Adds the caveat when the supporting sentence, or a generic caveat for the whole abstract, states limited certainty. */
 export function ensureCertaintyCaveat(line: string, excerpt: string) {
+  const generic = hasGenericCaveat(excerpt);
   const hits = outcomeHits(line);
-  if (!hits.length) return line;
   const supporting = excerpt.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => {
     const folded = fold(sentence);
     return hits.some(([english, portuguese]) => folded.includes(english) || folded.includes(portuguese));
   });
-  if (!supporting.length || !supporting.some((sentence) => LIMITED_CERTAINTY.test(sentence))) return line;
+  const sentenceLevel = supporting.some((sentence) => LIMITED_CERTAINTY.test(sentence));
+  if (!generic && (!hits.length || !supporting.length || !sentenceLevel)) return line;
   if (/baixa|incerta|limitad|cautel/.test(fold(line))) return line;
-  const note = supporting.some((sentence) => /very low/i.test(sentence)) ? "com certeza muito baixa" : "com certeza limitada";
+  const source = sentenceLevel ? supporting.join(" ") : excerpt;
+  const note = /very low/i.test(source) ? "com certeza muito baixa" : "com certeza limitada";
   if (/\[\d+\]/.test(line)) return line.replace(/\s*(\[\d+\])/, `, ${note} $1`);
   return `${line.replace(/[.\s]*$/, "")}, ${note}.`;
+}
+
+export function rejectionNote(raw: string, records: EvidenceRecord[]) {
+  const parsed = parseSynthesis(raw);
+  const items = Array.isArray(parsed?.itens) ? parsed.itens as Array<{ texto?: string; pmid?: string }> : [];
+  for (const item of items) {
+    const text = typeof item?.texto === "string" ? item.texto : "";
+    const record = records.find((entry) => entry.pmid === String(item?.pmid ?? "").replace(/\D/g, ""));
+    if (text && record && unsupportedYes(text, record.abstract || "")) {
+      return "Não comece com Sim. Diga o que o estudo comparou. Só use Sim se o trecho comparar com placebo, controle ou sem tratamento.";
+    }
+  }
+  return "Cada frase tem de estar no trecho do PMID citado. Não invente comparação nem efeito de outro fármaco.";
 }
 
 export function unsupportedYes(line: string, excerpt: string) {
@@ -216,17 +241,43 @@ export function leavesOutcomeInEnglish(line: string) {
   return english && !portuguese;
 }
 
-function parseSynthesis(raw: string): Record<string, unknown> | null {
-  try {
-    const trimmed = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start < 0 || end <= start) return null;
-    const value = JSON.parse(trimmed.slice(start, end + 1)) as unknown;
-    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-  } catch {
-    return null;
+function unescapeJson(value: string) {
+  return value.replace(/\\"/g, "\"").replace(/\\n/g, " ").replace(/\\\\/g, "\\");
+}
+
+/** Keeps complete itens when the model output was cut before the closing brace. */
+export function salvageItems(raw: string) {
+  const itens: Array<{ texto: string; pmid: string }> = [];
+  const patterns = [
+    /"texto"\s*:\s*"((?:\\.|[^"\\])*)"\s*,\s*"pmid"\s*:\s*"([^"\\]+)"/g,
+    /"pmid"\s*:\s*"([^"\\]+)"\s*,\s*"texto"\s*:\s*"((?:\\.|[^"\\])*)"/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of raw.matchAll(pattern)) {
+      const texto = unescapeJson(pattern === patterns[0] ? match[1] : match[2]);
+      const pmid = pattern === patterns[0] ? match[2] : match[1];
+      if (!texto.trim() || itens.some((item) => item.texto === texto && item.pmid === pmid)) continue;
+      itens.push({ texto, pmid });
+    }
   }
+  return itens.slice(0, 6);
+}
+
+function parseSynthesis(raw: string): Record<string, unknown> | null {
+  const trimmed = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
+  const start = trimmed.indexOf("{");
+  const body = start >= 0 ? trimmed.slice(start) : trimmed;
+  try {
+    const end = body.lastIndexOf("}");
+    if (end > 0) {
+      const value = JSON.parse(body.slice(0, end + 1)) as unknown;
+      if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+    }
+  } catch {
+    // Truncated JSON still may contain complete itens.
+  }
+  const itens = salvageItems(body);
+  return itens.length ? { itens } : null;
 }
 
 type Draft = { text: string; resolved: EvidenceRecord[] };

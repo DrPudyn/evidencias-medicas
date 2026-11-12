@@ -2,7 +2,7 @@ import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types"
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { insufficientAnswer, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
   const byId = new Map<string, EvidenceRecord>();
@@ -29,11 +29,13 @@ async function gatherIndications(
   const classQuery = evidenceQuery([main], today);
   const pairs = pairQueries(scoped, today).filter((term) => term !== classQuery);
   const safetyQuery = evidenceQuery([main, ["adverse effects", "perioperative"]], today);
-  const [guidelines, metas, recent, cautions, ...paired] = await Promise.all([
+  const outcomeQuery = evidenceQuery([main, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
+  const [guidelines, metas, recent, cautions, outcomes, ...paired] = await Promise.all([
     search(classQuery, { kind: "guideline", sort: "relevance" }),
     search(classQuery, { kind: "meta", sort: "relevance" }),
     search(classQuery, { kind: "high-level", sort: "pub_date" }),
     search(safetyQuery, { kind: "high-level", sort: "relevance" }),
+    search(outcomeQuery, { kind: "meta", sort: "relevance" }),
     ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
   ]);
   const supplemental: EvidenceRecord[] = [];
@@ -52,6 +54,7 @@ async function gatherIndications(
     metas,
     recent: [...recent, ...paired.flat()],
     supplemental,
+    outcomes,
     cautions,
     concept: main,
     question,
@@ -133,14 +136,21 @@ export async function answerClinicalQuestion(input: {
     await new Promise((resolve) => setTimeout(resolve, 40));
     input.onStage?.("writing");
     let raw = await input.ai.summarize(question, records, { direct: isYesNoQuestion(question) });
+    let retried = false;
     if (synthesisNeedsRetry(raw, records)) {
+      retried = true;
       const ids = records.map((record) => record.pmid).join(", ");
       const note = synthesisIsEmpty(raw)
         ? "A lista itens veio vazia. Responda de novo com um item por achado que o trecho sustente. Não comece por sim ou não."
         : `${RETRY_WARNING} PMIDs: ${ids}.`;
       raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
     }
-    return validateSynthesis(raw, records, main);
+    let answer = validateSynthesis(raw, records, main);
+    if (!answer.sufficient && !retried && !synthesisIsEmpty(raw)) {
+      raw = await input.ai.summarize(`${question}\n\n${rejectionNote(raw, records)}`, records, { direct: false });
+      answer = validateSynthesis(raw, records, main);
+    }
+    return answer;
   } catch {
     return insufficientAnswer(
       "A busca recuperou registros, mas a síntese falhou. Nenhuma conclusão foi produzida.",
