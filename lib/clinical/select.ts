@@ -62,13 +62,28 @@ export function mentionsConcept(article: Pick<EvidenceRecord, "title" | "abstrac
 }
 
 /** The class has to be the subject: title or conclusion, not a passing mention. */
-export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract">, concept: SearchConcept) {
+export function isVeterinary(title: string) {
+  return /\b(cats?|dogs?|felines?|canines?|veterinary|kittens?|puppies|equine|bovine)\b/i.test(title);
+}
+
+const SOCIETY = /\b(ADA|KDIGO|ESC|EASD|AHA|ACC|SBD|SBC|KDOQI|NICE|AACE|USPSTF)\b|American Diabetes Association|European Society of Cardiology|Kidney Disease: Improving Global Outcomes|Sociedade Brasileira de Diabetes|Sociedade Brasileira de Cardiologia|Endocrine Society/i;
+
+export function isSocietyGuideline(title: string) {
+  return SOCIETY.test(title);
+}
+
+function textHasConcept(text: string, concept: SearchConcept) {
   const needles = conceptNeedles(concept);
-  if (!needles.length) return false;
-  const title = article.title.toLowerCase();
-  if (needles.some((needle) => title.includes(needle))) return true;
-  const conclusion = conclusionText(article.abstract || "").toLowerCase();
-  return needles.some((needle) => conclusion.includes(needle));
+  const folded = text.toLowerCase();
+  if (needles.some((needle) => folded.includes(needle))) return true;
+  const aliases = classAliases(text);
+  return aliases.some((alias) => needles.some((needle) => alias.includes(needle) || needle.includes(alias)));
+}
+
+export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract">, concept: SearchConcept) {
+  if (!conceptNeedles(concept).length) return false;
+  if (textHasConcept(article.title, concept)) return true;
+  return textHasConcept(conclusionText(article.abstract || ""), concept);
 }
 
 function foldText(value: string) {
@@ -119,22 +134,15 @@ function mixTypes(articles: EvidenceRecord[]) {
   return mixed;
 }
 
-function eligible(article: EvidenceRecord, concept: SearchConcept, question: string) {
-  if (concept.length && !conceptInFocus(article, concept)) return false;
-  if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
-    if (safetyOnly(article) || combinationOnly(article)) return false;
-  }
-  return true;
-}
-
 /**
  * Drops papers that mention the class only in passing.
  * If no article matches the concept at all, the PubMed set is kept.
  */
 export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: SearchConcept, limit = 8, question = "") {
-  const focused = mainConcept.length ? articles.filter((article) => conceptInFocus(article, mainConcept)) : articles;
-  const passing = mainConcept.length ? articles.filter((article) => mentionsConcept(article, mainConcept)) : articles;
-  let pool = focused.length ? focused : (passing.length ? [] : articles);
+  const humans = articles.filter((article) => !isVeterinary(article.title));
+  const focused = mainConcept.length ? humans.filter((article) => conceptInFocus(article, mainConcept)) : humans;
+  const passing = mainConcept.length ? humans.filter((article) => mentionsConcept(article, mainConcept)) : humans;
+  let pool = focused.length ? focused : (passing.length ? [] : humans);
   if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
     const narrowed = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
     if (narrowed.length || !pool.length) pool = narrowed;
@@ -151,25 +159,35 @@ export function mergeIndicationRecords(input: {
   metas: EvidenceRecord[];
   recent: EvidenceRecord[];
   supplemental: EvidenceRecord[];
+  cautions?: EvidenceRecord[];
   concept: SearchConcept;
   question: string;
   limit?: number;
 }) {
   const limit = input.limit ?? 6;
-  const keep = (list: EvidenceRecord[]) => {
+  const keep = (list: EvidenceRecord[], precaution = false) => {
     const out: EvidenceRecord[] = [];
     const seen = new Set<string>();
     for (const article of list) {
-      if (seen.has(article.pmid) || !eligible(article, input.concept, input.question)) continue;
+      if (seen.has(article.pmid) || isVeterinary(article.title)) continue;
+      const onTopic = !input.concept.length || conceptInFocus(article, input.concept);
+      if (!onTopic) continue;
+      if (!precaution && input.question && indicationQuestion(input.question) && !/combinad|combination|seguran[cç]a|safety/i.test(input.question)) {
+        if (safetyOnly(article) || combinationOnly(article)) continue;
+      }
       seen.add(article.pmid);
       out.push(article);
     }
     return out;
   };
-  const guides = keep(input.guidelines);
+  const guides = keep(input.guidelines)
+    .map((article, index) => ({ article, index, society: isSocietyGuideline(article.title) ? 0 : 1 }))
+    .sort((a, b) => a.society - b.society || a.index - b.index)
+    .map((item) => item.article);
   const metas = keep(input.metas);
   const extra = keep(input.supplemental);
   const recent = keep(input.recent);
+  const cautions = keep(input.cautions || [], true);
   const picked: EvidenceRecord[] = [];
   const used = new Set<string>();
   const take = (article?: EvidenceRecord) => {
@@ -178,6 +196,7 @@ export function mergeIndicationRecords(input: {
     picked.push(article);
   };
   take(guides[0]);
+  take(cautions[0]);
   take(metas[0]);
   const lanes = [guides.slice(1), metas.slice(1), extra, recent];
   let pending = true;

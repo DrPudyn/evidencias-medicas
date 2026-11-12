@@ -83,7 +83,7 @@ export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): Clinic
       return complete(TERMS_SYSTEM, question, 280, TERMS_SCHEMA, 0);
     },
     summarize(question, records) {
-      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 600, SUMMARY_SCHEMA, 0.2);
+      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 420, SUMMARY_SCHEMA, 0.2);
     },
   };
 }

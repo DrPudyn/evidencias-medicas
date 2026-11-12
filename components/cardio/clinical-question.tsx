@@ -43,6 +43,7 @@ export function ClinicalQuestion({
   const { t } = useLocale();
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState(false);
+  const [stage, setStage] = useState("");
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState<ClinicalAnswer | null>(null);
 
@@ -51,6 +52,7 @@ export function ClinicalQuestion({
     const text = question.trim();
     if (text.length < 12 || pending) return;
     setPending(true);
+    setStage("pubmed");
     setError("");
     setAnswer(null);
     try {
@@ -59,16 +61,49 @@ export function ClinicalQuestion({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: text }),
       });
-      const data = await response.json() as { error?: string; answer?: ClinicalAnswer };
-      if (!response.ok || !data.answer) {
-        setError(data.error || t("Não foi possível responder agora."));
+      const type = response.headers.get("content-type") || "";
+      if (!type.includes("ndjson")) {
+        const data = await response.json() as { error?: string; answer?: ClinicalAnswer };
+        if (!response.ok || !data.answer) {
+          setError(data.error || t("Não foi possível responder agora."));
+          return;
+        }
+        setAnswer(data.answer);
         return;
       }
-      setAnswer(data.answer);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        setError(t("Não foi possível responder agora."));
+        return;
+      }
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalAnswer: ClinicalAnswer | null = null;
+      let streamError = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as { stage?: string; answer?: ClinicalAnswer; error?: string };
+          if (event.error) streamError = event.error;
+          else if (event.stage === "done" && event.answer) finalAnswer = event.answer;
+          else if (event.stage) setStage(event.stage);
+        }
+      }
+      if (streamError || !finalAnswer) {
+        setError(streamError || t("Não foi possível responder agora."));
+        return;
+      }
+      setAnswer(finalAnswer);
     } catch {
       setError(t("Não foi possível responder agora."));
     } finally {
       setPending(false);
+      setStage("");
     }
   }
 
@@ -97,7 +132,7 @@ export function ClinicalQuestion({
           <div className="clinical-form-row">
             <span>{question.trim().length}/500</span>
             <button className="button" type="submit" disabled={pending || question.trim().length < 12}>
-              {pending ? t("Buscando a literatura…") : t("Perguntar")}
+              {pending ? t(stage === "writing" ? "Escrevendo resposta…" : stage === "reading" ? "Lendo artigos…" : "Buscando no PubMed…") : t("Perguntar")}
               <ArrowRight size={18} />
             </button>
           </div>
@@ -124,7 +159,7 @@ export function ClinicalQuestion({
         {pending && (
           <article className="glass-card answer-card">
             <p className="eyebrow">{t("EM CURSO")}</p>
-            <h2>{t("Consultando o PubMed")}</h2>
+            <h2>{t(stage === "writing" ? "Escrevendo resposta…" : stage === "reading" ? "Lendo artigos…" : "Buscando no PubMed…")}</h2>
             <p>{t("A busca e o resumo usam só os registros recuperados. Pode levar até um minuto.")}</p>
           </article>
         )}

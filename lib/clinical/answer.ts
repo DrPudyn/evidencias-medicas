@@ -1,6 +1,6 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
-import { conceptInFocus, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
+import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
+import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
 import { insufficientAnswer, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
@@ -27,20 +27,22 @@ async function gatherIndications(
 ) {
   const classQuery = evidenceQuery([main], today);
   const pairs = pairQueries(scoped, today).filter((term) => term !== classQuery);
-  const [guidelines, metas, recent, ...paired] = await Promise.all([
+  const safetyQuery = evidenceQuery([main, ["adverse effects", "perioperative"]], today);
+  const [guidelines, metas, recent, cautions, ...paired] = await Promise.all([
     search(classQuery, { kind: "guideline", sort: "relevance" }),
     search(classQuery, { kind: "meta", sort: "relevance" }),
     search(classQuery, { kind: "high-level", sort: "pub_date" }),
+    search(safetyQuery, { kind: "high-level", sort: "relevance" }),
     ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
   ]);
   const supplemental: EvidenceRecord[] = [];
-  const guide = guidelines.find((article) => conceptInFocus(article, main));
+  const guide = guidelines.find((article) => !isVeterinary(article.title) && conceptInFocus(article, main));
   if (guide) {
     const conditions = conditionsFromGuideline(guide, question);
     if (conditions.length) {
       const extra = await Promise.all(conditions.map((condition) => search(
-        evidenceQuery([main, [condition]], today),
-        { kind: "high-level", sort: "relevance" },
+        evidenceQuery([main, conditionSearchTerms(condition)], today),
+        { kind: "guideline", sort: "relevance" },
       )));
       supplemental.push(...extra.flat());
     }
@@ -50,6 +52,7 @@ async function gatherIndications(
     metas,
     recent: [...recent, ...paired.flat()],
     supplemental,
+    cautions,
     concept: main,
     question,
     limit: 6,
@@ -67,6 +70,7 @@ export async function answerClinicalQuestion(input: {
   question: string;
   ai: ClinicalAi;
   search: (term: string, options?: ClinicalSearchOptions) => Promise<EvidenceRecord[]>;
+  onStage?: (stage: "pubmed" | "reading" | "writing") => void;
 }) {
   const question = input.question.trim();
   let concepts = [] as ReturnType<typeof sanitizeConcepts>;
@@ -95,6 +99,7 @@ export async function answerClinicalQuestion(input: {
     || scoped.find((concept) => !isContextConcept(concept))
     || scoped[0];
   let records: EvidenceRecord[] = [];
+  input.onStage?.("pubmed");
   if (isIndicationQuestion(question)) {
     records = await gatherIndications(input.search, scoped, main, question, today);
   } else {
@@ -120,6 +125,9 @@ export async function answerClinicalQuestion(input: {
     );
   }
   try {
+    input.onStage?.("reading");
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    input.onStage?.("writing");
     let raw = await input.ai.summarize(question, records);
     if (synthesisNeedsRetry(raw, records)) {
       const ids = records.map((record) => record.pmid).join(", ");

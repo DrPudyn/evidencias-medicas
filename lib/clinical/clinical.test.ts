@@ -5,9 +5,9 @@ import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
 import { validateSynthesis } from "./validate";
 import { focusAbstract, highLevelPmids } from "../pubmed-xml";
-import { summaryUser } from "./prompts";
+import { SUMMARY_SYSTEM, summaryUser } from "./prompts";
 import { mentionsConcept, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionsFromGuideline, fallbackSearchTerms, queryForKind, sanitizeConcepts, searchAttempts } from "./terms";
+import { conceptsForQuestion, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, queryForKind, sanitizeConcepts, searchAttempts } from "./terms";
 import { createClinicalAi, createWorkersAi } from "./provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "./quota";
 import type { ClinicalAi, EvidenceRecord } from "./types";
@@ -208,7 +208,7 @@ test("a síntese recebe um trecho curto e o aviso de cookies sai do rodapé", ()
   article.abstract = `CONCLUSIONS: ${"palavra ".repeat(800)}`;
   const packed = summaryUser("indicações", [article]);
   const excerpt = (JSON.parse(packed.slice(packed.indexOf("[{"))) as Array<{ excerpt: string }>)[0].excerpt;
-  assert.ok(excerpt.length <= 700);
+  assert.ok(excerpt.length <= 420);
   assert.ok(excerpt.length < article.abstract.length);
   const css = readFileSync(new URL("../../app/premium.css", import.meta.url), "utf8");
   const rule = css.slice(css.indexOf(".analytics-consent {"), css.indexOf(".analytics-consent p"));
@@ -585,7 +585,8 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
       return [];
     },
   });
-  assert.equal(seen.filter((item) => item.kind === "guideline" && item.sort === "relevance").length, 1);
+  assert.ok(seen.filter((item) => item.kind === "guideline" && item.sort === "relevance").length >= 1);
+  assert.ok(seen.some((item) => /heart failure/i.test(item.term) && /HFrEF|reduced ejection/i.test(item.term)));
   assert.equal(seen.filter((item) => item.kind === "meta" && item.sort === "relevance").length, 1);
   assert.equal(seen.some((item) => /heart failure/i.test(item.term) && /sglt2/i.test(item.term)), true);
   assert.equal(answer.sufficient, true);
@@ -606,6 +607,119 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
   const term = queryForKind('("sglt2 inhibitors"[Title/Abstract]) AND (systematic[sb] OR "Meta-Analysis"[Publication Type] OR "Practice Guideline"[Publication Type] OR "Guideline"[Publication Type])', "guideline");
   assert.match(term, /Practice Guideline/);
   assert.doesNotMatch(term, /systematic\[sb\]/);
+});
+
+test("literatura veterinária sai da busca e da seleção", () => {
+  const query = evidenceQuery([["sglt2 inhibitors"]], "2026/11/12");
+  assert.match(query, /NOT \(animals\[mh\] NOT humans\[mh\]\)/);
+  const cats = record("42014100", "Diretriz", "sglt2");
+  cats.title = "AAHA Diabetes Management Guidelines for Cats";
+  cats.abstract = "CONCLUSIONS: SGLT2 inhibitors in feline diabetes.";
+  const human = record("21", "Diretriz", "sglt2 inhibitors in adults");
+  const selected = selectForSynthesis([cats, human], ["sglt2 inhibitors"], 6, "indicações de sglt2");
+  assert.deepEqual(selected.map((item) => item.pmid), ["21"]);
+});
+
+test("certeza limitada e interpretação cautelosa exigem ressalva", () => {
+  const article = record("71", "Diretriz", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure. The evidence has limited certainty and should be interpreted cautiously.";
+  const missing = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca.", pmid: "71" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(missing.sufficient, false);
+  const kept = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca, com certeza limitada.", pmid: "71" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(kept.sufficient, true);
+  assert.match(kept.answer, /certeza limitada/);
+});
+
+test("DM2 colado ao fármaco não entra na consulta", () => {
+  const question = "quais indicações de uso de sglt2 na prática de saúde da família";
+  const scoped = conceptsForQuestion(sanitizeConcepts({
+    concepts: [
+      ["Sodium-Glucose Transporter 2 Inhibitors", "DM2", "type 2 diabetes mellitus"],
+      ["Diabetes Mellitus, Type 2"],
+      ["T2DM"],
+      ["diabetic kidney disease"],
+    ],
+  }), question);
+  const query = evidenceQuery(scoped, "2026/11/12");
+  assert.doesNotMatch(query, /diabetes|t2dm|\bdm2\b|niddm|diabetic/i);
+  assert.match(query, /sodium-glucose transporter 2 inhibitors/);
+});
+
+test("diretriz de sociedade vem primeiro e o corpo da diretriz abre IC e DRC", async () => {
+  const plain = record("30", "Diretriz", "sglt2 inhibitors heart failure");
+  const kdigo = record("31", "Diretriz", "sglt2 inhibitors kidney");
+  kdigo.title = "KDIGO guideline on SGLT2 inhibitors";
+  const caution = record("32", "Revisão sistemática", "sglt2 inhibitors perioperative");
+  caution.title = "Perioperative management of SGLT2 inhibitors";
+  caution.abstract = "CONCLUSIONS: Withhold SGLT2 inhibitors before surgery.";
+  const merged = mergeIndicationRecords({
+    guidelines: [plain, kdigo],
+    metas: [],
+    recent: Array.from({ length: 6 }, (_, index) => record(String(40 + index), "Revisão sistemática", "sglt2 inhibitors outcome")),
+    supplemental: [],
+    cautions: [caution],
+    concept: ["sglt2 inhibitors"],
+    question: "indicações de sglt2",
+    limit: 6,
+  });
+  assert.equal(merged[0].pmid, "31");
+  assert.equal(merged[1].pmid, "32");
+  assert.equal(merged.length, 6);
+  const guide = record("33", "Diretriz", "sglt2 inhibitors");
+  guide.title = "KDIGO clinical practice guideline";
+  guide.abstract = "RECOMMENDATIONS: SGLT2 inhibitors are used in HFrEF and in chronic kidney disease. CONCLUSIONS: Further trials are welcome.";
+  assert.deepEqual(conditionsFromGuideline(guide, "indicações de sglt2"), ["chronic kidney disease", "heart failure"]);
+  const seen: string[] = [];
+  await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2 na prática de saúde da família",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+      },
+      async summarize() {
+        return JSON.stringify({ itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca", pmid: "33" }] });
+      },
+    },
+    search: async (term) => {
+      seen.push(term);
+      if (/adverse effects|perioperative/i.test(term)) return [caution];
+      if (/Practice Guideline/i.test(term) && !/heart failure|kidney/i.test(term)) return [guide];
+      return [];
+    },
+  });
+  assert.ok(seen.some((term) => /heart failure/i.test(term) && /HFrEF/i.test(term)));
+  assert.ok(seen.some((term) => /chronic kidney disease/i.test(term)));
+  assert.ok(seen.some((term) => /adverse effects/i.test(term) && /perioperative/i.test(term)));
+  assert.match(SUMMARY_SYSTEM, /esteato-hepatite associada à disfunção metabólica/);
+  assert.match(SUMMARY_SYSTEM, /Cuidados:/);
+});
+
+test("o front mostra as três etapas da pergunta", async () => {
+  const stages: string[] = [];
+  const article = record("44", "Diretriz", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2",
+    onStage: (stage) => stages.push(stage),
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+      },
+      async summarize() {
+        return JSON.stringify({ itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca", pmid: "44" }] });
+      },
+    },
+    search: async () => [article],
+  });
+  assert.deepEqual(stages, ["pubmed", "reading", "writing"]);
+  const screen = readFileSync(new URL("../../components/cardio/clinical-question.tsx", import.meta.url), "utf8");
+  assert.match(screen, /Buscando no PubMed…/);
+  assert.match(screen, /Lendo artigos…/);
+  assert.match(screen, /Escrevendo resposta…/);
 });
 
 test("frase que copia o exemplo do prompt sai quando o resumo não diz isso", () => {

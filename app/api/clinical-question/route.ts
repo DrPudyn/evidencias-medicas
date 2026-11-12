@@ -12,7 +12,7 @@ async function searchHighLevel(term: string, options?: ClinicalSearchOptions): P
     term: queryForKind(term, kind),
     sort: options?.sort || (kind === "high-level" ? "pub_date" : "relevance"),
     page: 1,
-    retmax: 30,
+    retmax: 12,
     abstracts: true,
     highLevelOnly: true,
   });
@@ -59,19 +59,36 @@ export async function POST(req: Request) {
   if (!quota.allowed) {
     return json({ error: quotaMessage(quota.plan, quota.limit), plan: quota.plan, limit: quota.limit, used: quota.used }, 429);
   }
-  try {
-    const answer = await answerClinicalQuestion({ question, ai, search: searchHighLevel });
-    return json({
-      answer,
-      quota: {
-        plan: quota.plan,
-        limit: quota.limit,
-        used: quota.used,
-        remaining: Math.max(0, quota.limit - quota.used),
-      },
-    });
-  } catch {
-    await releaseClinicalQuota(env.DB, quota.key, quota.day).catch(() => undefined);
-    return json({ error: "Não foi possível consultar o PubMed agora. Esta tentativa não foi descontada do limite diário." }, 502);
-  }
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (payload: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`));
+      try {
+        const answer = await answerClinicalQuestion({
+          question,
+          ai,
+          search: searchHighLevel,
+          onStage: (stage) => send({ stage }),
+        });
+        send({
+          stage: "done",
+          answer,
+          quota: {
+            plan: quota.plan,
+            limit: quota.limit,
+            used: quota.used,
+            remaining: Math.max(0, quota.limit - quota.used),
+          },
+        });
+      } catch {
+        await releaseClinicalQuota(env.DB, quota.key, quota.day).catch(() => undefined);
+        send({ error: "Não foi possível consultar o PubMed agora. Esta tentativa não foi descontada do limite diário." });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+  return new Response(stream, {
+    headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
+  });
 }

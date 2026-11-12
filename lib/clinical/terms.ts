@@ -1,5 +1,4 @@
 import { HIGH_LEVEL_EVIDENCE_FILTER } from "../evidence-filter";
-import { conclusionText } from "../pubmed-xml";
 
 const STOP = new Set([
   "para", "como", "qual", "quais", "sobre", "entre", "essa", "esse", "esta", "este", "uma", "com",
@@ -166,7 +165,7 @@ export function evidenceQuery(concepts: SearchConcept[], today?: string) {
     });
     return `(${synonyms.join(" OR ")})`;
   });
-  const typed = `${groups.join(" AND ")} AND ${HIGH_LEVEL_EVIDENCE_FILTER}`;
+  const typed = `${groups.join(" AND ")} AND ${HIGH_LEVEL_EVIDENCE_FILTER} AND NOT (animals[mh] NOT humans[mh])`;
   return today ? `${typed} AND ${publicationDateClause(today)}` : typed;
 }
 
@@ -228,9 +227,65 @@ export function isIndicationQuestion(question: string) {
   return /indica/.test(fold(question));
 }
 
+/** Disease aliases the model emits that do not contain the English phrase itself. */
+const CONDITION_ALIASES: Array<{ id: string; search: string[]; pattern: RegExp; portuguese: RegExp }> = [
+  {
+    id: "ckd",
+    search: ["chronic kidney disease", "diabetic kidney disease", "CKD"],
+    pattern: /\b(?:ckd|dkd|chronic kidney disease|diabetic kidney(?: disease)?)\b/i,
+    portuguese: /doenca renal|\bdrc\b|\bdkd\b/,
+  },
+  {
+    id: "hf",
+    search: ["heart failure", "heart failure with reduced ejection fraction", "HFrEF"],
+    pattern: /\b(?:hfref|hfpef|heart failure(?: with (?:reduced|preserved) ejection fraction)?|reduced ejection fraction|preserved ejection fraction)\b/i,
+    portuguese: /insuficiencia cardiaca|fracao de ejecao/,
+  },
+  {
+    id: "t2dm",
+    search: ["type 2 diabetes"],
+    pattern: /\b(?:t2dm|t2d|dm2|niddm|diabetics?|diabetes mellitus,? type 2|type 2 diabetes(?: mellitus)?|type ii diabetes)\b/i,
+    portuguese: /diabetes tipo 2|\bdm2\b|\bt2dm\b/,
+  },
+  {
+    id: "mash",
+    search: ["metabolic dysfunction-associated steatohepatitis"],
+    pattern: /\b(?:mash|nash|steatohepatitis)\b/i,
+    portuguese: /esteato-?hepatite|\bmash\b/,
+  },
+];
+
+const GUIDELINE_CONDITIONS = ["hf", "ckd", "mash"];
+
+function aliasNamedInQuestion(question: string, alias: (typeof CONDITION_ALIASES)[number]) {
+  const asked = fold(question);
+  return alias.pattern.test(question) || alias.pattern.test(asked) || alias.portuguese.test(asked)
+    || alias.search.some((term) => asked.includes(fold(term)));
+}
+
 export function isConditionTerm(term: string) {
   const folded = fold(term);
+  if (CONDITION_ALIASES.some((alias) => alias.pattern.test(term) || alias.pattern.test(folded))) return true;
   return CONDITION_ENGLISH.some((english) => folded === english || folded.includes(english));
+}
+
+/** Removes a disease the question did not name, including DM2/T2DM glued to the drug concept. */
+export function stripUnnamedConditions(term: string, question: string) {
+  let text = term;
+  for (const alias of CONDITION_ALIASES) {
+    if (aliasNamedInQuestion(question, alias)) continue;
+    text = text.replace(new RegExp(alias.pattern.source, "gi"), " ");
+  }
+  for (const english of CONDITION_ENGLISH) {
+    if (questionNamesConcept(question, [english])) continue;
+    text = text.replace(new RegExp(english.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ");
+  }
+  return text.replace(/\s+/g, " ").trim();
+}
+
+export function conditionSearchTerms(label: string) {
+  const alias = CONDITION_ALIASES.find((item) => item.search[0] === label || item.id === label);
+  return alias ? alias.search : [label];
 }
 
 /**
@@ -257,14 +312,21 @@ export function questionNamesConcept(question: string, concept: SearchConcept) {
     });
     if (matches) return true;
   }
-  if (/sglt/.test(concept.join(" ").toLowerCase()) && /sglt-?2|isglt2|gliflozin/.test(asked)) return true;
+  if (/sglt|sodium[-\s]?glucose/.test(concept.join(" ").toLowerCase()) && /sglt-?2|isglt2|gliflozin/.test(asked)) return true;
   return false;
 }
 
 export function conceptsForQuestion(concepts: SearchConcept[], question: string) {
   if (!question.trim()) return concepts;
   const stripped = concepts
-    .map((concept) => concept.filter((term) => !isConditionTerm(term) || questionNamesConcept(question, [term])))
+    .map((concept) => {
+      const terms: string[] = [];
+      for (const term of concept) {
+        const cleaned = stripUnnamedConditions(term, question);
+        if (cleaned && !terms.includes(cleaned)) terms.push(cleaned);
+      }
+      return terms;
+    })
     .filter((concept) => concept.length);
   const kept = stripped.filter((concept) => questionNamesConcept(question, concept));
   if (kept.length) return kept;
@@ -274,20 +336,14 @@ export function conceptsForQuestion(concepts: SearchConcept[], question: string)
 
 /** Conditions named in a retrieved guideline, not conditions invented by the model. */
 export function conditionsFromGuideline(record: { title: string; abstract: string }, question: string) {
-  const text = fold(`${record.title} ${conclusionText(record.abstract || "")}`);
-  const asked = fold(question);
+  const text = `${record.title}\n${record.abstract || ""}`;
   const found: string[] = [];
-  const pairs = PT_EN
-    .filter(([, english]) => !NOT_A_CONDITION.has(fold(english)))
-    .sort((left, right) => fold(right[1]).length - fold(left[1]).length);
-  for (const [source, target] of pairs) {
-    const english = fold(target);
-    const portuguese = fold(source);
-    if (!text.includes(english) && !text.includes(portuguese)) continue;
-    if (asked.includes(portuguese) || asked.includes(english)) continue;
-    if (found.some((item) => item.includes(english) || english.includes(item))) continue;
-    found.push(target.toLowerCase());
-    if (found.length === 3) break;
+  for (const alias of CONDITION_ALIASES) {
+    if (!GUIDELINE_CONDITIONS.includes(alias.id)) continue;
+    if (!alias.pattern.test(text)) continue;
+    if (aliasNamedInQuestion(question, alias)) continue;
+    found.push(alias.search[0]);
+    if (found.length === 2) break;
   }
   return found;
 }

@@ -126,7 +126,7 @@ function excerptHasCertainty(excerpt: string, level: "very-low" | "low" | "moder
   const text = excerpt.toLowerCase();
   const folded = fold(excerpt);
   if (level === "very-low") return /very low[ -]certainty/.test(text) || /certeza muito baixa/.test(folded);
-  if (level === "low") return /(?<!very )low[ -]certainty/.test(text) || /(?<!muito )certeza baixa/.test(folded);
+  if (level === "low") return /(?<!very )low[ -]certainty|limited certainty|interpreted cautiously|with caution/.test(text) || /(?<!muito )certeza baixa|certeza limitada|cautela/.test(folded);
   if (level === "moderate") return /moderate[ -]certainty/.test(text) || /certeza moderada/.test(folded);
   return /\bhigh certainty\b/.test(text) || /certeza alta/.test(folded);
 }
@@ -184,10 +184,9 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
 }
 
 export function omitsLowCertainty(line: string, excerpt: string) {
-  const sentences = excerpt.split(/(?<=[.!?])\s+/);
-  const low = sentences.some((sentence) => /very low certainty|low certainty|low-certainty/.test(sentence.toLowerCase()));
-  if (!low) return false;
-  return !/baixa|incerta/.test(fold(line));
+  const limited = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i.test(excerpt);
+  if (!limited) return false;
+  return !/baixa|incerta|limitad|cautel/.test(fold(line));
 }
 
 export function leavesOutcomeInEnglish(line: string) {
