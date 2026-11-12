@@ -1,26 +1,9 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isCareGuideline, isHeartFailureSlot, isType2DiabetesTitle, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, metforminPrediabetesQuery, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
+import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, finalSetKey, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, metforminPrediabetesQuery, pairQueries, parseJsonObject, readFinalSet, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeFinalSet, writeTermCache, type FinalSetItem, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, resultSentence, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, resultSentence, sourceExcerpt, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 import type { ClinicalAnswer } from "./types";
-
-function hitCounts(groups: EvidenceRecord[][]) {
-  const counts = new Map<string, number>();
-  for (const group of groups) {
-    const seen = new Set<string>();
-    for (const article of group) {
-      if (seen.has(article.pmid)) continue;
-      seen.add(article.pmid);
-      counts.set(article.pmid, (counts.get(article.pmid) || 0) + 1);
-    }
-  }
-  return counts;
-}
-
-function withHits(articles: EvidenceRecord[], counts: Map<string, number>) {
-  return articles.map((article) => ({ ...article, hits: counts.get(article.pmid) ?? 1 }));
-}
 
 function uniqueRecords(articles: EvidenceRecord[]) {
   const byId = new Map<string, EvidenceRecord>();
@@ -110,15 +93,14 @@ async function gatherIndications(
       supplemental.push(...extra.flat());
     }
   }
-  const counts = hitCounts([guidelines, metas, recent, cautions, outcomes, dm2Outcomes, heartFailure, prediabetesTrials, supplemental, ...paired]);
   const merged = mergeIndicationRecords({
-    guidelines: withHits(guidelines, counts),
-    metas: withHits(metas, counts),
-    recent: withHits([...recent, ...paired.flat(), ...prediabetesTrials], counts),
-    supplemental: withHits(supplemental, counts),
-    outcomes: withHits([...dm2Outcomes, ...outcomes], counts),
-    heartFailure: withHits(heartFailure, counts),
-    cautions: withHits(cautions, counts),
+    guidelines,
+    metas,
+    recent: [...recent, ...paired.flat(), ...prediabetesTrials],
+    supplemental,
+    outcomes: [...dm2Outcomes, ...outcomes],
+    heartFailure,
+    cautions,
     concept: main,
     question,
     limit: 6,
@@ -130,6 +112,91 @@ async function gatherIndications(
     if (selected.length) return selected;
   }
   return [];
+}
+
+function pinSources(raw: string, fontes: FinalSetItem[]) {
+  try {
+    const parsed = JSON.parse(raw) as { itens?: Array<{ pmid?: string; trecho?: string }> };
+    if (!Array.isArray(parsed.itens)) return raw;
+    for (const item of parsed.itens) {
+      const id = String(item.pmid || "").replace(/\D/g, "");
+      const fonte = fontes.find((entry) => entry.pmid === id);
+      if (fonte) item.trecho = fonte.excerpt;
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return raw;
+  }
+}
+
+function withoutPmids(answer: ClinicalAnswer, pmids: Set<string>, records: EvidenceRecord[], concept: ReturnType<typeof conceptsForQuestion>[number], question: string) {
+  const items = answerLines(answer).filter((line) => !pmids.has(line.pmid)).map((line) => ({ texto: line.texto, pmid: line.pmid }));
+  if (!items.length) return insufficientAnswer("A tradução não ficou fiel à frase de resultado. Nenhuma conclusão foi produzida.");
+  return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
+}
+
+async function unfaithful(answer: ClinicalAnswer, fontes: FinalSetItem[], verify: NonNullable<ClinicalAi["verify"]>) {
+  const pairs = answerLines(answer).flatMap((line) => {
+    const fonte = fontes.find((entry) => entry.pmid === line.pmid)?.excerpt || "";
+    return fonte ? [{ pmid: line.pmid, texto: line.texto, fonte }] : [];
+  });
+  if (!pairs.length) return new Set<string>();
+  try {
+    const parsed = JSON.parse(await verify(pairs)) as { itens?: Array<{ pmid?: string; fiel?: boolean }> };
+    const bad = new Set<string>();
+    for (const item of parsed.itens || []) {
+      if (item?.fiel === false) bad.add(String(item.pmid || "").replace(/\D/g, ""));
+    }
+    return bad;
+  } catch {
+    return new Set<string>();
+  }
+}
+
+async function translateRecords(
+  input: { ai: ClinicalAi },
+  question: string,
+  records: EvidenceRecord[],
+  fontes: FinalSetItem[],
+  main: ReturnType<typeof conceptsForQuestion>[number],
+) {
+  const translate = input.ai.translate;
+  if (!translate) throw new Error("tradução ausente");
+  const ask = (note: string, pairs: FinalSetItem[]) => translate(
+    note ? `${question}\n${note}` : question,
+    pairs.map((pair) => ({ pmid: pair.pmid, fonte: pair.excerpt })),
+  );
+  let answer = validateSynthesis(pinSources(await ask("", fontes), fontes), records, main, question);
+  let retried = false;
+  const repair = async (pairs: FinalSetItem[], note: string) => {
+    if (!pairs.length || retried) return;
+    retried = true;
+    const subset = records.filter((record) => pairs.some((pair) => pair.pmid === record.pmid));
+    let retry = validateSynthesis(pinSources(await ask(note, pairs), fontes), subset, main, question);
+    if (input.ai.verify && retry.sufficient) {
+      const bad = await unfaithful(retry, fontes, input.ai.verify);
+      if (bad.size) retry = withoutPmids(retry, bad, records, main, question);
+    }
+    answer = mergeAnswers(answer, retry, records, main, question);
+  };
+  if (input.ai.verify && answer.sufficient) {
+    const bad = await unfaithful(answer, fontes, input.ai.verify);
+    if (bad.size) {
+      answer = withoutPmids(answer, bad, records, main, question);
+      await repair(
+        fontes.filter((pair) => bad.has(pair.pmid)),
+        "A tradução anterior foi infiel. Traduza de novo só a frase-fonte, sem desfecho extra, sem ampliar a população e sem inverter a polaridade.",
+      );
+    }
+  }
+  const missing = reservedWithoutLine(records, answer, question);
+  if (missing.length) {
+    await repair(
+      fontes.filter((pair) => missing.some((record) => record.pmid === pair.pmid)),
+      "Faltou a linha desta frase. Traduza só ela. Se a frase for de omissão ou suspensão, comece com Cuidados:.",
+    );
+  }
+  return answer;
 }
 
 export async function answerClinicalQuestion(input: {
@@ -168,38 +235,52 @@ export async function answerClinicalQuestion(input: {
   const main = scoped.find((concept) => !isContextConcept(concept) && !concept.every(isConditionTerm))
     || scoped.find((concept) => !isContextConcept(concept))
     || scoped[0];
+  const setKey = finalSetKey(question, scoped);
   let records: EvidenceRecord[] = [];
+  let fontes: FinalSetItem[] | null = input.db ? await readFinalSet(setKey, input.db) : null;
   input.onStage?.("pubmed");
-  if (isIndicationQuestion(question)) {
-    records = await gatherIndications(input.search, scoped, main, question, today);
-  } else {
-    const pairTerms = pairQueries(scoped, today);
-    const searches = pairTerms.map((term) => input.search(term));
-    if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true }));
-    if (searches.length) {
-      const batches = await Promise.all(searches);
-      records = selectForSynthesis(uniqueRecords(batches.flat()), main, 6, question);
-    }
-    if (!records.length) {
-      for (const term of attempts) {
-        const found = await input.search(term);
-        const selected = selectForSynthesis(found, main, 6, question);
-        if (selected.length) {
-          records = selected;
-          break;
+  if (fontes?.length) {
+    const fetched = await input.search(fontes.map((item) => `${item.pmid}[uid]`).join(" OR "), { kind: "high-level", includeTrials: true });
+    const byId = new Map(fetched.map((record) => [record.pmid, record]));
+    const ordered = fontes.map((item) => byId.get(item.pmid)).filter((record): record is EvidenceRecord => Boolean(record));
+    if (ordered.length === fontes.length) records = ordered;
+    else fontes = null;
+  }
+  if (!records.length) {
+    if (isIndicationQuestion(question)) {
+      records = await gatherIndications(input.search, scoped, main, question, today);
+    } else {
+      const pairTerms = pairQueries(scoped, today);
+      const searches = pairTerms.map((term) => input.search(term));
+      if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true }));
+      if (searches.length) {
+        const batches = await Promise.all(searches);
+        records = selectForSynthesis(uniqueRecords(batches.flat()), main, 6, question);
+      }
+      if (!records.length) {
+        for (const term of attempts) {
+          const found = await input.search(term);
+          const selected = selectForSynthesis(found, main, 6, question);
+          if (selected.length) {
+            records = selected;
+            break;
+          }
         }
       }
     }
+    fontes = records.map((record) => ({ pmid: record.pmid, excerpt: sourceExcerpt(record) }));
+    if (input.db && fontes.length) await writeFinalSet(setKey, fontes, input.db);
   }
   if (!records.length) {
     return insufficientAnswer(
       "Não encontramos revisões sistemáticas, metanálises ou diretrizes no PubMed para esta pergunta. Não há conclusão clínica a partir desta busca.",
     );
   }
+  const pinned = fontes ?? records.map((record) => ({ pmid: record.pmid, excerpt: sourceExcerpt(record) }));
   try {
     input.onStage?.("reading");
-    await new Promise((resolve) => setTimeout(resolve, 40));
     input.onStage?.("writing");
+    if (input.ai.translate) return await translateRecords(input, question, records, pinned, main);
     let raw = await input.ai.summarize(question, records, { direct: isYesNoQuestion(question) });
     let retried = false;
     if (synthesisNeedsRetry(raw, records)) {

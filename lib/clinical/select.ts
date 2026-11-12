@@ -149,8 +149,6 @@ export function isIsolatedHeartFailureMeta(article: Pick<EvidenceRecord, "title"
 }
 
 export function byTypeThenPmidDesc(a: EvidenceRecord, b: EvidenceRecord) {
-  const hits = (b.hits ?? 1) - (a.hits ?? 1);
-  if (hits) return hits;
   const type = typeRank(a.type) - typeRank(b.type);
   if (type) return type;
   const pmid = Number(b.pmid) - Number(a.pmid);
@@ -166,6 +164,12 @@ export function isHeartFailureSlot(article: Pick<EvidenceRecord, "title" | "abst
   if (HEART_FAILURE_NICHE.test(article.title)) return false;
   const conclusion = `${article.title}\n${conclusionText(article.abstract || "")}`;
   if (!/death|mortalit|hospitali[sz]/i.test(conclusion)) return false;
+  const positive = conclusion.split(/(?<=[.!?])\s+/).some((sentence) =>
+    /sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(`${article.title} ${sentence}`)
+    && /reduc|lower|benefit|decrease|\bfell\b|fewer/i.test(sentence)
+    && /death|mortalit|hospitali|worsening/i.test(sentence)
+    && !/\b(?:did not|not significantly)\s+(?:significantly\s+)?reduce/i.test(sentence));
+  if (!positive) return false;
   const low = /very low[ -]certainty|low[ -]certainty/i.test(conclusion);
   const firm = /moderate|high[ -]certainty|high coe/i.test(conclusion);
   return !low || firm;

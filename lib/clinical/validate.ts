@@ -330,10 +330,47 @@ function stripHedge(line: string) {
     .replace(/\bpode\s+representar\b/gi, "representa");
 }
 
-/** The code, not the model, decides whether the verb stays indicative or takes pode. */
+/** A negative source sentence never takes pode. Association is not a benefit verb. */
+export function sourceIsNegative(support: string) {
+  if (/\bmay reduce\b/i.test(support) && /however|totality|pooled/i.test(support)) return false;
+  return /\b(?:did not|do not|does not)\s+(?:significantly\s+)?(?:reduce|lower|decrease)|\bnot significantly\b|\bno significant (?:effect|reduction|difference)\b|\bdid not demonstrate\b/i.test(support);
+}
+
 export function applyCodeCertainty(line: string, support: string) {
+  if (sourceIsNegative(support)) return stripHedge(line).replace(/\bpodem\b/gi, "").replace(/\bpode\b/gi, "").replace(/\s{2,}/g, " ").trim();
+  if (/\b(?:associated with|linked with|linked to)\b/i.test(support)) return line;
   if (supportCertainty(support) === "hedge") return hedgeCoordinatedVerbs(line) || line;
   return stripHedge(line);
+}
+
+function applyAssociation(line: string, support: string) {
+  if (sourceIsNegative(support) || !/\b(?:associated with|linked with|linked to)\b/i.test(support)) return line;
+  if (/associa-se|associam-se/.test(fold(line))) return line;
+  return line
+    .replace(/\bpode(?:m)?\s+reduzir\b/gi, "associa-se a uma redução")
+    .replace(/\breduziram\b/gi, "associam-se a uma redução")
+    .replace(/\breduzem\b/gi, "associam-se a uma redução")
+    .replace(/\breduziu\b/gi, "associa-se a uma redução")
+    .replace(/\breduz\b/gi, "associa-se a uma redução")
+    .replace(/\bassocia-se a uma redução\s+a\s+/gi, "associa-se a uma redução da ")
+    .replace(/\bassocia-se a uma redução\s+o\s+/gi, "associa-se a uma redução do ")
+    .replace(/\bassocia-se a uma redução\s+as\s+/gi, "associa-se a uma redução das ")
+    .replace(/\bassocia-se a uma redução\s+os\s+/gi, "associa-se a uma redução dos ");
+}
+
+function polarityFlipped(line: string, support: string) {
+  const folded = fold(line);
+  const negativeLine = /\bnao\b/.test(folded) && /\breduz/.test(folded);
+  const positiveLine = /\breduz/.test(folded) && !/\bnao\b/.test(folded);
+  if (sourceIsNegative(support)) return positiveLine;
+  if (/\b(?:may reduce|reduc(?:e|es|ed))\b/i.test(support) && negativeLine && !/conjunto|totalidade/.test(folded)) return true;
+  return false;
+}
+
+/** "Primary and secondary" widens a benefit the source confines to established disease. */
+export function expandsConfinedPopulation(line: string, support: string) {
+  if (!/confined to[^.]{0,80}established/i.test(support)) return false;
+  return /primaria e secundaria|prevencao primaria/.test(fold(line));
 }
 
 const OUTCOME_CLAUSES: Array<[RegExp, RegExp]> = [
@@ -550,7 +587,13 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
   const sentences = usableSentences(excerpt);
   const supporting = sentences.filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome)));
   if (!supporting.length) return true;
-  return !supporting.some((sentence) => sentenceHasClass(sentence, needles) && !sentenceHasOtherDrug(sentence, needles));
+  return !supporting.some((sentence) => {
+    const at = sentences.indexOf(sentence);
+    const previous = at > 0 ? sentences[at - 1] : "";
+    const pronoun = /^(however,?\s+)?(they|these agents|these drugs|these inhibitors)\b/i.test(sentence.trim());
+    const window = pronoun ? `${previous} ${sentence}` : sentence;
+    return sentenceHasClass(window, needles) && !sentenceHasOtherDrug(sentence, needles);
+  });
 }
 
 const LIMITED_CERTAINTY = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i;
@@ -778,9 +821,44 @@ export function outcomeSupport(line: string, abstract: string) {
 }
 
 export function resultSentence(record: EvidenceRecord) {
-  const sentences = resultsAndConclusions(record.abstract || "").split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 40);
-  const picked = sentences.find((sentence) => /significantly reduced|should omit|omit them|hospitali|cv death|cardiovascular death|placebo/i.test(sentence));
-  return (picked || sentences[0] || record.abstract || "").slice(0, 500);
+  return sourceExcerpt(record).slice(0, 500);
+}
+
+function resultSentences(abstract: string) {
+  return resultsAndConclusions(abstract).split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 40);
+}
+
+/** The code picks the results or conclusion sentence. The model only translates it. */
+export function sourceExcerpt(record: EvidenceRecord) {
+  const sentences = resultSentences(record.abstract || "");
+  const care = sentences.find((sentence) => /should omit|omit them the day before/i.test(sentence));
+  if (care) return care;
+  const pooled = sentences.find((sentence) =>
+    /however|totality|pooled/i.test(sentence)
+    && /may reduce|reduc/i.test(sentence)
+    && !/\b(?:did not|not significantly|did not demonstrate)\b/i.test(sentence)
+    && /sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(sentence));
+  if (pooled && sentences.some((sentence) => /\b(?:did not|not significantly)\b/i.test(sentence))) return pooled;
+  const robust = sentences.find((sentence) => /hospitali[sz]ation for heart failure/i.test(sentence) && /renal/i.test(sentence) && /regardless/i.test(sentence));
+  if (robust) return withNamedClass(sentences, robust);
+  const direct = sentences.find((sentence) => /cotransport inhibitors reduce the risk/i.test(sentence));
+  if (direct) return direct;
+  const joint = sentences.find((sentence) => /sglt-?2/i.test(sentence) && /glp-?1/i.test(sentence) && /associated|linked/i.test(sentence) && !/\bdid not\b/i.test(sentence));
+  if (joint) return joint;
+  const associated = sentences.find((sentence) => /associated with (?:a )?(?:significant )?(?:reduction|reduced|decrease|improved)|linked with a decrease/i.test(sentence) && !/\bdid not\b/i.test(sentence));
+  if (associated) return associated;
+  const effect = sentences.find((sentence) => /significantly (?:reduced|reduce)/i.test(sentence) && !/\b(?:did not|not significantly)\b/i.test(sentence));
+  if (effect) return withNamedClass(sentences, effect);
+  const last = sentences.at(-1) || resultsAndConclusions(record.abstract || "").slice(0, 500);
+  return withNamedClass(sentences, last);
+}
+
+function withNamedClass(sentences: string[], picked: string) {
+  if (/sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(picked)) return picked;
+  const index = sentences.indexOf(picked);
+  const previous = index > 0 ? sentences[index - 1] : "";
+  if (/sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(previous)) return `${previous} ${picked}`;
+  return picked;
 }
 
 function specifyCardiovascularDeath(line: string, support: string) {
@@ -964,7 +1042,9 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
     }
   }
   text = stripRestatedPopulation(text);
-  text = specifyCardiovascularDeath(text, outcomeSupport(text, citedAbstract));
+  text = text.replace(/^(?:Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*(?=Cuidados\b)/i, "");
+  const certaintySource = draft.support ? support : outcomeSupport(text, citedAbstract);
+  text = specifyCardiovascularDeath(text, certaintySource);
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
   if (claimOutsideResults(text, citedAbstract) || supportedOnlyByContext(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
@@ -972,9 +1052,12 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   text = metforminLine(text, citedAbstract, question);
   if (requireControl && missingControlContrast(text, support)) return null;
   if (treatsRankingAsEffect(text, support) || omitsSuperiorAlternative(text, support)) return null;
-  const hedged = ensureModalHedge(text, outcomeSupport(text, citedAbstract));
+  if (draft.support && polarityFlipped(text, support)) return null;
+  if (expandsConfinedPopulation(text, support)) return null;
+  const hedged = ensureModalHedge(text, certaintySource);
   if (!hedged) return null;
-  text = ensureCertaintyCaveat(hedged, support);
+  text = applyAssociation(hedged, certaintySource);
+  text = ensureCertaintyCaveat(text, support);
   if (concept && (attributesForeignBenefit(text, support, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };
 }
@@ -1034,6 +1117,25 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
     remember(accepted);
   }
   for (const later of deferred) remember(later);
+  const seenCare = new Set<string>();
+  for (let index = kept.length - 1; index >= 0; index -= 1) {
+    if (!/^cuidados\b/i.test(fold(kept[index].text))) continue;
+    if (!/^cuidados\s*:/i.test(kept[index].text)) {
+      kept[index] = { ...kept[index], text: kept[index].text.replace(/^cuidados\b[:\s-]*/i, "Cuidados: ") };
+    }
+    const key = fold(kept[index].text).replace(/\s+/g, " ").trim();
+    if (seenCare.has(key)) {
+      kept.splice(index, 1);
+      continue;
+    }
+    seenCare.add(key);
+  }
+  appearance.length = 0;
+  for (const unit of kept) {
+    for (const record of unit.resolved) {
+      if (!appearance.includes(record.pmid)) appearance.push(record.pmid);
+    }
+  }
   if (!kept.length || !appearance.length) {
     return insufficientAnswer(
       "A busca recuperou registros, mas não houve afirmação que pudesse ser ligada somente a esses artigos. Nenhuma conclusão foi produzida.",

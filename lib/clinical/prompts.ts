@@ -15,7 +15,7 @@ export const SUMMARY_SYSTEM = [
   "Responda a um médico usando somente os artigos enviados. Cada artigo tem PMID e um trecho de resultados ou conclusão.",
   "JSON com a chave itens, no máximo 6 objetos {\"texto\":\"...\",\"pmid\":\"12345678\",\"trecho\":\"...\"}. Cada texto é uma frase completa, de até 40 palavras.",
   "pmid é o PMID do artigo que sustenta essa frase, um dos PMIDs recebidos. Não escreva [n] nem /pmid no texto.",
-  "trecho é uma frase copiada literalmente dos resultados ou da conclusão, nunca do título, do objetivo ou do background, sem reticências. O verbo do texto fica no indicativo. Não escreva pode: o código aplica pode quando a frase completa do resumo que contém o trecho tiver suggest, may, might, likely, associated ou certeza baixa.",
+  "trecho é uma frase copiada literalmente dos resultados ou da conclusão, nunca do título, do objetivo ou do background, sem reticências. O verbo do texto fica no indicativo. Não escreva pode: o código aplica pode quando a frase-fonte tiver suggest, may, might, likely ou certeza baixa. associated ou linked vira associa-se a, sem pode. Frase negativa não recebe pode.",
   "Não escolha o rótulo da população. O código deriva DM2, DM2 com DRC, DM2 com IC, DM2 com DCV, IC, ICFEr ou ICFEp do título e da frase completa.",
   "O desfecho da frase é o desfecho do trecho. Não troque desfecho cardiovascular por controle glicêmico. Se o trecho for terapia tripla, dupla ou combined with, mantenha essa combinação na frase.",
   "Português do Brasil, natural. Em pergunta de indicação ou tratamento, uma linha por condição, começando com hífen.",
@@ -45,6 +45,21 @@ export function isYesNoQuestion(question: string) {
   if (effect.test(asked)) return true;
   return asked.includes("?") && effect.test(asked);
 }
+
+export const TRANSLATE_SYSTEM = [
+  "Traduza cada frase inglesa para português do Brasil. Uma frase por artigo. Não junte artigos.",
+  "Não acrescente desfecho, população, número nem certeza que a frase não traga. Encurte sem mudar o sujeito, a população, o verbo, a modalidade ou a polaridade.",
+  "associated with ou linked with vira associa-se a. Frase negativa continua negativa e não recebe pode.",
+  "Não escreva o rótulo da população: o código coloca DM2, DM2 com DRC, DM2 com IC, DM2 com DCV, IC, ICFEr ou ICFEp.",
+  "Se a frase for de omissão ou suspensão, comece com Cuidados:.",
+  "JSON {itens:[{pmid, texto, trecho}]}. trecho é a frase inglesa recebida, copiada sem mudar.",
+].join(" ");
+
+export const VERIFY_SYSTEM = [
+  "Compare cada frase em português com a frase-fonte em inglês. Temperatura zero. Diga se a tradução é fiel.",
+  "Infiel quando houver desfecho extra, população ampliada (primária e secundária quando a fonte diz confined to established), certeza mudada, efeito atribuído só ao iSGLT2 quando a fonte atribui o efeito a iSGLT2 e GLP-1 juntos, ou polaridade invertida.",
+  "JSON {itens:[{pmid, fiel, motivo}]}. fiel é boolean. motivo fica vazio quando fiel.",
+].join(" ");
 
 export function summarySystem(question: string, direct = true) {
   if (!direct || !isYesNoQuestion(question)) return SUMMARY_SYSTEM;

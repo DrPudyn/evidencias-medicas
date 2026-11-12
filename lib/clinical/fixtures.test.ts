@@ -5,8 +5,9 @@ import { displayPublicationType } from "../evidence-filter";
 import { answerClinicalQuestion } from "./answer";
 import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
 import { isHeartFailureSlot, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { evidenceQuery, expandClassTerms, forceMetforminType2, readResultCache, writeResultCache } from "./terms";
-import { normalizeOddCaps, validateSynthesis } from "./validate";
+import { evidenceQuery, expandClassTerms, finalSetKey, forceMetforminType2, readFinalSet, readResultCache, writeFinalSet, writeResultCache } from "./terms";
+import { normalizeOddCaps, sourceExcerpt, validateSynthesis } from "./validate";
+import { createWorkersAi } from "./provider";
 import type { EvidenceRecord } from "./types";
 
 const PMIDs = [
@@ -41,6 +42,8 @@ const PMIDs = [
   "41084961",
   "37615988",
   "37039787",
+  "38287703",
+  "40702593",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -655,17 +658,17 @@ test("o conjunto de PMIDs fica estável por sete dias", async () => {
   assert.equal(await readResultCache(key, adapter, writtenAt + 8 * 24 * 60 * 60 * 1000), null);
 });
 
-test("a união ordena por quantas consultas trouxeram o artigo, depois tipo e PMID", () => {
+test("a união ordena por tipo e PMID, sem depender de quantas consultas trouxeram o artigo", () => {
   const base = fixture("34693515");
-  const rare = { ...base, pmid: "90000000", hits: 1 };
-  const common = { ...base, pmid: "10000000", hits: 4 };
+  const newer = { ...base, pmid: "90000000", hits: 1 };
+  const older = { ...base, pmid: "10000000", hits: 4 };
   const question = "quais indicações de uso de sglt2";
   const concept = ["sglt2 inhibitors"];
   const input = { guidelines: [], metas: [], recent: [], supplemental: [], concept, question, limit: 6 };
-  const forward = mergeIndicationRecords({ ...input, outcomes: [rare, common] });
-  const reversed = mergeIndicationRecords({ ...input, outcomes: [common, rare] });
+  const forward = mergeIndicationRecords({ ...input, outcomes: [older, newer] });
+  const reversed = mergeIndicationRecords({ ...input, outcomes: [newer, older] });
   assert.equal(forward.map((item) => item.pmid).join(), reversed.map((item) => item.pmid).join());
-  assert.equal(forward[0].pmid, "10000000");
+  assert.equal(forward[0].pmid, "90000000");
 });
 
 test("trecho fora de resultados ou conclusão derruba a frase", () => {
@@ -694,7 +697,7 @@ test("trecho fora de resultados ou conclusão derruba a frase", () => {
     }],
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(suggested.sufficient, true);
-  assert.doesNotMatch(suggested.answer, /\bpode\b/);
+  assert.match(suggested.answer, /\bpode\b/);
   assert.match(suggested.answer, /^DM2 com IC:/);
   assert.match(suggested.answer, /cardiovasculares/);
   const glycemic = validateSynthesis(JSON.stringify({
@@ -785,7 +788,7 @@ test("37615988 mantém o indicativo e escreve morte cardiovascular", () => {
     itens: [{
       texto: "reduz a morte.",
       pmid: "37615988",
-      trecho: "suggesting that their use may be beneficial for most individuals with HF",
+      trecho: "SGLT2 inhibitors significantly reduced the risk of worsening HF or CV death (hazard ratio [HR], 0.77 [95% CI, 0.73-0.82]).",
     }],
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(answer.sufficient, true);
@@ -870,4 +873,221 @@ test("vaga sem linha pede uma chamada curta e conserva as linhas válidas", asyn
   assert.match(answer.answer, /Cuidados:/);
   assert.match(answer.answer, /morte cardiovascular/);
   assert.ok(answer.references.some((item) => item.pmid === care.pmid));
+});
+
+test("40884036 entra na vaga de IC pela conclusão da metanálise", () => {
+  assert.equal(isHeartFailureSlot(fixture("40884036")), true);
+  const negative = {
+    ...fixture("40884036"),
+    pmid: "703",
+    abstract: "CONCLUSIONS: Dapagliflozin did not significantly reduce cardiovascular death or hospitalization for heart failure.",
+  };
+  assert.equal(isHeartFailureSlot(negative), false);
+  assert.match(sourceExcerpt(fixture("40884036")), /totality of randomized clinical trial data/);
+  assert.doesNotMatch(sourceExcerpt(fixture("40884036")), /did not significantly reduce/);
+});
+
+test("30424892 mantém internação por IC e progressão renal em DM2", () => {
+  const article = fixture("30424892");
+  const fonte = sourceExcerpt(article);
+  assert.match(fonte, /hospitalisation for heart failure/);
+  assert.match(fonte, /progression of renal disease/);
+  assert.match(fonte, /regardless/);
+  const kept = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "reduz a internação por IC e a progressão renal em DM2.", pmid: "30424892", trecho: fonte }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(kept.sufficient, true);
+  assert.match(kept.answer, /^DM2:/);
+  assert.doesNotMatch(kept.answer, /^DM2 com IC:/);
+  assert.match(kept.answer, /internação por IC/);
+  assert.match(kept.answer, /progressão renal/);
+  assert.doesNotMatch(kept.answer, /\bpode\b/);
+  const widened = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "reduz eventos CV na prevenção primária e secundária.",
+      pmid: "30424892",
+      trecho: "SGLT2i have moderate benefits on atherosclerotic major adverse cardiovascular events that seem confined to patients with established atherosclerotic cardiovascular disease.",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(widened.sufficient, false);
+});
+
+test("38287703 associa e não usa pode na frase negativa", () => {
+  const article = fixture("38287703");
+  const fonte = sourceExcerpt(article);
+  assert.match(fonte, /associated with a significant reduction/i);
+  assert.doesNotMatch(fonte, /did not significantly reduce HbA1c/i);
+  const linked = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "reduz a mortalidade.", pmid: "38287703", trecho: fonte }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(linked.sufficient, true);
+  assert.match(linked.answer, /associa-se a uma redução/);
+  assert.doesNotMatch(linked.answer, /\bpode\b/);
+  assert.doesNotMatch(linked.answer, /\breduz\b/);
+  const negative = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "pode reduzir a HbA1c.",
+      pmid: "38287703",
+      trecho: "SGLT2Is did not significantly reduce HbA1c level (mean difference -0.13, 95%CI: -0.41 to 0.14).",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(negative.sufficient, false);
+});
+
+test("32036861, 40702593 e 39781571 usam a frase-fonte e Cuidados não duplica", () => {
+  assert.match(sourceExcerpt(fixture("32036861")), /cotransport inhibitors reduce the risk of incident HF/i);
+  assert.match(sourceExcerpt(fixture("40702593")), /SGLT2i and GLP-1RA were associated/i);
+  const care = fixture("39781571");
+  const fonte = sourceExcerpt(care);
+  assert.match(fonte, /omit them the day before/i);
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "Cuidados: omitir no dia anterior e no dia do procedimento.", pmid: "39781571", trecho: fonte },
+      { texto: "DM2: Cuidados: omitir no dia anterior e no dia do procedimento.", pmid: "39781571", trecho: fonte },
+    ],
+  }), [care], ["sglt2 inhibitors"]);
+  assert.equal(answer.answer.split("\n").filter((line) => /Cuidados/.test(line)).length, 1);
+  assert.match(answer.answer, /^Cuidados:/);
+  assert.doesNotMatch(answer.answer, /^DM2:/);
+});
+
+test("o conjunto final fica no cache por sete dias e ignora a ordem da busca", async () => {
+  const db = new (await import("node:sqlite")).DatabaseSync(":memory:");
+  db.exec("CREATE TABLE clinical_result_cache (query_key text primary key, pmids text not null, updated_at integer not null)");
+  const adapter = {
+    prepare(sql: string) {
+      return {
+        bind(...params: unknown[]) {
+          return {
+            async first<T>() {
+              return (db.prepare(sql).get(...(params as never[])) as T | undefined) ?? null;
+            },
+            async run() {
+              db.prepare(sql).run(...(params as never[]));
+              return { meta: { changes: 1 } };
+            },
+          };
+        },
+      };
+    },
+  };
+  const question = "Quais as indicações de iSGLT2 neste conjunto final?";
+  const key = finalSetKey(question, [["sglt2 inhibitors"]]);
+  const writtenAt = Date.parse("2026-11-01T00:00:00Z");
+  await writeFinalSet(key, [{ pmid: "30424892", excerpt: "SGLT2i reduced hospitalisation for heart failure." }], adapter, writtenAt);
+  const fresh = await readFinalSet(key, adapter, writtenAt + 6 * 24 * 60 * 60 * 1000);
+  assert.equal(fresh?.[0]?.pmid, "30424892");
+  assert.match(fresh?.[0]?.excerpt || "", /hospitalisation/);
+  assert.equal(await readFinalSet(key, adapter, writtenAt + 8 * 24 * 60 * 60 * 1000), null);
+
+  const articles = [fixture("30424892"), fixture("33031522"), fixture("32877652")];
+  const seen: string[][] = [];
+  let capture = true;
+  let searches = 0;
+  const ai = {
+    async searchTerms() {
+      return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+    },
+    async summarize(_question: string, records: EvidenceRecord[]) {
+      if (capture) {
+        seen.push(records.map((record) => record.pmid));
+        capture = false;
+      }
+      return JSON.stringify({
+        itens: records.map((record) => ({ texto: "reduz a internação por IC.", pmid: record.pmid })),
+      });
+    },
+  };
+  await answerClinicalQuestion({
+    question,
+    cacheTerms: true,
+    db: adapter,
+    ai,
+    search: async () => {
+      searches += 1;
+      return articles;
+    },
+  });
+  capture = true;
+  const before = searches;
+  await answerClinicalQuestion({
+    question,
+    cacheTerms: true,
+    db: adapter,
+    ai,
+    search: async () => {
+      searches += 1;
+      return [fixture("34693515"), ...articles].reverse();
+    },
+  });
+  assert.deepEqual(seen[1], seen[0]);
+  assert.equal(seen[1]?.includes("34693515"), false);
+  assert.equal(searches - before, 1);
+});
+
+test("a tradução segue a frase-fonte e o verificador derruba a linha infiel", async () => {
+  const calls = { translate: 0, verify: 0 };
+  const judged: string[] = [];
+  const answer = await answerClinicalQuestion({
+    question: "Quais as indicações de iSGLT2 na tradução fiel?",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+      },
+      async summarize() {
+        throw new Error("não deve parafrasear");
+      },
+      async translate(_question, pairs) {
+        calls.translate += 1;
+        return JSON.stringify({
+          itens: pairs.map((pair) => ({
+            pmid: pair.pmid,
+            trecho: pair.fonte,
+            texto: pair.pmid === "40702593"
+              ? "associa-se a melhora da sobrevida e dos desfechos cardiovasculares."
+              : pair.pmid === "30424892"
+                ? "reduz a internação por IC e a progressão renal."
+                : "O conjunto dos ensaios pode reduzir a morte cardiovascular ou a piora da IC.",
+          })),
+        });
+      },
+      async verify(pairs) {
+        calls.verify += 1;
+        for (const pair of pairs) judged.push(pair.pmid);
+        return JSON.stringify({
+          itens: pairs.map((pair) => ({
+            pmid: pair.pmid,
+            fiel: pair.pmid !== "40702593",
+            motivo: pair.pmid === "40702593" ? "atribuição conjunta GLP-1" : "",
+          })),
+        });
+      },
+    },
+    search: async () => [fixture("30424892"), fixture("40884036"), fixture("40702593"), fixture("32036861"), fixture("39781571")],
+  });
+  assert.equal(answer.sufficient, true);
+  assert.match(answer.answer, /internação por IC/);
+  assert.match(answer.answer, /progressão renal/);
+  assert.match(answer.answer, /^DM2:/m);
+  assert.match(answer.answer, /conjunto dos ensaios/);
+  assert.match(answer.answer, /pode reduzir/);
+  assert.doesNotMatch(answer.answer, /sobrevida/);
+  assert.ok(judged.includes("40702593"));
+  assert.equal(calls.translate, 2);
+  assert.equal(calls.verify, 2);
+});
+
+test("tradução e verificador usam temperatura zero", async () => {
+  const calls: Array<{ temperature?: number }> = [];
+  const ai = createWorkersAi({
+    async run(_model, input) {
+      calls.push(input as { temperature?: number });
+      return { response: { itens: [] } };
+    },
+  });
+  await ai.translate!("Quais as indicações de iSGLT2?", [{ pmid: "30424892", fonte: "SGLT2i reduced hospitalisation for heart failure and progression of renal disease." }]);
+  await ai.verify!([{ pmid: "30424892", texto: "reduz a internação por IC.", fonte: "SGLT2i reduced hospitalisation for heart failure." }]);
+  assert.equal(calls[0]?.temperature, 0);
+  assert.equal(calls[1]?.temperature, 0);
+  assert.match(JSON.stringify(calls[1]), /fiel/);
 });

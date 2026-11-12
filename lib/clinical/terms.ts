@@ -300,6 +300,47 @@ export async function readResultCache(key: string, db?: TermCacheDb | null, now 
   }
 }
 
+export type FinalSetItem = { pmid: string; excerpt: string };
+
+const finalSets = new Map<string, { items: FinalSetItem[]; at: number }>();
+
+export function finalSetKey(question: string, concepts: string[][]) {
+  const terms = concepts.map((concept) => concept.map((term) => term.toLowerCase()).sort().join("|")).sort().join("||");
+  return `final|${normalizeQuestion(question)}|${terms}`;
+}
+
+export async function readFinalSet(key: string, db?: TermCacheDb | null, now = Date.now()) {
+  const memory = finalSets.get(key);
+  if (memory && now - memory.at < RESULT_TTL_MS) return memory.items;
+  if (memory) finalSets.delete(key);
+  if (!db) return null;
+  try {
+    const row = await db.prepare("SELECT pmids, updated_at FROM clinical_result_cache WHERE query_key = ?").bind(key).first<{ pmids: string; updated_at: number }>();
+    if (!row?.pmids || now - row.updated_at >= RESULT_TTL_MS) return null;
+    const parsed = JSON.parse(row.pmids) as { items?: FinalSetItem[] };
+    const items = Array.isArray(parsed?.items) ? parsed.items.filter((item) => item?.pmid && item?.excerpt) : [];
+    if (!items.length) return null;
+    finalSets.set(key, { items, at: row.updated_at });
+    return items;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeFinalSet(key: string, items: FinalSetItem[], db?: TermCacheDb | null, now = Date.now()) {
+  const unique = items.filter((item, index) => item.pmid && item.excerpt && items.findIndex((other) => other.pmid === item.pmid) === index);
+  if (!unique.length) return;
+  finalSets.set(key, { items: unique, at: now });
+  if (!db) return;
+  try {
+    await db.prepare(
+      "INSERT INTO clinical_result_cache (query_key, pmids, updated_at) VALUES (?, ?, ?) ON CONFLICT(query_key) DO UPDATE SET pmids = excluded.pmids, updated_at = excluded.updated_at",
+    ).bind(key, JSON.stringify({ items: unique }), now).run();
+  } catch {
+    // The table may not exist yet. The memory cache still applies.
+  }
+}
+
 export async function writeResultCache(key: string, pmids: string[], db?: TermCacheDb | null, now = Date.now()) {
   const unique = [...new Set(pmids.filter(Boolean))];
   resultCache.set(key, { pmids: unique, at: now });
