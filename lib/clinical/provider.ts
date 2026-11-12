@@ -1,7 +1,7 @@
 import { DEFAULT_AI_MODEL } from "../brand";
 import type { ClinicalAi, EvidenceRecord } from "./types";
 import { fallbackSearchTerms } from "./terms";
-import { SUMMARY_SYSTEM, TERMS_SYSTEM, summaryUser } from "./prompts";
+import { TERMS_SYSTEM, summarySystem, summaryUser } from "./prompts";
 
 export type AiBinding = {
   run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
@@ -82,8 +82,8 @@ export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): Clinic
     searchTerms(question) {
       return complete(TERMS_SYSTEM, question, 280, TERMS_SCHEMA, 0);
     },
-    summarize(question, records) {
-      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 420, SUMMARY_SCHEMA, 0.2);
+    summarize(question, records, options) {
+      return complete(summarySystem(question, options?.direct !== false), summaryUser(question, records), 420, SUMMARY_SCHEMA, 0.2);
     },
   };
 }

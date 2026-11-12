@@ -190,12 +190,51 @@ export function normalizeQuestion(question: string) {
 
 const termCache = new Map<string, string>();
 
+export type TermCacheDb = {
+  prepare: (sql: string) => {
+    bind: (...params: unknown[]) => {
+      first: <T>() => Promise<T | null>;
+      run: () => Promise<unknown>;
+    };
+  };
+};
+
 export function cachedSearchTerms(question: string) {
-  return termCache.get(normalizeQuestion(question));
+  return termCache.get(normalizeQuestion(question)) || "";
+}
+
+export async function readTermCache(question: string, db?: TermCacheDb | null) {
+  const key = normalizeQuestion(question);
+  if (db) {
+    try {
+      const row = await db.prepare("SELECT concepts FROM clinical_term_cache WHERE question_key = ?").bind(key).first<{ concepts: string }>();
+      if (row?.concepts) {
+        termCache.set(key, row.concepts);
+        return row.concepts;
+      }
+    } catch {
+      // The table may not exist yet. The memory cache still applies.
+    }
+  }
+  return termCache.get(key) || "";
 }
 
 export function rememberSearchTerms(question: string, raw: string) {
   if (raw.trim()) termCache.set(normalizeQuestion(question), raw);
+}
+
+export async function writeTermCache(question: string, raw: string, db?: TermCacheDb | null) {
+  if (!raw.trim()) return;
+  const key = normalizeQuestion(question);
+  termCache.set(key, raw);
+  if (!db) return;
+  try {
+    await db.prepare(
+      "INSERT INTO clinical_term_cache (question_key, concepts, updated_at) VALUES (?, ?, ?) ON CONFLICT(question_key) DO UPDATE SET concepts = excluded.concepts, updated_at = excluded.updated_at",
+    ).bind(key, raw, Date.now()).run();
+  } catch {
+    // Memory already holds the value when D1 is unavailable.
+  }
 }
 
 function mentionsPhrase(haystack: string, phrase: string) {
@@ -313,7 +352,9 @@ export function stripUnnamedConditions(term: string, question: string) {
 export function requiredConditionMarks(question: string) {
   const asked = fold(question);
   const marks: string[] = [];
-  if (/pre-?diabet/.test(asked)) marks.push("prediabet");
+  if (/pre-?diabet|pre diabetes/.test(asked)) {
+    marks.push("prediabetes", "pre-diabetes", "pre diabetes", "prediabetic", "impaired glucose tolerance", "impaired fasting glucose");
+  }
   else if (/(?:^|[^a-z0-9-])diabetes(?:[^a-z0-9-]|$)/.test(` ${asked} `)) marks.push("diabetes");
   if (/insuficiencia cardiaca/.test(asked)) marks.push("heart failure");
   if (/doenca renal|\bdrc\b/.test(asked)) marks.push("kidney");

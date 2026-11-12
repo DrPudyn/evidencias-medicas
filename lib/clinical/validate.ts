@@ -205,6 +205,11 @@ export function ensureCertaintyCaveat(line: string, excerpt: string) {
   return `${line.replace(/[.\s]*$/, "")}, ${note}.`;
 }
 
+export function unsupportedYes(line: string, excerpt: string) {
+  if (!/(^|\n)\s*[-•]?\s*sim\b/i.test(fold(line))) return false;
+  return !/placebo|controle|control group|grupo controle|no treatment|sem tratamento|untreated/i.test(excerpt);
+}
+
 export function leavesOutcomeInEnglish(line: string) {
   const english = /\b(hospitalization for heart failure|sglt2 inhibitors|sodium-glucose transporter)\b/i.test(line);
   const portuguese = /hospitalizaç|hospitalizacao\b|insufici[eê]ncia|inibidores? de sglt2/i.test(line);
@@ -287,13 +292,18 @@ function draftsFromAnswer(source: string, records: EvidenceRecord[], byId: Map<s
   return drafts;
 }
 
+export function synthesisIsEmpty(raw: string) {
+  const parsed = parseSynthesis(raw);
+  return Boolean(parsed && Array.isArray(parsed.itens) && parsed.itens.length === 0);
+}
+
 /** True when the model returned text that could not be tied to a retrieved PMID. */
 export function synthesisNeedsRetry(raw: string, records: EvidenceRecord[]) {
   const parsed = parseSynthesis(raw);
   if (!parsed) return true;
   const byId = new Map(records.map((record) => [record.pmid, record]));
   if (Array.isArray(parsed.itens)) {
-    if (!parsed.itens.length) return false;
+    if (!parsed.itens.length) return records.length > 0;
     return draftsFromItems(parsed.itens, records, byId, []).length === 0;
   }
   if (parsed.sufficient === false) return false;
@@ -311,7 +321,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept) {
   text = attributeSpecificDrug(text, citedAbstract);
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
-  if (creditsClassForSingleDrug(text, citedAbstract)) return null;
+  if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract)) return null;
   text = ensureCertaintyCaveat(text, citedAbstract);
   if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };

@@ -68,13 +68,13 @@ Bindings: `DB` (D1 `evidencias-medicas`) e `AI` (Workers AI). Vars: `SITE_ORIGIN
 Requer Node >=22.13.0. Use `npm ci` (ou `npm run install:ci`). Crie `.openai/hosting.json` com `{"d1":"DB","r2":null}`; este arquivo local não é versionado. Copie os exemplos de ambiente apenas se precisar configurar integrações; nunca versione credenciais.
 
 1. `npm run build`
-2. Aplique, em ordem, os SQL de `drizzle/0000_*.sql` até `0005_*.sql`, apenas uma vez por banco, usando o Wrangler:
+2. Aplique, em ordem, os SQL de `drizzle/0000_*.sql` até `0006_*.sql`, apenas uma vez por banco, usando o Wrangler:
 
 ```powershell
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0005_plans_and_quota.sql
 ```
 
-O comando acima exemplifica a migração de planos. Num banco novo aplique também 0000, 0001, 0002, 0003 e 0004 antes dela. Não execute uma migração já aplicada. 0005 acrescenta assinatura, cota diária da pergunta clínica e eventos do webhook. Não aplique 0005 em produção até o deploy combinado.
+O comando acima exemplifica a migração de planos. Num banco novo aplique também 0000, 0001, 0002, 0003 e 0004 antes dela, e `0006_term_cache.sql` depois. Não execute uma migração já aplicada. 0005 acrescenta assinatura, cota diária da pergunta clínica e eventos do webhook. 0006 guarda os termos de busca já gerados. Não aplique 0005 nem 0006 em produção até o deploy combinado.
 
 3. `npm run preview:local` para servir o Worker compilado em localhost:5173; `npm run dev` para desenvolvimento com recarga.
 

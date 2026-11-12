@@ -69,6 +69,7 @@ export async function POST(req: Request) {
           ai,
           search: searchHighLevel,
           cacheTerms: true,
+          db: settings().DB,
           onStage: (stage) => send({ stage }),
         });
         send({

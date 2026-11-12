@@ -91,8 +91,9 @@ function isGuideline(article: Pick<EvidenceRecord, "type">) {
   return value.includes("diretriz") || value.includes("guideline");
 }
 
-export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract" | "type">, concept: SearchConcept) {
+export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract" | "type">, concept: SearchConcept, question = "") {
   if (!conceptNeedles(concept).length) return false;
+  if (requiredConditionMarks(question).length) return textHasConcept(`${article.title} ${article.abstract}`, concept);
   if (textHasConcept(article.title, concept)) return true;
   if (isGuideline(article)) return textHasConcept(labeledConclusion(article.abstract || ""), concept);
   return textHasConcept(conclusionText(article.abstract || ""), concept);
@@ -159,7 +160,7 @@ function mixTypes(articles: EvidenceRecord[]) {
  */
 export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: SearchConcept, limit = 8, question = "") {
   const humans = articles.filter((article) => !isVeterinary(article.title));
-  const focused = mainConcept.length ? humans.filter((article) => conceptInFocus(article, mainConcept)) : humans;
+  const focused = mainConcept.length ? humans.filter((article) => conceptInFocus(article, mainConcept, question)) : humans;
   const passing = mainConcept.length ? humans.filter((article) => mentionsConcept(article, mainConcept)) : humans;
   let pool = focused.length ? focused : (passing.length ? [] : humans);
   pool = pool.filter((article) => matchesAskedCondition(article, question));
@@ -190,7 +191,7 @@ export function mergeIndicationRecords(input: {
     const seen = new Set<string>();
     for (const article of list) {
       if (seen.has(article.pmid) || isVeterinary(article.title) || !matchesAskedCondition(article, input.question)) continue;
-      const onTopic = !input.concept.length || conceptInFocus(article, input.concept);
+      const onTopic = !input.concept.length || conceptInFocus(article, input.concept, input.question);
       if (!onTopic) continue;
       if (!precaution && input.question && indicationQuestion(input.question) && !/combinad|combination|seguran[cç]a|safety/i.test(input.question)) {
         if (safetyOnly(article) || combinationOnly(article)) continue;

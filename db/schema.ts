@@ -168,6 +168,12 @@ export const clinicalQuota = sqliteTable("clinical_quota", {
   count: integer("count").notNull(),
 }, (t) => [primaryKey({ columns: [t.subjectKey, t.day] })]);
 
+export const clinicalTermCache = sqliteTable("clinical_term_cache", {
+  questionKey: text("question_key").primaryKey(),
+  concepts: text("concepts").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const stripeEvents = sqliteTable("stripe_events", {
   id: text("id").primaryKey(),
   type: text("type").notNull(),

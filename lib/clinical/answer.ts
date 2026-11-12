@@ -1,7 +1,8 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { cachedSearchTerms, conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, rememberSearchTerms, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
-import { insufficientAnswer, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
+import { isYesNoQuestion } from "./prompts";
+import { insufficientAnswer, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
   const byId = new Map<string, EvidenceRecord>();
@@ -71,13 +72,14 @@ export async function answerClinicalQuestion(input: {
   search: (term: string, options?: ClinicalSearchOptions) => Promise<EvidenceRecord[]>;
   onStage?: (stage: "pubmed" | "reading" | "writing") => void;
   cacheTerms?: boolean;
+  db?: TermCacheDb | null;
 }) {
   const question = input.question.trim();
   let concepts = [] as ReturnType<typeof sanitizeConcepts>;
   try {
-    const cached = input.cacheTerms ? cachedSearchTerms(question) : "";
+    const cached = input.cacheTerms ? await readTermCache(question, input.db) : "";
     const raw = cached || await input.ai.searchTerms(question);
-    if (input.cacheTerms && !cached && raw.trim()) rememberSearchTerms(question, raw);
+    if (input.cacheTerms && !cached && raw.trim()) await writeTermCache(question, raw, input.db);
     concepts = sanitizeConcepts(parseJsonObject(raw));
   } catch {
     concepts = [];
@@ -130,10 +132,13 @@ export async function answerClinicalQuestion(input: {
     input.onStage?.("reading");
     await new Promise((resolve) => setTimeout(resolve, 40));
     input.onStage?.("writing");
-    let raw = await input.ai.summarize(question, records);
+    let raw = await input.ai.summarize(question, records, { direct: isYesNoQuestion(question) });
     if (synthesisNeedsRetry(raw, records)) {
       const ids = records.map((record) => record.pmid).join(", ");
-      raw = await input.ai.summarize(`${question}\n\n${RETRY_WARNING} PMIDs: ${ids}.`, records);
+      const note = synthesisIsEmpty(raw)
+        ? "A lista itens veio vazia. Responda de novo com um item por achado que o trecho sustente. Não comece por sim ou não."
+        : `${RETRY_WARNING} PMIDs: ${ids}.`;
+      raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
     }
     return validateSynthesis(raw, records, main);
   } catch {

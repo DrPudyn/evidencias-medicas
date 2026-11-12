@@ -5,7 +5,7 @@ import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
 import { validateSynthesis } from "./validate";
 import { focusAbstract, highLevelPmids } from "../pubmed-xml";
-import { SUMMARY_SYSTEM, summaryUser } from "./prompts";
+import { SUMMARY_SYSTEM, isYesNoQuestion, summaryUser } from "./prompts";
 import { mentionsConcept, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { conceptsForQuestion, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, queryForKind, sanitizeConcepts, searchAttempts } from "./terms";
 import { createClinicalAi, createWorkersAi } from "./provider";
@@ -841,11 +841,113 @@ test("pré-diabetes exige a condição no título ou no resumo e a primeira linh
   const onTopic = record("61", "Revisão sistemática", "metformin prediabetes progression");
   const selected = selectForSynthesis([acne, onTopic], ["metformin"], 6, "Metformina no pré-diabetes");
   assert.deepEqual(selected.map((item) => item.pmid), ["61"]);
-  assert.match(SUMMARY_SYSTEM, /primeira linha responde direto/);
+  const impaired = record("62", "Revisão sistemática", "metformin");
+  impaired.title = "Exercise versus metformin in impaired glucose tolerance";
+  const fasting = record("63", "Diretriz", "metformin");
+  fasting.title = "Consensus on impaired fasting glucose";
+  const kept = selectForSynthesis([acne, impaired, fasting], ["metformin"], 6, "Metformina no pré-diabetes");
+  assert.deepEqual(kept.map((item) => item.pmid).sort(), ["62", "63"]);
+  assert.equal(isYesNoQuestion("quais indicações de uso de sglt2 na prática de saúde da família"), false);
+  assert.equal(isYesNoQuestion("A metformina reduz a progressão do pré-diabetes?"), true);
+  assert.equal(isYesNoQuestion("Devo usar metformina?"), true);
+  assert.doesNotMatch(SUMMARY_SYSTEM, /sim ou não/);
   const screen = readFileSync(new URL("../../components/cardio/clinical-question.tsx", import.meta.url), "utf8");
   const css = readFileSync(new URL("../../app/premium.css", import.meta.url), "utf8");
   assert.match(screen, /item\.type/);
   assert.match(css, /-webkit-line-clamp:\s*2/);
+});
+
+test("itens vazio com artigos pertinentes repete uma vez sem a linha de sim ou não", async () => {
+  const prompts: Array<{ question: string; direct?: boolean }> = [];
+  const article = record("90", "Diretriz", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  const answer = await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2 na prática de saúde da família",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+      },
+      async summarize(question, _records, options) {
+        prompts.push({ question, direct: options?.direct });
+        if (prompts.length === 1) return JSON.stringify({ itens: [] });
+        return JSON.stringify({
+          itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca", pmid: "90" }],
+        });
+      },
+    },
+    search: async () => [article],
+  });
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[0].direct, false);
+  assert.equal(prompts[1].direct, false);
+  assert.match(prompts[1].question, /itens veio vazia/);
+  assert.equal(answer.sufficient, true);
+});
+
+test("Sim só fica se o trecho comparar com placebo, controle ou sem tratamento", () => {
+  const doses = record("91", "Revisão sistemática", "metformin");
+  doses.abstract = "Metformin 750 mg compared with other doses lowered glucose.";
+  const refused = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Sim, a metformina reduz a glicose.", pmid: "91" }],
+  }), [doses], ["metformin"]);
+  assert.equal(refused.sufficient, false);
+  const placebo = record("92", "Revisão sistemática", "metformin");
+  placebo.abstract = "Metformin reduced new diabetes versus placebo.";
+  const kept = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Sim, a metformina reduz o diabetes em relação ao placebo.", pmid: "92" }],
+  }), [placebo], ["metformin"]);
+  assert.equal(kept.sufficient, true);
+  assert.match(kept.answer, /^Sim,/);
+});
+
+test("cache de termos persiste no D1 e cai para a memória", async () => {
+  const db = new DatabaseSync(":memory:");
+  db.exec("CREATE TABLE clinical_term_cache (question_key text primary key, concepts text not null, updated_at integer not null)");
+  const adapter = {
+    prepare(sql: string) {
+      return {
+        bind(...params: unknown[]) {
+          return {
+            async first<T>() {
+              return (db.prepare(sql).get(...(params as never[])) as T | undefined) ?? null;
+            },
+            async run() {
+              db.prepare(sql).run(...(params as never[]));
+              return { meta: { changes: 1 } };
+            },
+          };
+        },
+      };
+    },
+  };
+  let calls = 0;
+  const ai: ClinicalAi = {
+    async searchTerms() {
+      calls += 1;
+      return JSON.stringify({ concepts: [["metformin"]] });
+    },
+    async summarize() {
+      return JSON.stringify({ sufficient: false, answer: "", citations: [] });
+    },
+  };
+  const question = "A metformina reduz eventos no pré-diabetes desta vez?";
+  await answerClinicalQuestion({
+    question,
+    cacheTerms: true,
+    db: adapter,
+    ai,
+    search: async () => [],
+  });
+  await answerClinicalQuestion({
+    question: "a metformina reduz eventos no pre-diabetes desta vez?",
+    cacheTerms: true,
+    db: adapter,
+    ai,
+    search: async () => [],
+  });
+  assert.equal(calls, 1);
+  const row = db.prepare("SELECT concepts FROM clinical_term_cache").get() as { concepts: string };
+  assert.match(row.concepts, /metformin/);
 });
 
 test("frase que copia o exemplo do prompt sai quando o resumo não diz isso", () => {

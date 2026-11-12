@@ -33,7 +33,7 @@ export type ClinicalSearchOptions = {
 
 export type ClinicalAi = {
   searchTerms(question: string): Promise<string>;
-  summarize(question: string, records: EvidenceRecord[]): Promise<string>;
+  summarize(question: string, records: EvidenceRecord[], options?: { direct?: boolean }): Promise<string>;
 };
 
 export const CLINICAL_DISCLAIMER =
