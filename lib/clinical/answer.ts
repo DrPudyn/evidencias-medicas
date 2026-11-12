@@ -58,7 +58,7 @@ async function gatherIndications(
     limit: 6,
   });
   if (merged.length) return merged;
-  for (const term of searchAttempts(scoped, today)) {
+  for (const term of searchAttempts(scoped, today, question)) {
     const found = await search(term);
     const selected = selectForSynthesis(found, main, 6, question);
     if (selected.length) return selected;
@@ -94,7 +94,7 @@ export async function answerClinicalQuestion(input: {
       "Não foi possível montar uma busca no PubMed a partir desta pergunta. Nenhuma conclusão foi completada com conhecimento geral.",
     );
   }
-  const attempts = searchAttempts(scoped, today);
+  const attempts = searchAttempts(scoped, today, question);
   const main = scoped.find((concept) => !isContextConcept(concept) && !concept.every(isConditionTerm))
     || scoped.find((concept) => !isContextConcept(concept))
     || scoped[0];

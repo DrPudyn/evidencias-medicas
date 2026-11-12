@@ -165,7 +165,7 @@ export function evidenceQuery(concepts: SearchConcept[], today?: string) {
     });
     return `(${synonyms.join(" OR ")})`;
   });
-  const typed = `${groups.join(" AND ")} AND ${HIGH_LEVEL_EVIDENCE_FILTER} AND NOT (animals[mh] NOT humans[mh])`;
+  const typed = `${groups.join(" AND ")} AND ${HIGH_LEVEL_EVIDENCE_FILTER} NOT (animals[mh] NOT humans[mh])`;
   return today ? `${typed} AND ${publicationDateClause(today)}` : typed;
 }
 
@@ -180,35 +180,37 @@ export function isContextConcept(concept: SearchConcept) {
   return concept.length > 0 && concept.every((term) => CONTEXT_PHRASES.some((phrase) => term.includes(phrase)));
 }
 
-function pairsOf(concepts: SearchConcept[]) {
-  const pairs: SearchConcept[][] = [];
-  for (let left = 0; left < concepts.length; left += 1) {
-    for (let right = left + 1; right < concepts.length; right += 1) {
-      pairs.push([concepts[left], concepts[right]]);
-    }
-  }
-  return pairs;
+function mentionsPhrase(haystack: string, phrase: string) {
+  const body = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^a-z0-9-])${body}(?:[^a-z0-9-]|$)`, "i").test(` ${haystack} `);
 }
 
 /**
- * Full query, then the same query without context concepts, then clinical pairs,
- * then single clinical concepts, and a last try of the main concept without the date window.
+ * Full query, then the same query without outcome or context concepts,
+ * then the drug with each named condition, then the drug alone.
+ * The outcome or context concept is removed before the search falls back to the drug by itself.
  */
-export function searchAttempts(concepts: SearchConcept[], today: string) {
-  const clinical = concepts.filter((concept) => !isContextConcept(concept));
+export function searchAttempts(concepts: SearchConcept[], today: string, question = "") {
   const context = concepts.filter((concept) => isContextConcept(concept));
+  const clinical = concepts.filter((concept) => !isContextConcept(concept));
   const core = clinical.length ? clinical : concepts;
+  const anchor = core[0];
+  const others = core.slice(1);
+  const named = question ? others.filter((concept) => questionNamesConcept(question, concept)) : others;
+  const extras = question ? others.filter((concept) => !questionNamesConcept(question, concept)) : [];
   const attempts: string[] = [];
   const push = (group: SearchConcept[], dated: boolean) => {
-    if (!group.length) return;
-    const term = dated ? evidenceQuery(group, today) : evidenceQuery(group);
+    const usable = group.filter((concept) => concept?.length);
+    if (!usable.length) return;
+    const term = dated ? evidenceQuery(usable, today) : evidenceQuery(usable);
     if (!attempts.includes(term)) attempts.push(term);
   };
   push([...core, ...context], true);
-  if (context.length) push(core, true);
-  for (const pair of pairsOf(core)) push(pair, true);
-  for (const concept of core) push([concept], true);
-  push([core[0]], false);
+  if (extras.length) push([anchor, ...named, ...context], true);
+  if (context.length) push([anchor, ...named], true);
+  for (const condition of named) push([anchor, condition], true);
+  push([anchor], true);
+  push([anchor], false);
   return attempts;
 }
 
@@ -240,6 +242,12 @@ const CONDITION_ALIASES: Array<{ id: string; search: string[]; pattern: RegExp; 
     search: ["heart failure", "heart failure with reduced ejection fraction", "HFrEF"],
     pattern: /\b(?:hfref|hfpef|heart failure(?: with (?:reduced|preserved) ejection fraction)?|reduced ejection fraction|preserved ejection fraction)\b/i,
     portuguese: /insuficiencia cardiaca|fracao de ejecao/,
+  },
+  {
+    id: "prediabetes",
+    search: ["prediabetic state", "prediabetes"],
+    pattern: /\bpre-?diabet(?:ic|es)(?: state)?\b/i,
+    portuguese: /pre-?diabetes/,
   },
   {
     id: "t2dm",
@@ -302,9 +310,10 @@ export function questionNamesConcept(question: string, concept: SearchConcept) {
     if (primary && /primary/.test(term)) return true;
     return false;
   }
-  if (concept.some((term) => asked.includes(fold(term)))) return true;
+  if (CONDITION_ALIASES.some((alias) => (alias.pattern.test(concept.join(" ")) || concept.some((term) => alias.pattern.test(term))) && aliasNamedInQuestion(question, alias))) return true;
+  if (concept.some((term) => mentionsPhrase(asked, fold(term)))) return true;
   for (const [source, target] of PT_EN) {
-    if (!asked.includes(fold(source))) continue;
+    if (!mentionsPhrase(asked, fold(source))) continue;
     const english = fold(target);
     const matches = concept.some((term) => {
       const folded = fold(term);

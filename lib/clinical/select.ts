@@ -63,7 +63,7 @@ export function mentionsConcept(article: Pick<EvidenceRecord, "title" | "abstrac
 
 /** The class has to be the subject: title or conclusion, not a passing mention. */
 export function isVeterinary(title: string) {
-  return /\b(cats?|dogs?|felines?|canines?|veterinary|kittens?|puppies|equine|bovine)\b/i.test(title);
+  return /\b(cats?|dogs?|felines?|canines?|veterinary|kittens?|puppies|equine|bovine|rodents?|rats?|mice|mouse|murine|preclinical|experimental|animal models?)\b/i.test(title);
 }
 
 const SOCIETY = /\b(ADA|KDIGO|ESC|EASD|AHA|ACC|SBD|SBC|KDOQI|NICE|AACE|USPSTF)\b|American Diabetes Association|European Society of Cardiology|Kidney Disease: Improving Global Outcomes|Sociedade Brasileira de Diabetes|Sociedade Brasileira de Cardiologia|Endocrine Society/i;

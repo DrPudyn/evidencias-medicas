@@ -610,14 +610,49 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
 });
 
 test("literatura veterinária sai da busca e da seleção", () => {
-  const query = evidenceQuery([["sglt2 inhibitors"]], "2026/11/12");
-  assert.match(query, /NOT \(animals\[mh\] NOT humans\[mh\]\)/);
+  const queries = [
+    evidenceQuery([["sglt2 inhibitors"]], "2026/11/12"),
+    evidenceQuery([["metformin"], ["prediabetic state"]], "2026/11/12"),
+    ...searchAttempts([["sglt2 inhibitors"], ["primary care"]], "2026/11/12"),
+    ...searchAttempts([["metformin"], ["prediabetic state"], ["diabetes mellitus type 2"]], "2026/11/12", "Metformina no pré-diabetes"),
+    queryForKind(evidenceQuery([["sglt2 inhibitors"]], "2026/11/12"), "guideline"),
+    queryForKind(evidenceQuery([["sglt2 inhibitors"], ["adverse effects", "perioperative"]], "2026/11/12"), "high-level"),
+  ];
+  for (const query of queries) {
+    assert.equal(query.includes("AND NOT"), false, query);
+    assert.match(query, / NOT \(animals\[mh\] NOT humans\[mh\]\)/);
+  }
   const cats = record("42014100", "Diretriz", "sglt2");
   cats.title = "AAHA Diabetes Management Guidelines for Cats";
   cats.abstract = "CONCLUSIONS: SGLT2 inhibitors in feline diabetes.";
+  const rodent = record("22", "Revisão sistemática", "sglt2 inhibitors");
+  rodent.title = "SGLT2 inhibitors in a rodent animal model";
+  const murine = record("23", "Revisão sistemática", "sglt2 inhibitors in mice");
+  murine.title = "Experimental murine study of SGLT2 inhibitors";
   const human = record("21", "Diretriz", "sglt2 inhibitors in adults");
-  const selected = selectForSynthesis([cats, human], ["sglt2 inhibitors"], 6, "indicações de sglt2");
+  const selected = selectForSynthesis([cats, rodent, murine, human], ["sglt2 inhibitors"], 6, "indicações de sglt2");
   assert.deepEqual(selected.map((item) => item.pmid), ["21"]);
+});
+
+test("pré-diabetes não puxa diabetes tipo 2 e o fallback tira esse conceito antes do fármaco só", () => {
+  const question = "Metformina no pré-diabetes";
+  const scoped = conceptsForQuestion(sanitizeConcepts({
+    concepts: [["Metformin"], ["Prediabetic State"], ["Diabetes Mellitus, Type 2"]],
+  }), question);
+  assert.deepEqual(scoped, [["metformin"], ["prediabetic state"]]);
+  const attempts = searchAttempts(
+    [["metformin"], ["prediabetic state"], ["diabetes mellitus type 2"]],
+    "2026/11/12",
+    question,
+  );
+  assert.match(attempts[0], /metformin/);
+  assert.match(attempts[0], /prediabetic state/);
+  assert.match(attempts[0], /diabetes mellitus type 2/);
+  const withoutDiabetes = attempts.findIndex((term) => /metformin/.test(term) && /prediabetic state/.test(term) && !/diabetes mellitus type 2/.test(term));
+  const drugOnly = attempts.findIndex((term) => /metformin/.test(term) && !/prediabetic/.test(term) && !/diabetes mellitus/.test(term));
+  assert.ok(withoutDiabetes > 0);
+  assert.ok(drugOnly > withoutDiabetes);
+  assert.equal(attempts.some((term) => term.includes("AND NOT")), false);
 });
 
 test("certeza limitada e interpretação cautelosa exigem ressalva", () => {
