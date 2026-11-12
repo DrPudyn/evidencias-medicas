@@ -49,12 +49,12 @@ const SUMMARY_SCHEMA = {
 };
 
 export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): ClinicalAi {
-  async function complete(system: string, user: string, maxTokens: number, schema: Record<string, unknown>) {
+  async function complete(system: string, user: string, maxTokens: number, schema: Record<string, unknown>, temperature: number) {
     const messages = [
       { role: "system", content: system },
       { role: "user", content: user },
     ];
-    const base = { messages, max_tokens: maxTokens, temperature: 0.2 };
+    const base = { messages, max_tokens: maxTokens, temperature };
     try {
       const structured = await ai.run(model, {
         ...base,
@@ -72,10 +72,10 @@ export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): Clinic
   }
   return {
     searchTerms(question) {
-      return complete(TERMS_SYSTEM, question, 320, TERMS_SCHEMA);
+      return complete(TERMS_SYSTEM, question, 280, TERMS_SCHEMA, 0);
     },
     summarize(question, records) {
-      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 700, SUMMARY_SCHEMA);
+      return complete(SUMMARY_SYSTEM, summaryUser(question, records), 600, SUMMARY_SCHEMA, 0.2);
     },
   };
 }

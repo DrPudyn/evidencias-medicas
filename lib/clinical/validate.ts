@@ -1,4 +1,6 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
+import type { SearchConcept } from "./terms";
+import { conceptNeedles } from "./select";
 import { CLINICAL_DISCLAIMER } from "./types";
 
 const ANSWER_MAX = 2200;
@@ -74,7 +76,63 @@ function markersOf(unit: string) {
   return found;
 }
 
-export function validateSynthesis(raw: string, records: EvidenceRecord[]): ClinicalAnswer {
+const OUTCOME_PAIRS: Array<[string, string]> = [
+  ["hospitalization", "hospitalizacao"],
+  ["heart failure", "insuficiencia cardiaca"],
+  ["mortality", "mortalidade"],
+  ["cardiovascular", "cardiovascular"],
+  ["kidney", "renal"],
+  ["albuminuria", "albuminuria"],
+  ["fracture", "fratura"],
+  ["weight", "peso"],
+  ["myocardial", "infarto"],
+];
+
+const OTHER_DRUGS = ["semaglutide", "liraglutide", "dulaglutide", "tirzepatide", "exenatide", "insulin", "sitagliptin"];
+
+function outcomeHits(line: string) {
+  const folded = fold(line);
+  return OUTCOME_PAIRS.filter(([english, portuguese]) => folded.includes(portuguese) || folded.includes(english));
+}
+
+function sentenceHasClass(sentence: string, needles: string[]) {
+  const folded = fold(sentence);
+  return needles.some((needle) => folded.includes(needle));
+}
+
+function sentenceHasOtherDrug(sentence: string, needles: string[]) {
+  const folded = fold(sentence);
+  return OTHER_DRUGS.some((drug) => folded.includes(drug) && !needles.some((needle) => drug.includes(needle) || needle.includes(drug)));
+}
+
+/** True when the line's outcome never shares an excerpt sentence with the asked class alone. */
+export function attributesForeignBenefit(line: string, excerpt: string, concept: SearchConcept) {
+  const needles = conceptNeedles(concept);
+  const hits = outcomeHits(line);
+  if (!needles.length || !hits.length) return false;
+  const sentences = excerpt.split(/\n+|(?<=[.!?])\s+/);
+  const supporting = sentences.filter((sentence) => {
+    const folded = fold(sentence);
+    return hits.some(([english, portuguese]) => folded.includes(english) || folded.includes(portuguese));
+  });
+  if (!supporting.length) return true;
+  return !supporting.some((sentence) => sentenceHasClass(sentence, needles) && !sentenceHasOtherDrug(sentence, needles));
+}
+
+export function omitsLowCertainty(line: string, excerpt: string) {
+  const sentences = excerpt.split(/(?<=[.!?])\s+/);
+  const low = sentences.some((sentence) => /very low certainty|low certainty|low-certainty/.test(sentence.toLowerCase()));
+  if (!low) return false;
+  return !/baixa|incerta/.test(fold(line));
+}
+
+export function leavesOutcomeInEnglish(line: string) {
+  const english = /\b(hospitalization for heart failure|sglt2 inhibitors|sodium-glucose transporter)\b/i.test(line);
+  const portuguese = /hospitalizaç|hospitalizacao\b|insufici[eê]ncia|inibidores? de sglt2/i.test(line);
+  return english && !portuguese;
+}
+
+export function validateSynthesis(raw: string, records: EvidenceRecord[], concept?: SearchConcept): ClinicalAnswer {
   const byId = new Map(records.map((record) => [record.pmid, record]));
   let parsed: Record<string, unknown> | null = null;
   try {
@@ -117,7 +175,9 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[]): Clini
     }
     if (invalid || !resolved.length) continue;
     const citedText = resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
+    const citedAbstract = resolved.map((record) => record.abstract || "").join("\n");
     if (echoesPrompt(unit, citedText)) continue;
+    if (concept && (attributesForeignBenefit(unit, citedAbstract, concept) || omitsLowCertainty(unit, citedAbstract) || leavesOutcomeInEnglish(unit))) continue;
     for (const record of resolved) {
       if (!appearance.includes(record.pmid)) appearance.push(record.pmid);
     }

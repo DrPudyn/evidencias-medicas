@@ -1,6 +1,6 @@
 import type { ClinicalAi, EvidenceRecord } from "./types";
 import { selectForSynthesis } from "./select";
-import { fallbackSearchTerms, isContextConcept, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
+import { conceptsForQuestion, fallbackSearchTerms, isContextConcept, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
 import { insufficientAnswer, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
@@ -31,18 +31,19 @@ export async function answerClinicalQuestion(input: {
     );
   }
   const today = saoPauloPublicationDay();
-  const attempts = searchAttempts(concepts, today);
-  const main = concepts.find((concept) => !isContextConcept(concept)) || concepts[0];
+  const scoped = conceptsForQuestion(concepts, question);
+  const attempts = searchAttempts(scoped, today);
+  const main = scoped.find((concept) => !isContextConcept(concept)) || scoped[0];
   let records: EvidenceRecord[] = [];
-  const pooled: EvidenceRecord[] = [];
-  for (const term of pairQueries(concepts, today)) {
-    pooled.push(...await input.search(term));
+  const pairTerms = pairQueries(scoped, today);
+  if (pairTerms.length) {
+    const batches = await Promise.all(pairTerms.map((term) => input.search(term)));
+    records = selectForSynthesis(uniqueRecords(batches.flat()), main, 5, question);
   }
-  records = selectForSynthesis(uniqueRecords(pooled), main, 6);
   if (!records.length) {
     for (const term of attempts) {
       const found = await input.search(term);
-      const selected = selectForSynthesis(found, main, 6);
+      const selected = selectForSynthesis(found, main, 5, question);
       if (selected.length) {
         records = selected;
         break;
@@ -56,7 +57,7 @@ export async function answerClinicalQuestion(input: {
   }
   try {
     const raw = await input.ai.summarize(question, records);
-    return validateSynthesis(raw, records);
+    return validateSynthesis(raw, records, main);
   } catch {
     return insufficientAnswer(
       "A busca recuperou registros, mas a síntese falhou. Nenhuma conclusão foi produzida.",

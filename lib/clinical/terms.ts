@@ -212,7 +212,36 @@ export function searchAttempts(concepts: SearchConcept[], today: string) {
   return attempts;
 }
 
-/** Drug or class plus each other clinical condition, then the anchor alone. Context settings are not paired. */
+/**
+ * A condition counts only when the question names it.
+ * Indication questions that name no disease therefore search the class alone,
+ * with the review and guideline filter already inside evidenceQuery.
+ */
+export function questionNamesConcept(question: string, concept: SearchConcept) {
+  const asked = fold(question);
+  if (concept.some((term) => asked.includes(fold(term)))) return true;
+  for (const [source, target] of PT_EN) {
+    const english = fold(target);
+    const matches = concept.some((term) => {
+      const folded = fold(term);
+      return folded.includes(english) || english.includes(folded);
+    });
+    if (matches && asked.includes(fold(source))) return true;
+  }
+  if (/sglt/.test(concept.join(" ").toLowerCase()) && /sglt-?2|isglt2/.test(asked)) return true;
+  return false;
+}
+
+export function conceptsForQuestion(concepts: SearchConcept[], question: string) {
+  if (!question.trim()) return concepts;
+  const clinical = concepts.filter((concept) => !isContextConcept(concept));
+  const context = concepts.filter((concept) => isContextConcept(concept));
+  if (!clinical.length) return concepts;
+  const named = clinical.slice(1).filter((concept) => questionNamesConcept(question, concept));
+  return [clinical[0], ...named, ...context];
+}
+
+/** Drug or class plus each other named clinical condition, then the anchor alone. */
 export function pairQueries(concepts: SearchConcept[], today: string) {
   const clinical = concepts.filter((concept) => !isContextConcept(concept));
   if (clinical.length < 2) return [];

@@ -220,6 +220,16 @@ body:has(.admin-shell)::before { display: none; }
 .footer { padding-top: 28px; }
 .install-app { border-radius: 24px; background: rgba(255, 252, 247, 0.8); color: var(--ink); border-color: rgba(42, 33, 28, 0.08); }
 .install-app button { border-radius: 999px; background: #2a211c; }
+.analytics-consent {
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  z-index: 1;
+  margin: 16px auto 28px;
+  max-width: 1100px;
+}
+.analytics-consent p { max-height: 2.8em; overflow: hidden; }
 
 .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.7s ease, transform 0.7s ease; }
 .js .reveal.is-visible { opacity: 1; transform: none; }
