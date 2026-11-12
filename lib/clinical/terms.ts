@@ -304,8 +304,28 @@ export type FinalSetItem = { pmid: string; excerpt: string };
 
 const finalSets = new Map<string, { items: FinalSetItem[]; at: number }>();
 
+export function canonicalTerm(term: string) {
+  const folded = fold(term).replace(/co-transporter/g, "cotransporter").replace(/co transporter/g, "cotransporter");
+  if (/sglt-?2|gliflozin|sodium-glucose cotransporter|sodium glucose cotransporter|sodium-glucose transporter/.test(folded)) return "sglt2 inhibitors";
+  if (folded === "metformin" || folded === "metformina") return "metformin";
+  if (/glp-?1|glucagon-like peptide/.test(folded)) return "glp-1 receptor agonists";
+  return folded;
+}
+
+/** Indication questions about a known class use one fixed term list, not the model's wording. */
+export function knownClassTerms(question: string) {
+  if (!isIndicationQuestion(question)) return null;
+  const folded = fold(question);
+  if (/isglt2|sglt-?2|gliflozin|cotransportador/.test(folded)) return ["sglt2 inhibitors", "SGLT2 inhibitors", "sodium-glucose cotransporter 2"];
+  if (/metformina|\bmetformin\b/.test(folded)) return ["metformin"];
+  if (/glp-?1|semaglutid|liraglutid|dulaglutid/.test(folded)) return ["GLP-1 receptor agonists"];
+  return null;
+}
+
 export function finalSetKey(question: string, concepts: string[][]) {
-  const terms = concepts.map((concept) => concept.map((term) => term.toLowerCase()).sort().join("|")).sort().join("||");
+  const fixed = knownClassTerms(question);
+  const source = fixed ? [fixed] : concepts;
+  const terms = source.map((concept) => concept.map((term) => canonicalTerm(term)).sort().join("|")).sort().join("||");
   return `final|${normalizeQuestion(question)}|${terms}`;
 }
 
@@ -337,7 +357,7 @@ export type ApprovedCard = {
 
 const approvedCards = new Map<string, { card: ApprovedCard; at: number }>();
 
-export const CARD_PIPELINE = "10";
+export const CARD_PIPELINE = "12";
 
 export function cardCacheKey(question: string) {
   return `card|${CARD_PIPELINE}|${normalizeQuestion(question)}`;

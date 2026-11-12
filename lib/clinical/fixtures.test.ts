@@ -6,8 +6,8 @@ import { answerClinicalQuestion } from "./answer";
 import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
 import { isHeartFailureSlot, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { focusAbstract } from "../pubmed-xml";
-import { cardCacheKey, evidenceQuery, expandClassTerms, finalSetKey, forceMetforminType2, readApprovedCard, readFinalSet, readResultCache, writeApprovedCard, writeFinalSet, writeResultCache } from "./terms";
-import { isCaveatSentence, normalizeOddCaps, sourceExcerpt, validateSynthesis } from "./validate";
+import { CARD_PIPELINE, canonicalTerm, cardCacheKey, evidenceQuery, expandClassTerms, finalSetKey, forceMetforminType2, knownClassTerms, readApprovedCard, readFinalSet, readResultCache, writeApprovedCard, writeFinalSet, writeResultCache } from "./terms";
+import { isCaveatSentence, metforminControlExcerpt, normalizeOddCaps, reservedCodeLine, sourceExcerpt, validateSynthesis } from "./validate";
 import type { EvidenceRecord } from "./types";
 
 const PMIDs = [
@@ -48,6 +48,7 @@ const PMIDs = [
   "38179304",
   "36592186",
   "31354627",
+  "30592787",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -1046,7 +1047,7 @@ test("o conjunto final fica no cache por sete dias e ignora a ordem da busca", a
   }, adapter, writtenAt);
   assert.match((await readApprovedCard("Pergunta do card aprovado isolado", adapter, writtenAt + 6 * 24 * 60 * 60 * 1000))?.answer || "", /internação por IC/);
   assert.equal(await readApprovedCard("Pergunta do card aprovado isolado", adapter, writtenAt + 8 * 24 * 60 * 60 * 1000), null);
-  assert.match(cardCacheKey(question), /card\|10\|/);
+  assert.match(cardCacheKey(question), new RegExp(`card\\|${CARD_PIPELINE}\\|`));
 });
 
 test("vaga de IC fica com iSGLT2 isolado e combinação não vira efeito da classe", () => {
@@ -1106,4 +1107,177 @@ test("28941313 não corta no meio da frase e 31354627 lidera a comparação com 
     "A metformina reduz a progressão do pré-diabetes?",
   );
   assert.equal(selected[0]?.pmid, "31354627");
+});
+
+test("card só é gravado com vagas preenchidas e sem linha descartada", async () => {
+  const db = new (await import("node:sqlite")).DatabaseSync(":memory:");
+  db.exec("CREATE TABLE clinical_result_cache (query_key text primary key, pmids text not null, updated_at integer not null)");
+  const adapter = {
+    prepare(sql: string) {
+      return {
+        bind(...params: unknown[]) {
+          return {
+            async first<T>() {
+              return (db.prepare(sql).get(...(params as never[])) as T | undefined) ?? null;
+            },
+            async run() {
+              db.prepare(sql).run(...(params as never[]));
+              return { meta: { changes: 1 } };
+            },
+          };
+        },
+      };
+    },
+  };
+  const question = "Quais as indicações de iSGLT2 no cache rigoroso?";
+  let summaries = 0;
+  const ai = {
+    async searchTerms() {
+      return JSON.stringify({ concepts: [["sodium-glucose cotransporter"]] });
+    },
+    async summarize() {
+      summaries += 1;
+      return JSON.stringify({
+        itens: [
+          { texto: "reduz a internação por IC.", pmid: "38179304" },
+          { texto: "O iSGLT2 é indicado para todo adulto.", pmid: "99999999" },
+        ],
+      });
+    },
+  };
+  const search = async () => [fixture("38179304"), fixture("39781571"), fixture("38639549")];
+  const first = await answerClinicalQuestion({ question, ai, search, db: adapter, cacheTerms: true });
+  assert.match(first.answer, /Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento/);
+  assert.match(first.answer, /reduz a internação por IC/);
+  assert.match(first.answer, /progressão da DRC/);
+  assert.equal(await readApprovedCard(question, adapter), null);
+  await answerClinicalQuestion({ question, ai, search, db: adapter, cacheTerms: true });
+  assert.equal(summaries, 2);
+  summaries = 0;
+  const cleanQuestion = "Quais as indicações de iSGLT2 no cache limpo?";
+  const clean = {
+    async searchTerms() {
+      return JSON.stringify({ concepts: [["Sodium-Glucose Transporter 2"]] });
+    },
+    async summarize() {
+      summaries += 1;
+      return JSON.stringify({
+        itens: [
+          { texto: "DM2 com IC: reduz a internação por IC.", pmid: "38179304", trecho: "All SGLT2is significantly reduced HFH compared to standard of care (SoC) alone." },
+          { texto: "DM2: reduz a progressão da DRC e a internação por IC.", pmid: "38639549", trecho: "SGLT2 inhibitors reduce progression of chronic kidney disease (CKD) and heart failure hospitalizations" },
+          { texto: "Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento.", pmid: "39781571" },
+        ],
+      });
+    },
+  };
+  const saved = await answerClinicalQuestion({ question: cleanQuestion, ai: clean, search, db: adapter, cacheTerms: true });
+  assert.equal(saved.discardedCitations.length, 0);
+  assert.equal(saved.sufficient, true);
+  const again = await answerClinicalQuestion({ question: cleanQuestion, ai: clean, search, db: adapter, cacheTerms: true });
+  assert.equal(again.answer, saved.answer);
+  assert.equal(summaries, 1);
+});
+
+test("termos fixos de classe e trechos de metformina, indicação e conclusão genérica", () => {
+  assert.deepEqual(knownClassTerms("quais indicações de iSGLT2"), ["sglt2 inhibitors", "SGLT2 inhibitors", "sodium-glucose cotransporter 2"]);
+  assert.equal(canonicalTerm("sodium-glucose cotransporter"), canonicalTerm("Sodium-Glucose Transporter 2"));
+  assert.equal(
+    finalSetKey("indicações de iSGLT2", [["sodium-glucose cotransporter"]]),
+    finalSetKey("indicações de iSGLT2", [["Sodium-Glucose Transporter 2"]]),
+  );
+  assert.equal(metforminControlExcerpt(fixture("28941313").abstract), "");
+  assert.equal(metforminControlExcerpt(fixture("31354627").abstract), "");
+  assert.equal(metforminControlExcerpt(fixture("30592787").abstract), "");
+  const cancer = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "A metformina reduz o câncer.", pmid: "28941313" }],
+  }), [fixture("28941313")], ["metformin"], "A metformina reduz a progressão do pré-diabetes?");
+  assert.equal(cancer.sufficient, false);
+  const indicated = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "O iSGLT2 é indicado para reduzir a morte.", pmid: "32877652" }],
+  }), [fixture("32877652")], ["sglt2 inhibitors"]);
+  assert.equal(indicated.sufficient, false);
+  const generic = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "A metformina reduz a incidência de diabetes.",
+      pmid: "41151201",
+      trecho: "These findings underscore the value of a multidimensional and personalized approach to prediabetes management, emphasizing evidence-based pharmacological options alongside behavioral and digital health strategies.",
+    }],
+  }), [fixture("41151201")], ["metformin"], "A metformina reduz a progressão do pré-diabetes?");
+  assert.equal(generic.sufficient, false);
+  const invented = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "reduz a internação por IC e placebo.",
+      pmid: "30653708",
+      trecho: "To compare the cardiovascular efficacy and safety of sodium-glucose co-transporter-2 (SGLT2) inhibitors and glucagon-like peptide-1 receptor agonists (GLP-1RAs) in adults with Type 2 diabetes.",
+    }],
+  }), [fixture("30653708")], ["sglt2 inhibitors"]);
+  assert.doesNotMatch(invented.answer, /placebo/);
+  assert.match(reservedCodeLine(fixture("39781571")), /^Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento/);
+  assert.match(reservedCodeLine(fixture("38179304")), /reduz a internação por IC/);
+  assert.match(reservedCodeLine(fixture("38639549")), /progressão da DRC/);
+  assert.match(reservedCodeLine(fixture("40813122")), /benefício cardiovascular e renal/);
+});
+
+test("rótulo DM2 em estudo de pré-diabetes é rejeitado e o mesmo achado não se repete", () => {
+  const wrong = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2: a metformina reduz a incidência de diabetes.", pmid: "28941313" }],
+  }), [fixture("28941313")], ["metformin"], "quais indicações da metformina");
+  assert.equal(wrong.sufficient, false);
+  const labeled = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "A metformina reduz a incidência de diabetes.", pmid: "28941313" }],
+  }), [fixture("28941313")], ["metformin"], "quais indicações da metformina");
+  assert.match(labeled.answer, /^Pré-diabetes:/);
+  assert.doesNotMatch(labeled.answer, /^DM2:/);
+  const repeated = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "A metformina reduz a incidência de diabetes.", pmid: "31354627" },
+      { texto: "A metformina reduz a incidência de diabetes vs placebo.", pmid: "28941313" },
+    ],
+  }), [fixture("31354627"), fixture("28941313")], ["metformin"], "quais indicações da metformina");
+  assert.equal(repeated.answer.split("\n").filter(Boolean).length, 1);
+});
+
+test("descarte na primeira resposta impede o cache mesmo quando a retentativa fica limpa", async () => {
+  const db = new (await import("node:sqlite")).DatabaseSync(":memory:");
+  db.exec("CREATE TABLE clinical_result_cache (query_key text primary key, pmids text not null, updated_at integer not null)");
+  const adapter = {
+    prepare(sql: string) {
+      return {
+        bind(...params: unknown[]) {
+          return {
+            async first<T>() {
+              return (db.prepare(sql).get(...(params as never[])) as T | undefined) ?? null;
+            },
+            async run() {
+              db.prepare(sql).run(...(params as never[]));
+              return { meta: { changes: 1 } };
+            },
+          };
+        },
+      };
+    },
+  };
+  const question = "Quais as indicações de iSGLT2 na retentativa?";
+  let calls = 0;
+  const ai = {
+    async searchTerms() {
+      return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+    },
+    async summarize() {
+      calls += 1;
+      if (calls === 1) return JSON.stringify({ itens: [{ texto: "O iSGLT2 é indicado para todo adulto.", pmid: "99999999" }] });
+      return JSON.stringify({
+        itens: [
+          { texto: "DM2 com IC: reduz a internação por IC.", pmid: "38179304" },
+          { texto: "DM2: reduz a progressão da DRC e a internação por IC.", pmid: "38639549" },
+          { texto: "Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento.", pmid: "39781571" },
+        ],
+      });
+    },
+  };
+  const search = async () => [fixture("38179304"), fixture("39781571"), fixture("38639549")];
+  const answer = await answerClinicalQuestion({ question, ai, search, db: adapter, cacheTerms: true });
+  assert.match(answer.answer, /Cuidados: suspender o iSGLT2/);
+  assert.equal(calls, 2);
+  assert.equal(await readApprovedCard(question, adapter), null);
 });

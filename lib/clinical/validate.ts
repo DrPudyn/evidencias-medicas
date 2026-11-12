@@ -182,6 +182,7 @@ function withAbbreviations(text: string) {
     .replace(/\bckd\b/g, "ckd kidney")
     .replace(/\bhfref\b/g, "hfref heart failure icfer")
     .replace(/\bhfpef\b/g, "hfpef heart failure icfep")
+    .replace(/\bhfh\b/g, "hfh heart failure hospitalization")
     .replace(/\bhf\b/g, "hf heart failure");
 }
 
@@ -387,7 +388,8 @@ export function dropMissingOutcomes(line: string, support: string) {
   }
   text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
   const claimed = OUTCOME_CLAUSES.filter(([linePattern]) => linePattern.test(text));
-  const missing = claimed.filter(([, supportPattern]) => !supportPattern.test(support));
+  const expanded = withAbbreviations(support);
+  const missing = claimed.filter(([, supportPattern]) => !supportPattern.test(support) && !supportPattern.test(expanded));
   const effect = /\b(reduz\w*|melhor\w*|aument\w*|represent\w*)\b/i.test(text);
   if (effect && claimed.length > 0 && missing.length === claimed.length) return null;
   const body = text.replace(/^(?:DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
@@ -471,6 +473,20 @@ function studiedPopulations(excerpt: string) {
   return pops;
 }
 
+/** Prediabetes cohort, established type 2 diabetes, or a paper that studies both. */
+export function metforminCohort(title: string, abstract: string) {
+  const blob = `${title}\n${abstract}`;
+  const prediabetes = /pre-?diabetes|impaired glucose tolerance|impaired fasting|\bigt\b|\bifg\b/i.test(blob);
+  const diabetes = /type 2 diabetes|type ii diabetes|\bt2dm\b|\bt2d\b/i.test(blob);
+  const preventsDiabetes = /prevent\w*|incident diabetes|incidence of (?:t2dm|diabetes)|conversion to diabetes|progression (?:of|from) (?:pre-?diabetes|diabetes)/i.test(blob);
+  const treatsDiabetes = /in (?:patients|adults|people|individuals) with type 2 diabetes/i.test(abstract);
+  if (prediabetes && preventsDiabetes && !treatsDiabetes) return "prediabetes";
+  if (prediabetes && diabetes) return "both";
+  if (prediabetes) return "prediabetes";
+  if (diabetes) return "dm2";
+  return "";
+}
+
 function preferredPopulation(pops: Set<string>) {
   if (pops.has("DM2 com DRC")) return "DM2 com DRC";
   if (pops.has("DM2 com IC")) return "DM2 com IC";
@@ -509,9 +525,12 @@ export function treatsRankingAsEffect(line: string, excerpt: string) {
   const folded = fold(line);
   if (!/\breduz/.test(folded)) return false;
   if (/sucra|probabilidade|ranking/.test(folded)) return true;
-  if (/placebo|controle/.test(folded)) return false;
-  const direct = excerpt.split(/(?<=[.!?])\s+/).some((sentence) => /placebo|\bcontrol\b/i.test(sentence) && /reduc/i.test(sentence) && !/sucra|ranking probability|probability of being/i.test(sentence));
-  return !direct;
+  const sentences = excerpt.split(/(?<=[.!?])\s+/);
+  const hits = outcomeHits(line);
+  const related = sentences.filter((sentence) => !hits.length || hits.some((outcome) => textHasOutcome(sentence, outcome)));
+  const pool = related.length ? related : sentences;
+  const ranking = /sucra|ranking probability|probability of being/i;
+  return pool.some((sentence) => ranking.test(sentence)) && !pool.some((sentence) => /reduc/i.test(sentence) && !ranking.test(sentence));
 }
 
 export function omitsSuperiorAlternative(line: string, excerpt: string) {
@@ -911,18 +930,64 @@ function stripRestatedPopulation(line: string) {
   return `${match[1]}: ${body}`.replace(/\s{2,}/g, " ").replace(/\s+([.;,])/g, "$1").trim();
 }
 
+function comparatorKind(support: string) {
+  if (/placebo/i.test(support)) return "placebo";
+  if (/usual care|\bcontrol group\b|\bversus control\b|\bcompared with control\b|\bwith control\b/i.test(support)) return "controle";
+  return "";
+}
+
+function stripInventedComparator(line: string, support: string) {
+  if (comparatorKind(support)) return line;
+  return line
+    .replace(/\s+e placebo\b/gi, "")
+    .replace(/\s+(?:vs|versus|em relação ao|em relacao ao)\s+placebo\b/gi, "")
+    .replace(/\s+(?:vs|versus|em relação ao|em relacao ao)\s+controle\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/** A metformin sentence that also names placebo, control or usual care. Ranking sentences do not count. */
+export function metforminControlExcerpt(abstract: string) {
+  const sentences = resultsAndConclusions(abstract).split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+  return sentences.find((sentence) => /metformin/i.test(sentence) && /placebo|\bcontrol\b|usual care/i.test(sentence) && !/ranking probability|sucra|probability of being/i.test(sentence) && /reduc|lower|incidence|incident/i.test(sentence)) || "";
+}
+
 function metforminLine(line: string, support: string, question: string) {
   if (!/metformin/.test(fold(question)) && !/metformina/.test(fold(line))) return line;
-  let text = line;
+  let text = stripInventedComparator(line, support);
   if (/poor methodological quality|interpreted with caution/i.test(support) && !/baixa qualidade/.test(fold(text))) {
     text = `${text.replace(/[.\s]*$/, "")}, evidência de baixa qualidade.`;
   }
-  if (/placebo/i.test(support) && !/placebo|controle/.test(fold(text))) {
-    text = `${text.replace(/[.\s]*$/, "")} vs placebo.`;
-  } else if (/control group|usual care|no treatment/i.test(support) && !/placebo|controle/.test(fold(text))) {
-    text = `${text.replace(/[.\s]*$/, "")} vs controle.`;
+  const kind = comparatorKind(support);
+  if (kind && !/placebo|controle/.test(fold(text))) {
+    text = `${text.replace(/[.\s]*$/, "")} vs ${kind}.`;
   }
   return text.replace(/\s{2,}/g, " ").trim();
+}
+
+/** Conclusion boilerplate with neither a drug nor an outcome cannot support a line. */
+export function genericConclusionExcerpt(support: string) {
+  const hasDrug = /sglt|gliflozin|metformin|glp-?1|semaglutide|liraglutide|orlistat|acarbose/i.test(support);
+  const hasOutcome = /death|mortalit|hospitali|kidney|renal|hba1c|incidence|incident|stroke|\bmace\b|infarction/i.test(support);
+  if (hasDrug || hasOutcome) return false;
+  return /these findings|this review|underscore the value|personalized approach|multidimensional/i.test(support);
+}
+
+export function reservedCodeLine(record: EvidenceRecord) {
+  const abstract = record.abstract || "";
+  if (/should omit them the day before and the day of a procedure/i.test(abstract)) {
+    return "Cuidados: suspender o iSGLT2 no dia anterior e no dia do procedimento.";
+  }
+  if (/All SGLT2is significantly reduced HFH compared to standard of care/i.test(abstract)) {
+    return "DM2 com IC: reduz a internação por IC.";
+  }
+  if (/SGLT2 inhibitors reduce progression of chronic kidney disease \(CKD\) and heart failure hospitalizations/i.test(abstract)) {
+    return "DM2: reduz a progressão da DRC e a internação por IC.";
+  }
+  if (/moderate to high certainty evidence confirms the well established cardiovascular and kidney benefits of sodium-glucose cotransporter-2/i.test(abstract)) {
+    return "DM2: confirma o benefício cardiovascular e renal.";
+  }
+  return "";
 }
 
 function glycemicEffect(support: string) {
@@ -937,10 +1002,13 @@ export function dropsStatedCombination(line: string, support: string) {
 
 export function bareIndication(line: string, record: EvidenceRecord, support: string) {
   if (/^[-•\s]*cuidados\b/i.test(fold(line))) return false;
+  const saysIndicated = /e indicado|indicado para|\bindicad[oa]s?\b/.test(fold(line));
+  const guideline = /guideline|diretriz|consensus/i.test(`${record.type} ${record.title}`);
+  const recommends = /\b(we recommend|is recommended|should be used|should be)\b/i.test(support);
+  if (saysIndicated && !(guideline && recommends)) return true;
   if (outcomeHits(line).length || /controle glic|glicemi|hba1c|hemoglobina glicada/i.test(line)) return false;
   if (!/indicad|recomend|para adultos com|deve ser us/.test(fold(line))) return false;
-  const guideline = /guideline|diretriz|consensus/i.test(`${record.type} ${record.title}`);
-  return !(guideline && /\b(we recommend|recommend(?:ed|ation)s?|should be)\b/i.test(support));
+  return !(guideline && recommends);
 }
 
 function resolveToken(token: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>) {
@@ -1041,7 +1109,8 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
   const sentence = draft.support ? sentenceContaining(draft.support, citedAbstract) : citedAbstract;
   const support = sentence;
-  if (draft.support && isCaveatSentence(support)) return null;
+  if (draft.support && (isCaveatSentence(support) || genericConclusionExcerpt(support))) return null;
+  if (/metformina|metformin/.test(fold(question)) && /c[aâ]ncer|neoplas/.test(fold(draft.text))) return null;
   let text = stripInventedCertainty(draft.text, support);
   text = attributeSpecificDrug(text, support);
   if (!cuidadosAllowed(text, support) || mixesDoseWithProgression(text)) return null;
@@ -1057,7 +1126,14 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
     text = withoutStroke;
   }
   const citedTitle = draft.resolved.map((record) => record.title).join("\n");
+  const cohort = /metformina|metformin/.test(`${fold(question)}\n${fold(draft.text)}`) ? metforminCohort(citedTitle, citedAbstract) : "";
+  const written = draft.text.match(/^(Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i)?.[1] || "";
+  if (cohort === "prediabetes" && /^DM2/i.test(written)) return null;
+  if (cohort === "dm2" && /^pr[eé]-diabetes$/i.test(written)) return null;
   if (isMetforminPrediabetes(question)) {
+    text = text.replace(/^(?:Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+    text = `Pré-diabetes: ${text}`;
+  } else if (cohort === "prediabetes") {
     text = text.replace(/^(?:Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
     text = `Pré-diabetes: ${text}`;
   } else {
@@ -1075,7 +1151,8 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   if (echoesPrompt(text, citedText)) return null;
   if (claimOutsideResults(text, citedAbstract) || supportedOnlyByContext(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
   if (creditsClassForSingleDrug(text, support) || unsupportedYes(text, support) || unsupportedDoseClaim(text, support) || ignoresPooledConclusion(text, support)) return null;
-  text = metforminLine(text, citedAbstract, question);
+  if (draft.support) text = stripInventedComparator(text, support);
+  text = metforminLine(text, draft.support ? support : citedAbstract, question);
   if (requireControl && missingControlContrast(text, support)) return null;
   if (treatsRankingAsEffect(text, support) || omitsSuperiorAlternative(text, support)) return null;
   if (draft.support && polarityFlipped(text, support)) return null;
@@ -1150,6 +1227,12 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
       deferred.push(accepted);
       continue;
     }
+    if (!sawFinding && /metformina|metformin/.test(fold(question))) {
+      const poolHasControl = records.some((record) => metforminControlExcerpt(record.abstract || ""));
+      const cited = accepted.support || accepted.resolved.map((record) => record.abstract || "").join("\n");
+      const lead = /metformin/i.test(cited) && /placebo|\bcontrol\b|usual care/i.test(cited) && !/ranking probability|sucra/i.test(cited);
+      if (poolHasControl && !lead) continue;
+    }
     if (!sawFinding && isMetforminPrediabetes(question)) {
       const blob = accepted.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
       const population = /pre-?diabetes|impaired glucose|impaired fasting|\bigt\b|\bifg\b/i.test(blob);
@@ -1160,6 +1243,24 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
     remember(accepted);
   }
   for (const later of deferred) remember(later);
+  if (/metformin/.test(fold(question))) {
+    const claimOf = (text: string) => fold(text)
+      .replace(/^(?:pre-diabetes|dm2 com drc|dm2 com ic|dm2 com dcv|icfer|icfep|dm2|drc|ic)\s*:\s*/, "")
+      .replace(/\bvs placebo\b|\bvs controle\b|evidencia de baixa qualidade|\bpode\b/g, "")
+      .replace(/\breduz\w*/g, "reduz")
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+    const seenClaim = new Set<string>();
+    for (let index = 0; index < kept.length;) {
+      const claim = claimOf(kept[index].text);
+      if (claim && /metformin/.test(claim) && seenClaim.has(claim)) {
+        kept.splice(index, 1);
+        continue;
+      }
+      if (claim && /metformin/.test(claim)) seenClaim.add(claim);
+      index += 1;
+    }
+  }
   const seenBody = new Set<string>();
   for (let index = kept.length - 1; index >= 0; index -= 1) {
     const key = fold(kept[index].text).replace(/\s+/g, " ").trim();

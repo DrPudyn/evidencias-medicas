@@ -1,8 +1,8 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isCareGuideline, isHeartFailureSlot, isType2DiabetesTitle, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, finalSetKey, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, metforminPrediabetesQuery, pairQueries, parseJsonObject, readApprovedCard, readFinalSet, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeApprovedCard, writeFinalSet, writeTermCache, type FinalSetItem, type TermCacheDb } from "./terms";
+import { canonicalTerm, conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, finalSetKey, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, knownClassTerms, metforminPrediabetesQuery, pairQueries, parseJsonObject, readApprovedCard, readFinalSet, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeApprovedCard, writeFinalSet, writeTermCache, type FinalSetItem, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
-import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, resultSentence, sourceExcerpt, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
+import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, reservedCodeLine, resultSentence, sourceExcerpt, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 import type { ClinicalAnswer } from "./types";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
@@ -37,6 +37,49 @@ function mergeAnswers(first: ClinicalAnswer, second: ClinicalAnswer, records: Ev
   const items = order.map((pmid) => byPmid.get(pmid)).filter((item): item is { texto: string; pmid: string } => Boolean(item));
   if (!items.length) return second.sufficient ? second : first;
   return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
+}
+
+function normLine(value: string) {
+  return value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function withReservedLines(
+  answer: ClinicalAnswer,
+  records: EvidenceRecord[],
+  concept: ReturnType<typeof conceptsForQuestion>[number],
+  question: string,
+  onReplace: () => void,
+) {
+  const order: string[] = [];
+  const texts = new Map<string, string>();
+  for (const line of answerLines(answer)) {
+    if (!texts.has(line.pmid)) order.push(line.pmid);
+    texts.set(line.pmid, line.texto);
+  }
+  let changed = false;
+  for (const record of records) {
+    const text = reservedCodeLine(record);
+    if (!text) continue;
+    const current = texts.get(record.pmid);
+    if (current && normLine(current) !== normLine(text)) onReplace();
+    if (!texts.has(record.pmid)) order.push(record.pmid);
+    if (current === text) continue;
+    texts.set(record.pmid, text);
+    changed = true;
+  }
+  if (!changed) return answer;
+  const items = order.map((pmid) => ({ texto: texts.get(pmid) || "", pmid }));
+  return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
+}
+
+function reservedSlotsFilled(records: EvidenceRecord[], answer: ClinicalAnswer, question: string) {
+  if (!isIndicationQuestion(question)) return true;
+  const lines = answerLines(answer);
+  return records.every((record) => {
+    const required = Boolean(reservedCodeLine(record)) || isCareGuideline(record) || isHeartFailureSlot(record);
+    if (!required) return true;
+    return lines.some((line) => line.pmid === record.pmid && (!/^cuidados\b/i.test(reservedCodeLine(record)) || line.care));
+  });
 }
 
 const RETRY_WARNING = [
@@ -131,6 +174,12 @@ export async function answerClinicalQuestion(input: {
   } catch {
     concepts = [];
   }
+  const fixed = knownClassTerms(question);
+  if (fixed) {
+    const canonical = canonicalTerm(fixed[0]);
+    const replaced = concepts.map((concept) => concept.some((term) => canonicalTerm(term) === canonical) ? fixed : concept);
+    concepts = replaced.some((concept) => concept === fixed) ? replaced : [fixed, ...concepts];
+  }
   if (!concepts.length) concepts = sanitizeConcepts({ terms: fallbackSearchTerms(question) });
   if (!concepts.length) {
     return insufficientAnswer(
@@ -198,8 +247,10 @@ export async function answerClinicalQuestion(input: {
       ? `\n\nEscreva uma linha para cada vaga, com o desfecho da frase. Não comece com Cuidados: o código coloca o rótulo. Não troque procedure por cirurgia.\n${reserved.map((record) => `PMID ${record.pmid}: ${resultSentence(record)}`).join("\n")}`
       : "";
     let raw = await input.ai.summarize(`${question}${brief}`, records, { direct: isYesNoQuestion(question) });
+    let tainted = false;
     let retried = false;
     if (synthesisNeedsRetry(raw, records)) {
+      if (validateSynthesis(raw, records, main, question).discardedCitations.length) tainted = true;
       retried = true;
       const ids = records.map((record) => record.pmid).join(", ");
       const note = synthesisIsEmpty(raw)
@@ -207,7 +258,12 @@ export async function answerClinicalQuestion(input: {
         : `${RETRY_WARNING} PMIDs: ${ids}.`;
       raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
     }
-    let answer = validateSynthesis(raw, records, main, question);
+    const checked = (value: ClinicalAnswer) => {
+      if (value.discardedCitations.length) tainted = true;
+      return value;
+    };
+    let answer = checked(validateSynthesis(raw, records, main, question));
+    answer = withReservedLines(answer, records, main, question, () => { tainted = true; });
     const tooThin = () => answer.sufficient && (benefitLineCount(answer.answer) === 0 || (isIndicationQuestion(question) && benefitLineCount(answer.answer) < 2));
     const missedControl = () => isYesNoQuestion(question) && firstItemMissedControl(raw, records);
     if ((!answer.sufficient && !synthesisIsEmpty(raw)) || tooThin() || missedControl()) {
@@ -219,10 +275,13 @@ export async function answerClinicalQuestion(input: {
             ? "A primeira linha tem de dizer o efeito contra placebo, controle ou sem tratamento."
             : rejectionNote(raw, records);
         const retryRaw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
-        answer = mergeAnswers(answer, validateSynthesis(retryRaw, records, main, question), records, main, question);
+        answer = checked(mergeAnswers(answer, checked(validateSynthesis(retryRaw, records, main, question)), records, main, question));
+        answer = withReservedLines(answer, records, main, question, () => { tainted = true; });
       }
     }
-    if (input.db && answer.sufficient && answer.discardedCitations.length === 0) await writeApprovedCard(question, { ...answer, sufficient: true }, input.db);
+    if (input.db && answer.sufficient && !tainted && reservedSlotsFilled(records, answer, question)) {
+      await writeApprovedCard(question, { ...answer, sufficient: true }, input.db);
+    }
     return answer;
   } catch {
     return insufficientAnswer(
