@@ -2,21 +2,26 @@ import { answerClinicalQuestion } from "@/lib/clinical/answer";
 import { createClinicalAi } from "@/lib/clinical/provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "@/lib/clinical/quota";
 import type { ClinicalSearchOptions, EvidenceRecord } from "@/lib/clinical/types";
-import { queryForKind } from "@/lib/clinical/terms";
+import { queryForKind, readResultCache, resultCacheKey, writeResultCache } from "@/lib/clinical/terms";
 import { queryPubmed } from "@/lib/pubmed";
 import { body, currentUser, json, rateLimit, sameOrigin, settings } from "@/lib/server";
 
 async function searchHighLevel(term: string, options?: ClinicalSearchOptions): Promise<EvidenceRecord[]> {
   const kind = options?.kind || "high-level";
+  const query = queryForKind(term, kind);
+  const sort = options?.sort || "pub_date";
+  const retmax = 30;
+  const key = resultCacheKey(query, sort, retmax);
+  const cached = await readResultCache(key, settings().DB);
   const result = await queryPubmed({
-    term: queryForKind(term, kind),
-    sort: options?.sort || (kind === "high-level" ? "pub_date" : "relevance"),
+    term: cached?.length ? cached.map((id) => `${id}[uid]`).join(" OR ") : query,
+    sort,
     page: 1,
-    retmax: 30,
+    retmax: cached?.length || 30,
     abstracts: true,
     highLevelOnly: !options?.includeTrials,
   });
-  return result.articles.map((article) => ({
+  let articles = result.articles.map((article) => ({
     pmid: article.id,
     title: article.title,
     journal: article.journal,
@@ -27,6 +32,13 @@ async function searchHighLevel(term: string, options?: ClinicalSearchOptions): P
     url: article.url,
     abstract: article.abstract || "",
   }));
+  if (cached?.length) {
+    const order = new Map(cached.map((id, index) => [id, index]));
+    articles = articles.filter((article) => order.has(article.pmid)).sort((a, b) => (order.get(a.pmid) ?? 0) - (order.get(b.pmid) ?? 0));
+  } else if (articles.length) {
+    await writeResultCache(key, articles.map((article) => article.pmid), settings().DB);
+  }
+  return articles;
 }
 
 export async function POST(req: Request) {

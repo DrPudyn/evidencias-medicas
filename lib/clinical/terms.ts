@@ -162,6 +162,34 @@ export function isMetforminPrediabetes(question: string) {
   return /metformin/.test(asked) && /pre-?diabet|impaired glucose|tolerancia/.test(asked);
 }
 
+/** Heart-failure meta-analyses of the SGLT2 class, not combination or quadruple regimens. */
+export function isolatedHeartFailureQuery(today: string) {
+  const body = "(SGLT2 inhibitor*[tiab]) AND heart failure[ti] AND (meta-analysis[pt] OR systematic review[pt]) NOT (combination[tiab] OR quadruple[tiab])";
+  return `${body} NOT (animals[mh] NOT humans[mh]) AND ${publicationDateClause(today)}`;
+}
+
+/** Metformin questions about diabetes search type 2 diabetes. Prediabetes questions do not. */
+export function forceMetforminType2(concepts: SearchConcept[], question: string) {
+  const asked = fold(question);
+  if (!/metformin/.test(asked) || isMetforminPrediabetes(question)) return concepts;
+  if (!/diabetes/.test(asked)) return concepts;
+  let named = false;
+  const next = concepts.map((concept) => concept.map((term) => {
+    const folded = fold(term);
+    if (/type 2 diabetes|\bt2dm\b|\bt2d\b/.test(folded)) {
+      named = true;
+      return term;
+    }
+    if (folded === "diabetes" || folded === "diabetes mellitus" || folded === "dm2" || folded === "diabetes tipo 2") {
+      named = true;
+      return "type 2 diabetes";
+    }
+    return term;
+  }));
+  if (!named) next.push(["type 2 diabetes"]);
+  return next;
+}
+
 /** Meta-analyses and trials of metformin for preventing diabetes in prediabetes. */
 export function metforminPrediabetesQuery(today: string) {
   const metformin = `("metformin"[Title/Abstract] OR "metformin"[MeSH Terms])`;
@@ -247,6 +275,42 @@ export async function readTermCache(question: string, db?: TermCacheDb | null) {
 
 export function rememberSearchTerms(question: string, raw: string) {
   if (raw.trim()) termCache.set(normalizeQuestion(question), raw);
+}
+
+const RESULT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const resultCache = new Map<string, { pmids: string[]; at: number }>();
+
+export function resultCacheKey(term: string, sort: string, retmax: number) {
+  return `${sort}|${retmax}|${term}`;
+}
+
+export async function readResultCache(key: string, db?: TermCacheDb | null, now = Date.now()) {
+  const memory = resultCache.get(key);
+  if (memory && now - memory.at < RESULT_TTL_MS) return memory.pmids;
+  if (memory) resultCache.delete(key);
+  if (!db) return null;
+  try {
+    const row = await db.prepare("SELECT pmids, updated_at FROM clinical_result_cache WHERE query_key = ?").bind(key).first<{ pmids: string; updated_at: number }>();
+    if (!row?.pmids || now - row.updated_at >= RESULT_TTL_MS) return null;
+    const pmids = row.pmids.split(",").filter(Boolean);
+    resultCache.set(key, { pmids, at: row.updated_at });
+    return pmids;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeResultCache(key: string, pmids: string[], db?: TermCacheDb | null, now = Date.now()) {
+  const unique = [...new Set(pmids.filter(Boolean))];
+  resultCache.set(key, { pmids: unique, at: now });
+  if (!db) return;
+  try {
+    await db.prepare(
+      "INSERT INTO clinical_result_cache (query_key, pmids, updated_at) VALUES (?, ?, ?) ON CONFLICT(query_key) DO UPDATE SET pmids = excluded.pmids, updated_at = excluded.updated_at",
+    ).bind(key, unique.join(","), now).run();
+  } catch {
+    // The table may not exist yet. The memory cache still applies.
+  }
 }
 
 export async function writeTermCache(question: string, raw: string, db?: TermCacheDb | null) {

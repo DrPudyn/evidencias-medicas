@@ -237,6 +237,7 @@ export function mergeIndicationRecords(input: {
   recent: EvidenceRecord[];
   supplemental: EvidenceRecord[];
   outcomes?: EvidenceRecord[];
+  heartFailure?: EvidenceRecord[];
   cautions?: EvidenceRecord[];
   concept: SearchConcept;
   question: string;
@@ -246,7 +247,7 @@ export function mergeIndicationRecords(input: {
   const keep = (list: EvidenceRecord[], precaution = false) => {
     const out: EvidenceRecord[] = [];
     const seen = new Set<string>();
-    for (const article of list) {
+    for (const article of [...list].sort(byTypeThenPmidDesc)) {
       if (seen.has(article.pmid) || isVeterinary(article.title) || !matchesAskedCondition(article, input.question)) continue;
       const onTopic = !input.concept.length || conceptInFocus(article, input.concept, input.question);
       if (!onTopic) continue;
@@ -269,7 +270,8 @@ export function mergeIndicationRecords(input: {
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
   const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title)).sort(byTypeThenPmidDesc);
-  const hfMetas = [...outcomes, ...metas].filter((article) => isIsolatedHeartFailureMeta(article)).sort(byTypeThenPmidDesc);
+  const dedicatedHeartFailure = keep(input.heartFailure || []).filter((article) => isIsolatedHeartFailureMeta(article)).sort(byTypeThenPmidDesc);
+  const hfMetas = [...dedicatedHeartFailure, ...[...outcomes, ...metas].filter((article) => isIsolatedHeartFailureMeta(article)).sort(byTypeThenPmidDesc)];
   const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title) && !isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
   const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];

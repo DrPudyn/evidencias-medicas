@@ -65,7 +65,8 @@ jobs:
             drizzle/0003_password_auth.sql \
             drizzle/0004_reading_workspace.sql \
             drizzle/0005_plans_and_quota.sql \
-            drizzle/0006_term_cache.sql
+            drizzle/0006_term_cache.sql \
+            drizzle/0007_result_cache.sql
           do
             node --import ./scripts/sites-env.mjs \
               ./node_modules/wrangler/bin/wrangler.js d1 execute DB \

@@ -49,8 +49,9 @@ const SUMMARY_SCHEMA = {
         properties: {
           texto: { type: "string" },
           pmid: { type: "string" },
+          trecho: { type: "string" },
         },
-        required: ["texto", "pmid"],
+        required: ["texto", "pmid", "trecho"],
       },
     },
   },

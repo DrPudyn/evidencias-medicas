@@ -1,6 +1,6 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, metforminPrediabetesQuery, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
+import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, forceMetforminType2, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, isolatedHeartFailureQuery, metforminPrediabetesQuery, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
 import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
@@ -33,15 +33,17 @@ async function gatherIndications(
   const outcomeQuery = evidenceQuery([searchClass, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
   const dm2OutcomeQuery = evidenceQuery([searchClass, ["type 2 diabetes", "T2DM"], ["cardiovascular", "kidney", "renal"]], today);
   const prediabetesSearch = isMetforminPrediabetes(question)
-    ? search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true })
+    ? search(metforminPrediabetesQuery(today), { sort: "pub_date", includeTrials: true })
     : Promise.resolve([] as EvidenceRecord[]);
-  const [guidelines, metas, recent, cautions, outcomes, dm2Outcomes, prediabetesTrials, ...paired] = await Promise.all([
-    search(classQuery, { kind: "guideline", sort: "relevance" }),
-    search(classQuery, { kind: "meta", sort: "relevance" }),
+  const heartFailureQuery = isolatedHeartFailureQuery(today);
+  const [guidelines, metas, recent, cautions, outcomes, dm2Outcomes, heartFailure, prediabetesTrials, ...paired] = await Promise.all([
+    search(classQuery, { kind: "guideline", sort: "pub_date" }),
+    search(classQuery, { kind: "meta", sort: "pub_date" }),
     search(classQuery, { kind: "high-level", sort: "pub_date" }),
-    search(safetyQuery, { kind: "high-level", sort: "relevance" }),
-    search(outcomeQuery, { kind: "meta", sort: "relevance" }),
-    search(dm2OutcomeQuery, { kind: "meta", sort: "relevance" }),
+    search(safetyQuery, { kind: "high-level", sort: "pub_date" }),
+    search(outcomeQuery, { kind: "meta", sort: "pub_date" }),
+    search(dm2OutcomeQuery, { kind: "meta", sort: "pub_date" }),
+    search(heartFailureQuery, { kind: "high-level", sort: "pub_date" }),
     prediabetesSearch,
     ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
   ]);
@@ -51,8 +53,8 @@ async function gatherIndications(
     const conditions = conditionsFromGuideline(guide, question);
     if (conditions.length) {
       const extra = await Promise.all(conditions.map((condition) => condition === "type 2 diabetes"
-        ? search(evidenceQuery([searchClass, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "relevance" })
-        : search(evidenceQuery([searchClass, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "relevance" })));
+        ? search(evidenceQuery([searchClass, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "pub_date" })
+        : search(evidenceQuery([searchClass, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "pub_date" })));
       supplemental.push(...extra.flat());
     }
   }
@@ -62,6 +64,7 @@ async function gatherIndications(
     recent: [...recent, ...paired.flat(), ...prediabetesTrials],
     supplemental,
     outcomes: [...dm2Outcomes, ...outcomes],
+    heartFailure,
     cautions,
     concept: main,
     question,
@@ -101,7 +104,7 @@ export async function answerClinicalQuestion(input: {
     );
   }
   const today = saoPauloPublicationDay();
-  let scoped = conceptsForQuestion(concepts, question);
+  let scoped = forceMetforminType2(conceptsForQuestion(concepts, question), question);
   if (!scoped.length) scoped = sanitizeConcepts({ terms: fallbackSearchTerms(question) });
   if (!scoped.length) {
     return insufficientAnswer(
@@ -119,7 +122,7 @@ export async function answerClinicalQuestion(input: {
   } else {
     const pairTerms = pairQueries(scoped, today);
     const searches = pairTerms.map((term) => input.search(term));
-    if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true }));
+    if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "pub_date", includeTrials: true }));
     if (searches.length) {
       const batches = await Promise.all(searches);
       records = selectForSynthesis(uniqueRecords(batches.flat()), main, 6, question);

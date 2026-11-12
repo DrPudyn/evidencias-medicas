@@ -174,6 +174,12 @@ export const clinicalTermCache = sqliteTable("clinical_term_cache", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const clinicalResultCache = sqliteTable("clinical_result_cache", {
+  queryKey: text("query_key").primaryKey(),
+  pmids: text("pmids").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const stripeEvents = sqliteTable("stripe_events", {
   id: text("id").primaryKey(),
   type: text("type").notNull(),

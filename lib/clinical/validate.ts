@@ -193,7 +193,8 @@ function textHasOutcome(text: string, outcome: Outcome) {
 }
 
 function outcomeHits(line: string) {
-  return OUTCOMES.filter((outcome) => textHasOutcome(line, outcome));
+  const body = line.replace(/^(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+  return OUTCOMES.filter((outcome) => textHasOutcome(body, outcome));
 }
 
 function firstOutcomeAt(text: string, outcome: Outcome) {
@@ -308,8 +309,87 @@ function hedgeCoordinatedVerbs(line: string) {
 
 /** Adds pode to every coordinated verb when the supporting sentence is only a suggestion. */
 export function ensureModalHedge(line: string, excerpt: string) {
-  if (!claimNeedsHedge(line, excerpt)) return line;
-  return hedgeCoordinatedVerbs(line);
+  return applyCodeCertainty(line, excerpt);
+}
+
+export function supportCertainty(support: string): "firm" | "hedge" {
+  if (/high[ -]certainty|(?<!low to )high coe|moderate-to-high|moderate to high|moderate-\s+to high|\bdemonstrates\b/i.test(support)) return "firm";
+  if (/\b(suggest(?:s|ed|ing)?|may|might|likely)\b|\bassociated\b|very low[ -]certainty|(?<!very )low[ -]certainty/i.test(support)) return "hedge";
+  return "firm";
+}
+
+function stripHedge(line: string) {
+  return line
+    .replace(/\bpodem\s+melhorar\b/gi, "melhoram")
+    .replace(/\bpode\s+melhorar\b/gi, "melhora")
+    .replace(/\bpodem\s+reduzir\b/gi, "reduzem")
+    .replace(/\bpode\s+reduzir\b/gi, "reduz")
+    .replace(/\bpodem\s+aumentar\b/gi, "aumentam")
+    .replace(/\bpode\s+aumentar\b/gi, "aumenta")
+    .replace(/\bpodem\s+representar\b/gi, "representam")
+    .replace(/\bpode\s+representar\b/gi, "representa");
+}
+
+/** The code, not the model, decides whether the verb stays indicative or takes pode. */
+export function applyCodeCertainty(line: string, support: string) {
+  if (supportCertainty(support) === "hedge") return hedgeCoordinatedVerbs(line);
+  return stripHedge(line);
+}
+
+const OUTCOME_CLAUSES: Array<[RegExp, RegExp]> = [
+  [/eventos?\s+cv|cardiovascul|mace\b/i, /cardiovascular|\bmace\b|cardioprotect|eventos?\s+cv/i],
+  [/progress[aã]o renal|desfechos renais|doen[cç]a renal|\brenal\b|\bdrc\b/i, /renal|kidney|\bckd\b|\bdrc\b/i],
+  [/morte|mortalidade/i, /death|mortalit|morte/i],
+  [/interna\w*(?: por)? ic|insufici[eê]ncia card[ií]aca|\bpor ic\b/i, /heart failure|insufici[eê]ncia card|\bhfref\b|\bhfpef\b|\bhf\b/i],
+  [/avc|acidente vascular|derrame/i, /stroke|\bavc\b|acidente vascular/i],
+  [/\bpeso\b/i, /weight|\bpeso\b/i],
+  [/hba1c|hemoglobina glicada/i, /hba1c|glycated|\ba1c\b|hemoglobina glicada/i],
+];
+
+const OUTCOME_TAILS: Array<[RegExp, RegExp]> = [
+  [/\s*(?:,| e)\s*(?:a |o |os |as )?progress[aã]o (?:da |de )?(?:doen[cç]a )?renal\b/gi, /renal|kidney|\bckd\b|\bdrc\b/i],
+  [/\s*(?:,| e)\s*(?:a |o |os |as )?desfechos renais\b/gi, /renal|kidney|\bckd\b|\bdrc\b/i],
+  [/\s*(?:,| e)\s*(?:a |o |os |as )?doen[cç]a renal\b/gi, /renal|kidney|\bckd\b|\bdrc\b/i],
+  [/\s*(?:,| e)\s*(?:o |a |os )?avc(?: n[aã]o fatal)?\b/gi, /stroke|\bavc\b/i],
+  [/\s*(?:,| e)\s*(?:a |o |as )?morte(?: cardiovascular)?\b/gi, /death|mortalit|\bmorte\b/i],
+  [/\s*(?:,| e)\s*(?:os |as |o |a )?(?:eventos?\s+cv|eventos cardiovasculares)\b/gi, /cardiovascular|\bmace\b|cardioprotect/i],
+  [/\s*(?:,| e)\s*(?:a |o |as )?(?:internaç\w+|hospitalizaç\w+) por ic\b/gi, /heart failure|\bhf\b|insufici[eê]ncia card/i],
+  [/\s*(?:,| e)\s*(?:o |a )?peso\b/gi, /weight|\bpeso\b/i],
+];
+
+/** Drops an outcome the supporting excerpt does not name. */
+export function dropMissingOutcomes(line: string, support: string) {
+  let text = line;
+  for (const [tail, supportPattern] of OUTCOME_TAILS) {
+    if (!supportPattern.test(support)) text = text.replace(tail, "");
+  }
+  text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+  const claimed = OUTCOME_CLAUSES.filter(([linePattern]) => linePattern.test(text));
+  const missing = claimed.filter(([, supportPattern]) => !supportPattern.test(support));
+  const effect = /\b(reduz\w*|melhor\w*|aument\w*|represent\w*)\b/i.test(text);
+  if (effect && claimed.length > 0 && missing.length === claimed.length) return null;
+  const body = text.replace(/^(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+  if (!/[a-zà-ú]/i.test(body)) return null;
+  return text;
+}
+
+const GLP1 = /glp-?1|glucagon-like peptide/i;
+
+export function strokeBelongsToGlp1(line: string, support: string) {
+  if (!/avc|acidente vascular|derrame|stroke/i.test(line)) return false;
+  if (!GLP1.test(support) || !/sglt-?2|sodium-glucose/i.test(support)) return false;
+  const sentences = support.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => /stroke|avc/i.test(sentence));
+  if (!sentences.length) return true;
+  return sentences.every((sentence) => GLP1.test(sentence) && /sglt-?2|sodium-glucose/i.test(sentence));
+}
+
+function dropStrokeClause(line: string) {
+  let text = line.replace(/\s*(?:,| e)\s*(?:o |a )?avc(?: n[aã]o fatal)?\b/gi, "");
+  text = text.replace(/^(?:(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*)?.*?\b(?:reduz\w*|pode reduzir|melhor\w*)\s+(?:o |a )?avc(?: n[aã]o fatal)?\b/i, "");
+  text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
+  const body = text.replace(/^(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+  if (!/[a-zà-ú]/i.test(body) || /avc|acidente vascular|derrame/i.test(body)) return null;
+  return text;
 }
 
 function contextFreeClause(sentence: string) {
@@ -355,21 +435,13 @@ function studiedPopulations(excerpt: string) {
   const heartFailureAside = /history of heart failure|with and without[^.]{0,40}heart failure|regardless of[^.]{0,80}heart failure|irrespective of[^.]{0,80}heart failure/i.test(text);
   if ((heartFailureCohort || pops.has("ICFEr") || pops.has("ICFEp")) && !heartFailureAside) pops.add("IC");
   if (pops.has("DM2") && pops.has("DRC")) pops.add("DM2 com DRC");
+  if (pops.has("DM2") && /established cvd|known cvd|established cardiovascular disease|with cardiovascular disease/i.test(text)) pops.add("DM2 com DCV");
   return pops;
-}
-
-function canonicalPopulation(label: string) {
-  const folded = fold(label);
-  if (folded === "dm2 com drc") return "DM2 com DRC";
-  if (folded === "icfer") return "ICFEr";
-  if (folded === "icfep") return "ICFEp";
-  if (folded === "dm2") return "DM2";
-  if (folded === "drc") return "DRC";
-  return "IC";
 }
 
 function preferredPopulation(pops: Set<string>) {
   if (pops.has("DM2 com DRC")) return "DM2 com DRC";
+  if (pops.has("DM2 com DCV")) return "DM2 com DCV";
   if (pops.has("DM2")) return "DM2";
   if (pops.has("ICFEr")) return "ICFEr";
   if (pops.has("ICFEp")) return "ICFEp";
@@ -386,16 +458,16 @@ function addTitlePopulations(pops: Set<string>, title: string) {
   for (const pop of studiedPopulations(title)) pops.add(pop);
 }
 
-/** The label before the colon is the studied population, not an outcome. */
+/** The label before the colon is derived from the excerpt and the title. */
 export function alignPopulationLabel(line: string, excerpt: string, title = "") {
-  const match = line.match(/^(DM2 com DRC|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
-  if (!match) return line;
-  const label = canonicalPopulation(match[1]);
+  if (/^(sim|nao|cuidados)\b/i.test(fold(line))) return line;
+  const match = line.match(/^(DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
   const pops = studiedPopulations(excerpt);
-  if (!pops.has(label)) addTitlePopulations(pops, title);
-  if (pops.has(label) || pops.size === 0) return line;
+  if (!pops.size) addTitlePopulations(pops, title);
+  else if (pops.has("DM2") && /people with cardiovascular disease|established cvd|known cvd|established cardiovascular disease/i.test(`${title}\n${excerpt}`)) pops.add("DM2 com DCV");
   const replacement = preferredPopulation(pops);
-  if (!replacement || replacement === label) return line;
+  if (!replacement) return line;
+  if (!match) return `${replacement}: ${line}`;
   return line.replace(match[0], `${replacement}:`);
 }
 
@@ -424,6 +496,20 @@ export function firstItemMissedControl(raw: string, records: EvidenceRecord[]) {
   const record = records.find((entry) => entry.pmid === String(first.pmid ?? "").replace(/\D/g, ""));
   if (!record) return false;
   return missingControlContrast(first.texto, record.abstract || "");
+}
+
+export function cuidadosAllowed(line: string, support: string) {
+  if (!/^[-•\s]*cuidados\b/i.test(fold(line))) return true;
+  return /\b(omit|avoid|adverse|contraindicat|caution|ketoacidosis|infection|increased risk)\b/i.test(support);
+}
+
+export function mixesDoseWithProgression(line: string) {
+  const folded = fold(line);
+  return /comparando doses/.test(folded) && /progress/.test(folded);
+}
+
+export function isDoseLine(line: string) {
+  return /comparando doses/.test(fold(line));
 }
 
 export function missingControlContrast(line: string, excerpt: string) {
@@ -628,7 +714,15 @@ function parseSynthesis(raw: string): Record<string, unknown> | null {
   return itens.length ? { itens } : null;
 }
 
-type Draft = { text: string; resolved: EvidenceRecord[] };
+type Draft = { text: string; resolved: EvidenceRecord[]; support?: string };
+
+function verifiedQuote(quote: string, records: EvidenceRecord[]) {
+  const norm = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
+  const needle = norm(quote);
+  if (needle.length < 24) return "";
+  const hay = norm(records.map((record) => `${record.title}\n${record.abstract}`).join("\n"));
+  return hay.includes(needle) ? quote.trim() : "";
+}
 
 function resolveToken(token: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>) {
   return recordForMarker(token, records, byId);
@@ -638,13 +732,23 @@ function draftsFromItems(items: unknown[], records: EvidenceRecord[], byId: Map<
   const drafts: Draft[] = [];
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
-    const row = item as { texto?: unknown; pmid?: unknown; text?: unknown };
+    const row = item as { texto?: unknown; pmid?: unknown; text?: unknown; trecho?: unknown };
     const text = typeof row.texto === "string" ? row.texto : typeof row.text === "string" ? row.text : "";
     const field = row.pmid == null ? "" : String(row.pmid);
+    const quote = typeof row.trecho === "string" ? row.trecho.trim() : "";
     if (!text.trim()) continue;
     if (field) {
       const record = resolveToken(field, records, byId);
       if (record) {
+        if (quote) {
+          const support = verifiedQuote(quote, [record]);
+          if (!support) {
+            discarded.push(record.pmid);
+            continue;
+          }
+          drafts.push({ text, resolved: [record], support });
+          continue;
+        }
         drafts.push({ text, resolved: [record] });
         continue;
       }
@@ -716,8 +820,18 @@ export function synthesisNeedsRetry(raw: string, records: EvidenceRecord[]) {
 function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = false) {
   const citedText = draft.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
-  let text = stripInventedCertainty(draft.text, citedAbstract);
-  text = attributeSpecificDrug(text, citedAbstract);
+  const support = draft.support || citedAbstract;
+  let text = stripInventedCertainty(draft.text, support);
+  text = attributeSpecificDrug(text, support);
+  if (!cuidadosAllowed(text, support) || mixesDoseWithProgression(text)) return null;
+  const pruned = dropMissingOutcomes(text, support);
+  if (!pruned) return null;
+  text = pruned;
+  if (strokeBelongsToGlp1(text, support)) {
+    const withoutStroke = dropStrokeClause(text);
+    if (!withoutStroke) return null;
+    text = withoutStroke;
+  }
   const citedTitle = draft.resolved.map((record) => record.title).join("\n");
   const labeled = alignPopulationLabel(text, citedAbstract, citedTitle);
   if (!labeled) return null;
@@ -725,14 +839,18 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
   if (claimOutsideResults(text, citedAbstract) || supportedOnlyByContext(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
-  if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract) || ignoresPooledConclusion(text, citedAbstract)) return null;
-  if (requireControl && missingControlContrast(text, citedAbstract)) return null;
-  if (treatsRankingAsEffect(text, citedAbstract) || omitsSuperiorAlternative(text, citedAbstract)) return null;
-  const hedged = ensureModalHedge(text, citedAbstract);
+  if (creditsClassForSingleDrug(text, support) || unsupportedYes(text, support) || unsupportedDoseClaim(text, support) || ignoresPooledConclusion(text, support)) return null;
+  if (requireControl && missingControlContrast(text, support)) return null;
+  if (treatsRankingAsEffect(text, support) || omitsSuperiorAlternative(text, support)) return null;
+  const hedged = ensureModalHedge(text, support);
   if (!hedged) return null;
-  text = ensureCertaintyCaveat(hedged, citedAbstract);
-  if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || leavesOutcomeInEnglish(text))) return null;
+  text = ensureCertaintyCaveat(hedged, support);
+  if (concept && (attributesForeignBenefit(text, support, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };
+}
+
+export function supportHasControl(support: string) {
+  return /placebo|lifestyle|usual care|control group|no treatment|\bversus control\b|\bthan control\b|\bcontrol\b/i.test(support);
 }
 
 export function validateSynthesis(raw: string, records: EvidenceRecord[], concept?: SearchConcept, question = ""): ClinicalAnswer {
@@ -755,19 +873,32 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
     ? draftsFromItems(parsed.itens as unknown[], records, byId, discarded)
     : draftsFromAnswer(typeof parsed.answer === "string" ? parsed.answer.trim() : "", records, byId, discarded);
   const kept: Array<{ text: string; resolved: EvidenceRecord[] }> = [];
+  const deferred: Array<{ text: string; resolved: EvidenceRecord[] }> = [];
   const appearance: string[] = [];
   let sawFinding = false;
   const yesNo = isYesNoQuestion(question);
-  for (const draft of drafts) {
-    if (isCertaintyOnlyCaveat(draft.text)) continue;
-    const accepted = acceptDraft(draft, concept, yesNo && !sawFinding);
-    sawFinding = true;
-    if (!accepted) continue;
+  const metformin = /metformin/.test(fold(question));
+  const poolHasControl = metformin && drafts.some((draft) => supportHasControl(draft.support || draft.resolved.map((record) => record.abstract || "").join("\n")));
+  const remember = (accepted: { text: string; resolved: EvidenceRecord[] }) => {
     for (const record of accepted.resolved) {
       if (!appearance.includes(record.pmid)) appearance.push(record.pmid);
     }
     kept.push(accepted);
+  };
+  for (const draft of drafts) {
+    if (isCertaintyOnlyCaveat(draft.text)) continue;
+    const accepted = acceptDraft(draft, concept, yesNo && !sawFinding);
+    if (!accepted) continue;
+    const excerpt = accepted.support || accepted.resolved.map((record) => record.abstract || "").join("\n");
+    if (!sawFinding && isDoseLine(accepted.text)) {
+      deferred.push(accepted);
+      continue;
+    }
+    if (!sawFinding && poolHasControl && !supportHasControl(excerpt)) continue;
+    sawFinding = true;
+    remember(accepted);
   }
+  for (const later of deferred) remember(later);
   if (!kept.length || !appearance.length) {
     return insufficientAnswer(
       "A busca recuperou registros, mas não houve afirmação que pudesse ser ligada somente a esses artigos. Nenhuma conclusão foi produzida.",

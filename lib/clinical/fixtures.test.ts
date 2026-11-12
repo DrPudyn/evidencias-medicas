@@ -4,7 +4,7 @@ import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
 import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
 import { mergeIndicationRecords, selectForSynthesis } from "./select";
-import { evidenceQuery, expandClassTerms } from "./terms";
+import { evidenceQuery, expandClassTerms, forceMetforminType2, readResultCache, writeResultCache } from "./terms";
 import { normalizeOddCaps, validateSynthesis } from "./validate";
 import type { EvidenceRecord } from "./types";
 
@@ -35,6 +35,7 @@ const PMIDs = [
   "40813122",
   "28941313",
   "39242178",
+  "38639549",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -274,14 +275,19 @@ test("população em adults, people ou título não descarta a frase de DM2", ()
   assert.equal(cardiovascular.sufficient, true);
   assert.match(cardiovascular.answer, /^DM2:/);
   assert.match(cardiovascular.answer, /eventos CV/);
-  for (const pmid of ["30653708", "34693515"]) {
-    const heartFailure = validateSynthesis(JSON.stringify({
-      itens: [{ texto: "DM2: pode reduzir a internação por IC.", pmid }],
-    }), [fixture(pmid)], ["sglt2 inhibitors"]);
-    assert.equal(heartFailure.sufficient, true, pmid);
-    assert.match(heartFailure.answer, /^DM2:/);
-    assert.match(heartFailure.answer, /internação por IC/);
-  }
+  const younger = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2: pode reduzir a internação por IC.", pmid: "30653708" }],
+  }), [fixture("30653708")], ["sglt2 inhibitors"]);
+  assert.equal(younger.sufficient, true);
+  assert.match(younger.answer, /^DM2:/);
+  assert.match(younger.answer, /internação por IC/);
+  const established = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2: pode reduzir a internação por IC.", pmid: "34693515" }],
+  }), [fixture("34693515")], ["sglt2 inhibitors"]);
+  assert.equal(established.sufficient, true);
+  assert.match(established.answer, /^DM2 com DCV:/);
+  assert.match(established.answer, /internação por IC/);
+  assert.doesNotMatch(established.answer, /\bpode\b/);
   const reduced = validateSynthesis(JSON.stringify({
     itens: [{ texto: "ICFEr: pode reduzir a morte.", pmid: "40892608" }],
   }), [fixture("40892608")], ["sglt2 inhibitors"]);
@@ -444,11 +450,30 @@ test("39163798: reduz sem comparação de doses sai; comparando doses, 750 mg/di
     itens: [{ texto: "A metformina reduz a incidência de diabetes em comparação com outras doses.", pmid: "39163798" }],
   }), [article], ["metformin"]);
   assert.equal(refused.sufficient, false);
-  const kept = validateSynthesis(JSON.stringify({
+  const onlyDose = validateSynthesis(JSON.stringify({
     itens: [{ texto: "Comparando doses, 750 mg/dia de metformina reduziu a incidência de diabetes.", pmid: "39163798" }],
-  }), [article], ["metformin"]);
+  }), [article], ["metformin"], "A metformina reduz a progressão para diabetes?");
+  assert.equal(onlyDose.sufficient, true);
+  assert.match(onlyDose.answer, /Comparando doses, 750 mg\/dia/);
+  const mixed = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "A metformina reduz a incidência de diabetes em relação ao placebo.", pmid: "41151201" },
+      { texto: "Comparando doses, 750 mg/dia de metformina reduz a progressão para diabetes.", pmid: "39163798" },
+    ],
+  }), [fixture("41151201"), article], ["metformin"], "A metformina reduz a progressão para diabetes?");
+  assert.equal(mixed.sufficient, true);
+  assert.match(mixed.answer, /placebo/);
+  assert.doesNotMatch(mixed.answer, /Comparando doses/);
+  const kept = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "A metformina reduz a incidência de diabetes em relação ao placebo.", pmid: "41151201" },
+      { texto: "Comparando doses, 750 mg/dia de metformina reduziu a incidência de diabetes.", pmid: "39163798" },
+    ],
+  }), [fixture("41151201"), article], ["metformin"], "A metformina reduz a incidência de diabetes?");
   assert.equal(kept.sufficient, true);
+  assert.match(kept.answer.split("\n")[0], /placebo/);
   assert.match(kept.answer, /Comparando doses, 750 mg\/dia/);
+  assert.doesNotMatch(kept.answer.split("\n")[0], /Comparando doses/);
 });
 
 test("41151201 e a NMA de exercício com metformina vêm na frente no pré-diabetes", () => {
@@ -492,14 +517,19 @@ test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho 
       return [];
     },
   });
-  const guideline = seen.find((item) => item.kind === "guideline" && item.sort === "relevance");
+  const guideline = seen.find((item) => item.kind === "guideline" && item.sort === "pub_date");
   const outcome = seen.find((item) => item.kind === "meta" && /kidney outcomes/i.test(item.term) && /cardiovascular outcomes/i.test(item.term));
   assert.ok(guideline);
   assert.match(guideline.term, /Practice Guideline/);
   assert.match(guideline.term, /sodium-glucose co-transporter/);
   assert.match(guideline.term, /SGLT2 inhibitors/);
   assert.ok(outcome);
-  assert.equal(outcome.sort, "relevance");
+  assert.equal(outcome.sort, "pub_date");
+  const heartFailure = seen.find((item) => /\(SGLT2 inhibitor\*\[tiab\]\) AND heart failure\[ti\]/.test(item.term));
+  assert.ok(heartFailure);
+  assert.equal(heartFailure.sort, "pub_date");
+  assert.match(heartFailure.term, /NOT \(combination\[tiab\] OR quadruple\[tiab\]\)/);
+  assert.doesNotMatch(heartFailure.term, /AND NOT/);
   assert.match(SUMMARY_SYSTEM, /até 40 palavras/);
   assert.match(SUMMARY_SYSTEM, /associado à metformina/);
   assert.match(SUMMARY_SYSTEM, /comparando doses, 750 mg\/dia/);
@@ -507,13 +537,13 @@ test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho 
   assert.match(YES_NO_LINE, /umbrella review ou a metanálise em rede/);
   assert.match(YES_NO_LINE, /comparado a placebo, controle ou sem tratamento/);
   const route = readFileSync(new URL("../../app/api/clinical-question/route.ts", import.meta.url), "utf8");
-  assert.match(route, /retmax: 30/);
+  assert.match(route, /retmax: cached\?\.length \|\| 30/);
   const prediabetes = seen.find((item) => /impaired glucose tolerance/i.test(item.term) && /diabetes incidence/i.test(item.term) && /Randomized Controlled Trial/.test(item.term));
   assert.equal(prediabetes, undefined);
   assert.doesNotMatch(SUMMARY_SYSTEM, /curta/);
   const dm2Query = seen.find((item) => item.kind === "meta" && /type 2 diabetes/i.test(item.term) && /T2DM/.test(item.term) && /cardiovascular/i.test(item.term) && /renal/i.test(item.term));
   assert.ok(dm2Query);
-  assert.equal(dm2Query.sort, "relevance");
+  assert.equal(dm2Query.sort, "pub_date");
 });
 
 test("metformina no pré-diabetes busca incidência, progressão ou prevenção", async () => {
@@ -539,6 +569,83 @@ test("metformina no pré-diabetes busca incidência, progressão ou prevenção"
   assert.match(query.term, /Randomized Controlled Trial/);
   assert.match(query.term, /Meta-Analysis/);
   assert.doesNotMatch(query.term, /AND NOT/);
-  assert.equal(query.sort, "relevance");
+  assert.equal(query.sort, "pub_date");
   assert.equal(query.includeTrials, true);
+  assert.doesNotMatch(query.term, /type 2 diabetes/i);
+});
+
+test("certeza, desfecho e AVC saem do trecho citado", () => {
+  const firm = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "DM2: pode reduzir a morte e o AVC.",
+      pmid: "38639549",
+      trecho: "Compared with usual care, SGLT2 inhibitors and GLP1 agonists reduce all-cause mortality (high CoE) and major adverse cardiovascular events (MACE) (moderate to high CoE), SGLT2 inhibitors reduce progression of chronic kidney disease (CKD) and heart failure hospitalizations and GLP1 agonists reduce stroke (high CoE)",
+    }],
+  }), [fixture("38639549")], ["sglt2 inhibitors"]);
+  assert.equal(firm.sufficient, true);
+  assert.match(firm.answer, /reduz a morte/);
+  assert.doesNotMatch(firm.answer, /\bpode\b/);
+  assert.doesNotMatch(firm.answer, /AVC/);
+
+  const guideline = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2: reduz o AVC não fatal.", pmid: "35961754" }],
+  }), [fixture("35961754")], ["sglt2 inhibitors"]);
+  assert.equal(guideline.sufficient, false);
+
+  const suggested = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "IC: pode reduzir eventos CV e a progressão renal.",
+      pmid: "39899304",
+      trecho: "Analysis of age × treatment interactions suggested that SGLT2 inhibitors were more cardioprotective in older than in younger people despite smaller reductions in HbA1c; GLP-1 receptor agonists were more cardioprotective in younger people.",
+    }],
+  }), [fixture("39899304")], ["sglt2 inhibitors"]);
+  assert.equal(suggested.sufficient, true);
+  assert.match(suggested.answer, /\bpode\b/);
+  assert.match(suggested.answer, /eventos CV/);
+  assert.doesNotMatch(suggested.answer, /renal/);
+  assert.match(suggested.answer, /^DM2:/);
+
+  const kidney = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "IC: reduz a progressão da doença renal.", pmid: "30697905" }],
+  }), [fixture("30697905")], ["sglt2 inhibitors"]);
+  assert.match(kidney.answer, /^DM2 com DRC:/);
+
+  const caution = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Cuidados: suspender antes da cirurgia.", pmid: "39899304" }],
+  }), [fixture("39899304")], ["sglt2 inhibitors"]);
+  assert.equal(caution.sufficient, false);
+});
+
+test("metformina em diabetes força type 2 e a frase de dose não abre a resposta", () => {
+  const concepts = forceMetforminType2([["metformin"], ["diabetes"]], "A metformina reduz eventos no diabetes?");
+  assert.ok(concepts.some((concept) => concept.includes("type 2 diabetes")));
+  const prediabetes = forceMetforminType2([["metformin"], ["prediabetes"]], "A metformina reduz a progressão do pré-diabetes?");
+  assert.equal(prediabetes.some((concept) => concept.includes("type 2 diabetes")), false);
+});
+
+test("o conjunto de PMIDs fica estável por sete dias", async () => {
+  const db = new (await import("node:sqlite")).DatabaseSync(":memory:");
+  db.exec("CREATE TABLE clinical_result_cache (query_key text primary key, pmids text not null, updated_at integer not null)");
+  const adapter = {
+    prepare(sql: string) {
+      return {
+        bind(...params: unknown[]) {
+          return {
+            async first<T>() {
+              return (db.prepare(sql).get(...(params as never[])) as T | undefined) ?? null;
+            },
+            async run() {
+              db.prepare(sql).run(...(params as never[]));
+              return { meta: { changes: 1 } };
+            },
+          };
+        },
+      };
+    },
+  };
+  const key = "pub_date|30|sglt2-heart-failure-fixture";
+  const writtenAt = Date.parse("2026-11-01T00:00:00Z");
+  await writeResultCache(key, ["32877652", "30697905"], adapter, writtenAt);
+  assert.deepEqual(await readResultCache(key, adapter, writtenAt + 6 * 24 * 60 * 60 * 1000), ["32877652", "30697905"]);
+  assert.equal(await readResultCache(key, adapter, writtenAt + 8 * 24 * 60 * 60 * 1000), null);
 });

@@ -171,7 +171,8 @@ test("fármaco é buscado com cada condição clínica e os resultados se unem",
       return [];
     },
   });
-  assert.equal(seen.filter((term) => /heart failure/i.test(term) && /sglt2/i.test(term)).length, 1);
+  assert.ok(seen.filter((term) => /heart failure/i.test(term) && /sglt2/i.test(term)).length >= 1);
+  assert.ok(seen.some((term) => /SGLT2 inhibitor\*\[tiab\]/.test(term) && /heart failure\[ti\]/.test(term)));
   assert.ok(seen.filter((term) => /type 2 diabetes/i.test(term) && /sglt2/i.test(term)).length >= 1);
   assert.deepEqual(sentToSummary, ["20", "10"]);
   assert.equal(answer.sufficient, true);
@@ -415,7 +416,8 @@ test("pergunta de indicação sem doença não inventa condições", async () =>
       return /heart failure|type 2 diabetes/i.test(term) ? [] : [record("55", "Diretriz", "sglt2 inhibitors")];
     },
   });
-  assert.equal(seen.some((term) => /heart failure/i.test(term)), false);
+  assert.equal(seen.some((term) => /heart failure/i.test(term) && !/heart failure\[ti\]/.test(term)), false);
+  assert.ok(seen.some((term) => /SGLT2 inhibitor\*\[tiab\]/.test(term) && /heart failure\[ti\]/.test(term)));
   assert.ok(seen.some((term) => /type 2 diabetes/i.test(term) && /cardiovascular/i.test(term) && /T2DM/.test(term)));
   assert.equal(seen.some((term) => /type 2 diabetes/i.test(term) && !/cardiovascular/i.test(term)), false);
   assert.match(seen[0], /sglt2 inhibitors/);
@@ -588,9 +590,9 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
       return [];
     },
   });
-  assert.ok(seen.filter((item) => item.kind === "guideline" && item.sort === "relevance").length >= 1);
+  assert.ok(seen.filter((item) => item.kind === "guideline" && item.sort === "pub_date").length >= 1);
   assert.ok(seen.some((item) => /heart failure/i.test(item.term) && /HFrEF|reduced ejection/i.test(item.term)));
-  assert.ok(seen.filter((item) => item.kind === "meta" && item.sort === "relevance").length >= 2);
+  assert.ok(seen.filter((item) => item.kind === "meta" && item.sort === "pub_date").length >= 2);
   assert.equal(seen.some((item) => /heart failure/i.test(item.term) && /sglt2/i.test(item.term)), true);
   assert.equal(answer.sufficient, true);
   assert.ok(answer.references.some((item) => item.pmid === "11"));
@@ -1019,8 +1021,9 @@ test("indicação sempre busca diretriz e desfechos cardiovasculares ou renais",
       return [];
     },
   });
-  assert.equal(seen.some((item) => item.kind === "guideline" && item.sort === "relevance"), true);
-  assert.equal(seen.some((item) => /cardiovascular outcomes/i.test(item.term) && /kidney outcomes/i.test(item.term) && /mortality/i.test(item.term) && item.kind === "meta" && item.sort === "relevance"), true);
+  assert.equal(seen.some((item) => item.kind === "guideline" && item.sort === "pub_date"), true);
+  assert.equal(seen.some((item) => /cardiovascular outcomes/i.test(item.term) && /kidney outcomes/i.test(item.term) && /mortality/i.test(item.term) && item.kind === "meta" && item.sort === "pub_date"), true);
+  assert.equal(seen.some((item) => /\(SGLT2 inhibitor\*\[tiab\]\) AND heart failure\[ti\]/.test(item.term) && item.sort === "pub_date"), true);
   const guide = record("1", "Diretriz", "sglt2 inhibitors heart failure");
   const heartFailure = record("4", "Meta-análise", "sglt2 inhibitors heart failure meta-analysis");
   const outcome = record("2", "Meta-análise", "sglt2 inhibitors cardiovascular outcomes in type 2 diabetes");
