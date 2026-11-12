@@ -135,6 +135,18 @@ export function isType2DiabetesTitle(title: string) {
   return /type 2 diabetes|type ii diabetes|\bt2dm\b|\bt2d\b/i.test(title);
 }
 
+export function isHeartFailureTitle(title: string) {
+  return /heart failure|\bhfref\b|\bhfpef\b/i.test(title);
+}
+
+export function byTypeThenPmidDesc(a: EvidenceRecord, b: EvidenceRecord) {
+  const type = typeRank(a.type) - typeRank(b.type);
+  if (type) return type;
+  const pmid = Number(b.pmid) - Number(a.pmid);
+  if (pmid) return pmid;
+  return a.pmid < b.pmid ? 1 : -1;
+}
+
 function synthesisRank(article: EvidenceRecord, question: string) {
   const asked = foldText(question);
   if (isYesNoQuestion(question) && /metformin/.test(asked)) {
@@ -202,7 +214,7 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
     if (narrowed.length || !pool.length) pool = narrowed;
   }
   return mixTypes(pool)
-    .sort((a, b) => synthesisRank(a, question) - synthesisRank(b, question))
+    .sort((a, b) => synthesisRank(a, question) - synthesisRank(b, question) || byTypeThenPmidDesc(a, b))
     .slice(0, limit);
 }
 
@@ -241,14 +253,15 @@ export function mergeIndicationRecords(input: {
   const diverted = [...input.metas, ...input.recent, ...input.supplemental, ...(input.outcomes || [])].filter(notAnIndication);
   const guides = keep(input.guidelines)
     .map((article, index) => ({ article, index, society: isSocietyGuideline(article.title) ? 0 : 1 }))
-    .sort((a, b) => a.society - b.society || a.index - b.index)
+    .sort((a, b) => a.society - b.society || byTypeThenPmidDesc(a.article, b.article))
     .map((item) => item.article);
   const metas = keep(input.metas);
   const extra = keep(input.supplemental);
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
-  const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title));
-  const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title));
+  const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title)).sort(byTypeThenPmidDesc);
+  const hfMetas = [...outcomes, ...metas].filter((article) => isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
+  const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title) && !isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
   const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];
   const used = new Set<string>();
@@ -260,10 +273,11 @@ export function mergeIndicationRecords(input: {
   take(guides[0]);
   take(dm2Outcomes[0]);
   take(dm2Outcomes[1]);
+  take(hfMetas[0]);
   take(otherOutcomes[0]);
   take(cautions[0]);
   take(metas[0]);
-  const lanes = [guides.slice(1), otherOutcomes.slice(1), dm2Outcomes.slice(2), metas.slice(1), extra, recent];
+  const lanes = [guides.slice(1), otherOutcomes.slice(1), hfMetas.slice(1), dm2Outcomes.slice(2), metas.slice(1), extra, recent];
   let pending = true;
   while (pending && picked.length < limit) {
     pending = false;
@@ -276,5 +290,5 @@ export function mergeIndicationRecords(input: {
       if (picked.length >= limit) break;
     }
   }
-  return picked.sort((a, b) => synthesisRank(a, input.question) - synthesisRank(b, input.question));
+  return picked;
 }

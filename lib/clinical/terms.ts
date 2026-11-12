@@ -157,6 +157,20 @@ export function publicationDateClause(today: string) {
   return `("1900/01/01"[Date - Publication] : "${today}"[Date - Publication])`;
 }
 
+export function isMetforminPrediabetes(question: string) {
+  const asked = fold(question);
+  return /metformin/.test(asked) && /pre-?diabet|impaired glucose|tolerancia/.test(asked);
+}
+
+/** Meta-analyses and trials of metformin for preventing diabetes in prediabetes. */
+export function metforminPrediabetesQuery(today: string) {
+  const metformin = `("metformin"[Title/Abstract] OR "metformin"[MeSH Terms])`;
+  const prediabetes = `("prediabetes"[Title/Abstract] OR "prediabetes"[MeSH Terms] OR "impaired glucose tolerance"[Title/Abstract] OR "impaired glucose tolerance"[MeSH Terms])`;
+  const effect = `("diabetes incidence"[Title/Abstract] OR "progression"[Title/Abstract] OR "prevention"[Title/Abstract])`;
+  const design = `("Meta-Analysis"[Publication Type] OR "Randomized Controlled Trial"[Publication Type])`;
+  return `${metformin} AND ${prediabetes} AND ${effect} AND ${design} NOT (animals[mh] NOT humans[mh]) AND ${publicationDateClause(today)}`;
+}
+
 /** Adds the short forms a guideline or meta-analysis actually uses in the title. */
 export function expandClassTerms(concept: SearchConcept) {
   const terms = [...concept];

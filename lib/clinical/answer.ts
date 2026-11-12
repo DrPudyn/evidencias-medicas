@@ -1,6 +1,6 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
+import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, isMetforminPrediabetes, metforminPrediabetesQuery, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
 import { insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
@@ -32,13 +32,17 @@ async function gatherIndications(
   const safetyQuery = evidenceQuery([searchClass, ["adverse effects", "perioperative"]], today);
   const outcomeQuery = evidenceQuery([searchClass, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
   const dm2OutcomeQuery = evidenceQuery([searchClass, ["type 2 diabetes", "T2DM"], ["cardiovascular", "kidney", "renal"]], today);
-  const [guidelines, metas, recent, cautions, outcomes, dm2Outcomes, ...paired] = await Promise.all([
+  const prediabetesSearch = isMetforminPrediabetes(question)
+    ? search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true })
+    : Promise.resolve([] as EvidenceRecord[]);
+  const [guidelines, metas, recent, cautions, outcomes, dm2Outcomes, prediabetesTrials, ...paired] = await Promise.all([
     search(classQuery, { kind: "guideline", sort: "relevance" }),
     search(classQuery, { kind: "meta", sort: "relevance" }),
     search(classQuery, { kind: "high-level", sort: "pub_date" }),
     search(safetyQuery, { kind: "high-level", sort: "relevance" }),
     search(outcomeQuery, { kind: "meta", sort: "relevance" }),
     search(dm2OutcomeQuery, { kind: "meta", sort: "relevance" }),
+    prediabetesSearch,
     ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
   ]);
   const supplemental: EvidenceRecord[] = [];
@@ -55,7 +59,7 @@ async function gatherIndications(
   const merged = mergeIndicationRecords({
     guidelines,
     metas,
-    recent: [...recent, ...paired.flat()],
+    recent: [...recent, ...paired.flat(), ...prediabetesTrials],
     supplemental,
     outcomes: [...dm2Outcomes, ...outcomes],
     cautions,
@@ -114,8 +118,10 @@ export async function answerClinicalQuestion(input: {
     records = await gatherIndications(input.search, scoped, main, question, today);
   } else {
     const pairTerms = pairQueries(scoped, today);
-    if (pairTerms.length) {
-      const batches = await Promise.all(pairTerms.map((term) => input.search(term)));
+    const searches = pairTerms.map((term) => input.search(term));
+    if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true }));
+    if (searches.length) {
+      const batches = await Promise.all(searches);
       records = selectForSynthesis(uniqueRecords(batches.flat()), main, 6, question);
     }
     if (!records.length) {
@@ -148,10 +154,10 @@ export async function answerClinicalQuestion(input: {
         : `${RETRY_WARNING} PMIDs: ${ids}.`;
       raw = await input.ai.summarize(`${question}\n\n${note}`, records, { direct: false });
     }
-    let answer = validateSynthesis(raw, records, main);
+    let answer = validateSynthesis(raw, records, main, question);
     if (!answer.sufficient && !retried && !synthesisIsEmpty(raw)) {
       raw = await input.ai.summarize(`${question}\n\n${rejectionNote(raw, records)}`, records, { direct: false });
-      answer = validateSynthesis(raw, records, main);
+      answer = validateSynthesis(raw, records, main, question);
     }
     return answer;
   } catch {

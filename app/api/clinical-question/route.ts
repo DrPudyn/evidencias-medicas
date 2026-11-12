@@ -12,9 +12,9 @@ async function searchHighLevel(term: string, options?: ClinicalSearchOptions): P
     term: queryForKind(term, kind),
     sort: options?.sort || (kind === "high-level" ? "pub_date" : "relevance"),
     page: 1,
-    retmax: 12,
+    retmax: 30,
     abstracts: true,
-    highLevelOnly: true,
+    highLevelOnly: !options?.includeTrials,
   });
   return result.articles.map((article) => ({
     pmid: article.id,

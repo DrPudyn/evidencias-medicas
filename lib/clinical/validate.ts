@@ -1,5 +1,6 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
 import type { SearchConcept } from "./terms";
+import { isYesNoQuestion } from "./prompts";
 import { classAliases, conceptNeedles } from "./select";
 import { CLINICAL_DISCLAIMER } from "./types";
 
@@ -183,7 +184,8 @@ function withAbbreviations(text: string) {
 }
 
 function textHasOutcome(text: string, outcome: Outcome) {
-  const folded = withAbbreviations(text);
+  let folded = withAbbreviations(text);
+  if (outcome.stems.includes("cardiovascular")) folded = folded.replace(/cardiovascular risk/g, " ");
   if (outcome.stems.some((stem) => folded.includes(stem))) return true;
   return outcome.tokens.some((token) => new RegExp(`(?:^|[^a-z0-9])${token}(?:[^a-z0-9]|$)`).test(folded));
 }
@@ -215,23 +217,20 @@ function hedgeAt(text: string) {
   return match.index;
 }
 
-const SOFTEN_VERBS: Array<[RegExp, string]> = [
-  [/\bmelhoraram\b/i, "podem melhorar"],
-  [/\bmelhorou\b/i, "pode melhorar"],
-  [/\bmelhoram\b/i, "podem melhorar"],
-  [/\bmelhora\b/i, "pode melhorar"],
-  [/\breduziram\b/i, "podem reduzir"],
-  [/\breduziu\b/i, "pode reduzir"],
-  [/\breduzem\b/i, "podem reduzir"],
-  [/\breduz\b/i, "pode reduzir"],
-  [/\baumentaram\b/i, "podem aumentar"],
-  [/\baumentou\b/i, "pode aumentar"],
-  [/\baumentam\b/i, "podem aumentar"],
-  [/\baumenta\b/i, "pode aumentar"],
-  [/\brepresentam\b/i, "podem representar"],
-  [/\brepresenta\b/i, "pode representar"],
-  [/\bsão\b/i, "podem ser"],
-  [/\bé\b/i, "pode ser"],
+const FINITE_VERBS: Array<[RegExp, string, boolean]> = [
+  [/\bmelhoraram\b/gi, "melhorar", true],
+  [/\bmelhorou\b/gi, "melhorar", false],
+  [/\bmelhoram\b/gi, "melhorar", true],
+  [/\breduziram\b/gi, "reduzir", true],
+  [/\breduziu\b/gi, "reduzir", false],
+  [/\breduzem\b/gi, "reduzir", true],
+  [/\breduz\b/gi, "reduzir", false],
+  [/\baumentaram\b/gi, "aumentar", true],
+  [/\baumentou\b/gi, "aumentar", false],
+  [/\baumentam\b/gi, "aumentar", true],
+  [/\baumenta\b/gi, "aumentar", false],
+  [/\brepresentam\b/gi, "representar", true],
+  [/\brepresenta\b/gi, "representar", false],
 ];
 
 const ALIGNMENT: Array<[string, string, number]> = [
@@ -288,19 +287,105 @@ export function claimNeedsHedge(line: string, excerpt: string) {
   return top.length > 0 && top.every((item) => sentenceHedgesAligned(line, item.sentence));
 }
 
-function softenVerb(line: string) {
-  for (const [pattern, replacement] of SOFTEN_VERBS) {
-    if (pattern.test(line)) return line.replace(pattern, replacement);
+function hedgeCoordinatedVerbs(line: string) {
+  let plural = false;
+  let replaced = false;
+  let text = line;
+  for (const [pattern, infinitive, isPlural] of FINITE_VERBS) {
+    text = text.replace(pattern, () => {
+      replaced = true;
+      if (isPlural) plural = true;
+      return infinitive;
+    });
   }
-  return line;
+  if (/\b(pode|podem|sugere\w*|possivelmente)\b/.test(fold(text))) return text;
+  if (!replaced) return null;
+  const modal = plural ? "podem" : "pode";
+  return text.replace(/\b(melhorar|reduzir|aumentar|representar)\b/, `${modal} $1`);
 }
 
-/** Adds pode when the supporting sentence is only a suggestion. */
+/** Adds pode to every coordinated verb when the supporting sentence is only a suggestion. */
 export function ensureModalHedge(line: string, excerpt: string) {
   if (!claimNeedsHedge(line, excerpt)) return line;
-  if (/\b(sugere\w*|pode|podem|possivelmente)\b/.test(fold(line))) return line;
-  const softened = softenVerb(line);
-  return softened === line ? null : softened;
+  return hedgeCoordinatedVerbs(line);
+}
+
+function contextFreeClause(sentence: string) {
+  const trimmed = sentence.trim().replace(/^[A-Za-z][A-Za-z /-]{1,40}:\s*/, "");
+  if (/\bhave been shown\b|\bhave shown\b|\b(?:is|are) known to\b|\bare known\b|\bis known\b|\balready known\b/i.test(trimmed)) return "";
+  if (/^in addition to the established\b/i.test(trimmed)) {
+    const comma = trimmed.indexOf(",");
+    return comma > 0 ? trimmed.slice(comma + 1).trim() : "";
+  }
+  return trimmed;
+}
+
+function usableSentences(excerpt: string) {
+  return excerpt.split(/\n+|(?<=[.!?])\s+/).map(contextFreeClause).filter(Boolean);
+}
+
+function lineNamesHighRiskDiabetes(line: string) {
+  const folded = fold(line);
+  return /alto risco/.test(folded) && /dm2|diabetes/.test(folded);
+}
+
+/** Drops a claim whose outcome is only in a context clause, or whose population is not in the result. */
+export function supportedOnlyByContext(line: string, excerpt: string) {
+  const hits = outcomeHits(line);
+  if (!hits.length) return false;
+  const raw = excerpt.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome)));
+  const supports = usableSentences(excerpt).filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome)));
+  if (raw.length > 0 && supports.length === 0) return true;
+  if (!lineNamesHighRiskDiabetes(line) || !supports.length) return false;
+  return !supports.some((sentence) => /high cardiovascular risk|high risk/i.test(sentence));
+}
+
+function studiedPopulations(excerpt: string) {
+  const text = usableSentences(excerpt).join(" ");
+  const pops = new Set<string>();
+  if (/patients with type 2 diabetes|patients with t2dm|in patients with t2dm|in patients with type 2 diabetes/i.test(text)) pops.add("DM2");
+  if (/patients with (?:type 2 diabetes(?: mellitus)?(?: \(t2dm\))? and )?(?:chronic kidney disease|ckd)|t2dm and ckd/i.test(text)) pops.add("DRC");
+  const heartFailureCohort = /patients with (?:heart failure|hfref|hfpef)/i.test(text);
+  const heartFailureAside = /history of heart failure|with and without[^.]{0,40}heart failure|regardless of[^.]{0,80}heart failure|irrespective of[^.]{0,80}heart failure/i.test(text);
+  if (heartFailureCohort && !heartFailureAside) pops.add("IC");
+  if (pops.has("DM2") && pops.has("DRC")) pops.add("DM2 com DRC");
+  return pops;
+}
+
+function canonicalPopulation(label: string) {
+  const folded = fold(label);
+  if (folded === "dm2 com drc") return "DM2 com DRC";
+  if (folded === "icfer") return "ICFEr";
+  if (folded === "icfep") return "ICFEp";
+  if (folded === "dm2") return "DM2";
+  if (folded === "drc") return "DRC";
+  return "IC";
+}
+
+function preferredPopulation(pops: Set<string>) {
+  if (pops.has("DM2 com DRC")) return "DM2 com DRC";
+  if (pops.has("DM2")) return "DM2";
+  if (pops.has("IC")) return "IC";
+  if (pops.has("DRC")) return "DRC";
+  return "";
+}
+
+/** The label before the colon is the studied population, not an outcome. */
+export function alignPopulationLabel(line: string, excerpt: string) {
+  const match = line.match(/^(DM2 com DRC|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
+  if (!match) return line;
+  const label = canonicalPopulation(match[1]);
+  const pops = studiedPopulations(excerpt);
+  if (pops.has(label)) return line;
+  const replacement = preferredPopulation(pops);
+  if (!replacement) return null;
+  return line.replace(match[0], `${replacement}:`);
+}
+
+export function missingControlContrast(line: string, excerpt: string) {
+  if (!/placebo|controle|control group|grupo controle|usual care|sem tratamento|no treatment/i.test(excerpt)) return false;
+  if (!/\b(reduz\w*|melhor\w*|diminui\w*|aument\w*)\b/.test(fold(line))) return false;
+  return !/placebo|controle|comparad|versus|em relacao|sem tratamento/i.test(fold(line));
 }
 
 function sentenceHasClass(sentence: string, needles: string[]) {
@@ -320,7 +405,7 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
   const needles = conceptNeedles(concept);
   const hits = outcomeHits(line);
   if (!needles.length || !hits.length) return false;
-  const sentences = excerpt.split(/\n+|(?<=[.!?])\s+/);
+  const sentences = usableSentences(excerpt);
   const supporting = sentences.filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome)));
   if (!supporting.length) return true;
   return !supporting.some((sentence) => sentenceHasClass(sentence, needles) && !sentenceHasOtherDrug(sentence, needles));
@@ -386,6 +471,9 @@ export function rejectionNote(raw: string, records: EvidenceRecord[]) {
     }
     if (text && record && ignoresPooledConclusion(text, record.abstract || "")) {
       return "Não fique só no ensaio negativo. A frase tem de trazer a conclusão do conjunto, quando o trecho disser however, totality ou pooled.";
+    }
+    if (text && record && missingControlContrast(text, record.abstract || "")) {
+      return "A primeira linha tem de dizer o efeito em relação ao placebo, controle ou sem tratamento.";
     }
   }
   return "Cada frase tem de estar no trecho do PMID citado. Não invente comparação nem efeito de outro fármaco.";
@@ -581,15 +669,19 @@ export function synthesisNeedsRetry(raw: string, records: EvidenceRecord[]) {
   return !markers.some((marker) => resolveToken(marker, records, byId));
 }
 
-function acceptDraft(draft: Draft, concept?: SearchConcept) {
+function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = false) {
   const citedText = draft.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
   let text = stripInventedCertainty(draft.text, citedAbstract);
   text = attributeSpecificDrug(text, citedAbstract);
+  const labeled = alignPopulationLabel(text, citedAbstract);
+  if (!labeled) return null;
+  text = labeled;
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
-  if (claimOutsideResults(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
+  if (claimOutsideResults(text, citedAbstract) || supportedOnlyByContext(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
   if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract) || ignoresPooledConclusion(text, citedAbstract)) return null;
+  if (requireControl && missingControlContrast(text, citedAbstract)) return null;
   const hedged = ensureModalHedge(text, citedAbstract);
   if (!hedged) return null;
   text = ensureCertaintyCaveat(hedged, citedAbstract);
@@ -597,7 +689,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept) {
   return { ...draft, text };
 }
 
-export function validateSynthesis(raw: string, records: EvidenceRecord[], concept?: SearchConcept): ClinicalAnswer {
+export function validateSynthesis(raw: string, records: EvidenceRecord[], concept?: SearchConcept, question = ""): ClinicalAnswer {
   const byId = new Map(records.map((record) => [record.pmid, record]));
   const parsed = parseSynthesis(raw);
   const emptyMessage = records.length
@@ -618,9 +710,12 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
     : draftsFromAnswer(typeof parsed.answer === "string" ? parsed.answer.trim() : "", records, byId, discarded);
   const kept: Array<{ text: string; resolved: EvidenceRecord[] }> = [];
   const appearance: string[] = [];
+  let sawFinding = false;
+  const yesNo = isYesNoQuestion(question);
   for (const draft of drafts) {
     if (isCertaintyOnlyCaveat(draft.text)) continue;
-    const accepted = acceptDraft(draft, concept);
+    const accepted = acceptDraft(draft, concept, yesNo && !sawFinding);
+    sawFinding = true;
     if (!accepted) continue;
     for (const record of accepted.resolved) {
       if (!appearance.includes(record.pmid)) appearance.push(record.pmid);

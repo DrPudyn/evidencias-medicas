@@ -26,6 +26,8 @@ const PMIDs = [
   "32877652",
   "30424892",
   "33031522",
+  "30697905",
+  "33441402",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -82,6 +84,8 @@ test("fixtures reais trazem os resumos do PubMed", () => {
   assert.match(fixture("32877652").abstract, /suggest that these agents also improve renal outcomes/);
   assert.match(fixture("30424892").title, /type 2 diabetes/);
   assert.match(fixture("33031522").title, /Type 2 Diabetes/);
+  assert.match(fixture("30697905").title, /type 2 diabetes mellitus and chronic kidney disease/i);
+  assert.match(fixture("33441402").abstract, /placebo/);
 });
 
 test("35404670: hospitalização por IC e infecção genital ficam sem ressalva", () => {
@@ -204,6 +208,12 @@ test("32877652 e 39163798 recebem pode quando o trecho diz suggest ou may", () =
   }), [fixture("32877652")], ["sglt2 inhibitors"]);
   assert.equal(renal.sufficient, true);
   assert.match(renal.answer, /podem melhorar os desfechos renais/);
+  const partial = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 pode melhorar os desfechos renais e reduz a morte.", pmid: "32877652" }],
+  }), [fixture("32877652")], ["sglt2 inhibitors"]);
+  assert.equal(partial.sufficient, true);
+  assert.match(partial.answer, /pode melhorar os desfechos renais e reduzir a morte/);
+  assert.doesNotMatch(partial.answer, /e reduz /);
   const already = validateSynthesis(JSON.stringify({
     itens: [{ texto: "Os inibidores de SGLT2 sugerem melhora dos desfechos renais.", pmid: "32877652" }],
   }), [fixture("32877652")], ["sglt2 inhibitors"]);
@@ -230,8 +240,65 @@ test("30424892 e 33031522 ocupam a vaga de DM2 e a metanálise de IC não", () =
     limit: 6,
   });
   const ids = merged.map((item) => item.pmid);
-  assert.deepEqual(ids.slice(1, 3), ["30424892", "33031522"]);
-  assert.ok(!ids.slice(1, 3).includes("32877652"));
+  assert.deepEqual(ids.slice(1, 4), ["30424892", "33031522", "32877652"]);
+  const reversed = mergeIndicationRecords({
+    guidelines: [fixture("35961754")],
+    metas: [],
+    outcomes: [fixture("33031522"), fixture("32877652"), fixture("30424892")],
+    recent: Array.from({ length: 6 }, (_, index) => filler(String(9200 + index))),
+    supplemental: [],
+    cautions: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  }).map((item) => item.pmid);
+  assert.deepEqual(reversed, ids);
+});
+
+test("36351458 não usa o contexto de benefício cardiovascular já estabelecido", () => {
+  const article = fixture("36351458");
+  const context = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduzem eventos cardiovasculares em DM2 de alto risco.", pmid: "36351458" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(context.sufficient, false);
+  const kidney = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduzem a progressão da doença renal.", pmid: "36351458" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(kidney.sufficient, true);
+  assert.match(kidney.answer, /doença renal/);
+});
+
+test("o rótulo segue a população do estudo, não o desfecho", () => {
+  const zelniker = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "IC: Os inibidores de SGLT2 reduzem a hospitalização por IC.", pmid: "30424892" }],
+  }), [fixture("30424892")], ["sglt2 inhibitors"]);
+  assert.equal(zelniker.sufficient, true);
+  assert.match(zelniker.answer, /^DM2:/);
+  assert.doesNotMatch(zelniker.answer, /^IC:/);
+  const kidneyDiabetes = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "DM2 com DRC: Os inibidores de SGLT2 reduzem desfechos cardiovasculares e renais.", pmid: "30697905" }],
+  }), [fixture("30697905")], ["sglt2 inhibitors"]);
+  assert.equal(kidneyDiabetes.sufficient, true);
+  assert.match(kidneyDiabetes.answer, /^DM2 com DRC:/);
+  const mislabeled = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "IC: Os inibidores de SGLT2 reduzem a internação por IC.", pmid: "33441402" }],
+  }), [fixture("33441402")], ["sglt2 inhibitors"]);
+  assert.equal(mislabeled.sufficient, true);
+  assert.match(mislabeled.answer, /^DM2:/);
+  assert.doesNotMatch(mislabeled.answer, /^IC:/);
+});
+
+test("pergunta sim/não diz o efeito contra o controle quando o trecho compara", () => {
+  const question = "Os inibidores de SGLT2 reduzem a mortalidade?";
+  const bare = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduzem a mortalidade.", pmid: "33441402" }],
+  }), [fixture("33441402")], ["sglt2 inhibitors"], question);
+  assert.equal(bare.sufficient, false);
+  const compared = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduzem a mortalidade em relação ao placebo.", pmid: "33441402" }],
+  }), [fixture("33441402")], ["sglt2 inhibitors"], question);
+  assert.equal(compared.sufficient, true);
+  assert.match(compared.answer, /placebo/);
 });
 
 test("41202026 mantém benefício renal, hospitalização e mortalidade com ou sem diabetes", () => {
@@ -335,8 +402,40 @@ test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho 
   assert.match(SUMMARY_SYSTEM, /comparando doses, 750 mg\/dia/);
   assert.match(SUMMARY_SYSTEM, /DM2 de alto risco cardiovascular não se funde com DRC/);
   assert.match(YES_NO_LINE, /umbrella review ou a metanálise em rede/);
+  assert.match(YES_NO_LINE, /comparado a placebo, controle ou sem tratamento/);
+  const route = readFileSync(new URL("../../app/api/clinical-question/route.ts", import.meta.url), "utf8");
+  assert.match(route, /retmax: 30/);
+  const prediabetes = seen.find((item) => /impaired glucose tolerance/i.test(item.term) && /diabetes incidence/i.test(item.term) && /Randomized Controlled Trial/.test(item.term));
+  assert.equal(prediabetes, undefined);
   assert.doesNotMatch(SUMMARY_SYSTEM, /curta/);
   const dm2Query = seen.find((item) => item.kind === "meta" && /type 2 diabetes/i.test(item.term) && /T2DM/.test(item.term) && /cardiovascular/i.test(item.term) && /renal/i.test(item.term));
   assert.ok(dm2Query);
   assert.equal(dm2Query.sort, "relevance");
+});
+
+test("metformina no pré-diabetes busca incidência, progressão ou prevenção", async () => {
+  const seen: Array<{ term: string; sort?: string; includeTrials?: boolean }> = [];
+  await answerClinicalQuestion({
+    question: "A metformina reduz a progressão do pré-diabetes?",
+    ai: {
+      async searchTerms() {
+        return JSON.stringify({ concepts: [["metformin"], ["prediabetes"]] });
+      },
+      async summarize() {
+        return JSON.stringify({ itens: [] });
+      },
+    },
+    search: async (term, options) => {
+      seen.push({ term, sort: options?.sort, includeTrials: options?.includeTrials });
+      return [];
+    },
+  });
+  const query = seen.find((item) => /impaired glucose tolerance/i.test(item.term) && /diabetes incidence/i.test(item.term) && /prevention/i.test(item.term));
+  assert.ok(query);
+  assert.match(query.term, /metformin/i);
+  assert.match(query.term, /Randomized Controlled Trial/);
+  assert.match(query.term, /Meta-Analysis/);
+  assert.doesNotMatch(query.term, /AND NOT/);
+  assert.equal(query.sort, "relevance");
+  assert.equal(query.includeTrials, true);
 });

@@ -29,6 +29,7 @@ export type ClinicalAnswer = {
 export type ClinicalSearchOptions = {
   sort?: "relevance" | "pub_date";
   kind?: "high-level" | "guideline" | "meta";
+  includeTrials?: boolean;
 };
 
 export type ClinicalAi = {

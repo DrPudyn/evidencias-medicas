@@ -267,9 +267,9 @@ test("pergunta clínica normal cita só PMIDs recuperados", async () => {
   assert.match(seen[0], /systematic\[sb\]/);
   assert.equal(answer.sufficient, true);
   assert.match(answer.answer, /\[1\].*\[2\]/);
-  assert.deepEqual(answer.references.map((item) => item.pmid), ["12345678", "87654321"]);
+  assert.deepEqual(answer.references.map((item) => item.pmid), ["87654321", "12345678"]);
   assert.deepEqual(answer.references.map((item) => item.n), [1, 2]);
-  assert.equal(answer.references[0].url, "https://pubmed.ncbi.nlm.nih.gov/12345678/");
+  assert.equal(answer.references[0].url, "https://pubmed.ncbi.nlm.nih.gov/87654321/");
   assert.equal("journal" in answer.references[0], false);
   assert.equal(answer.discardedCitations.length, 0);
   assert.match(answer.disclaimer, /não substitui o julgamento clínico/i);
@@ -351,7 +351,7 @@ test("seleção prioriza diretriz e revisão recente e descarta artigo fora do t
     { ...record("10000005", "Diretriz", "sglt2 inhibitors"), date: "2022 Mar" },
   ];
   const selected = selectForSynthesis(papers, ["sglt2 inhibitors"], 8);
-  assert.deepEqual(selected.map((item) => item.pmid), ["10000005", "10000001", "10000003", "10000002"]);
+  assert.deepEqual(selected.map((item) => item.pmid), ["10000005", "10000002", "10000001", "10000003"]);
   assert.equal(mentionsConcept({
     title: "SGLT2 inhibitors and kidney outcomes",
     abstract: "Gliflozin reduced hospitalization.",
@@ -370,7 +370,7 @@ test("seleção prioriza diretriz e revisão recente e descarta artigo fora do t
     { ...record("30", "Revisão sistemática", "sglt2 inhibitors"), date: "2024" },
     { ...record("10", "Revisão sistemática", "sglt2 inhibitors"), date: "2024" },
   ], ["sglt2 inhibitors"]);
-  assert.deepEqual(tied.map((item) => item.pmid), ["10", "30"]);
+  assert.deepEqual(tied.map((item) => item.pmid), ["30", "10"]);
   assert.equal(selectForSynthesis([
     record("10000006", "Revisão sistemática", "Empagliflozin in heart failure"),
   ], ["sglt2 inhibitors"]).length, 1);
@@ -604,8 +604,9 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
     limit: 6,
   });
   assert.equal(merged.length, 6);
-  assert.equal(merged[0].pmid, "11");
+  assert.equal(merged[0].pmid, "13");
   assert.equal(merged[1].pmid, "14");
+  assert.ok(merged.some((item) => item.pmid === "11"));
   assert.equal(conditionsFromGuideline(guideline, "indicações de sglt2")[0], "heart failure");
   const term = queryForKind('("sglt2 inhibitors"[Title/Abstract]) AND (systematic[sb] OR "Meta-Analysis"[Publication Type] OR "Practice Guideline"[Publication Type] OR "Guideline"[Publication Type])', "guideline");
   assert.match(term, /Practice Guideline/);
