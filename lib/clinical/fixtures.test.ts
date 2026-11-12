@@ -20,6 +20,9 @@ const PMIDs = [
   "32036861",
   "39163798",
   "41151201",
+  "41202026",
+  "41203232",
+  "40884036",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -54,7 +57,7 @@ function filler(pmid: string): EvidenceRecord {
   };
 }
 
-test("fixtures reais trazem os onze resumos do PubMed", () => {
+test("fixtures reais trazem os resumos do PubMed", () => {
   assert.deepEqual(rows.map((row) => row.pmid), PMIDs);
   for (const row of rows) {
     assert.ok(row.title.length > 40, row.pmid);
@@ -69,6 +72,10 @@ test("fixtures reais trazem os onze resumos do PubMed", () => {
   assert.match(fixture("35961754").title, /Canadian Cardiovascular Society/);
   assert.match(fixture("39163798").abstract, /750 mg/);
   assert.match(fixture("41151201").title, /umbrella review/i);
+  assert.match(fixture("41202026").abstract, /irrespective of diabetes status/);
+  assert.match(fixture("41203232").abstract, /\(CKD\)/);
+  assert.match(fixture("40884036").abstract, /totality of randomized clinical trial data/);
+  assert.match(fixture("42914763").abstract, /type II DM/);
 });
 
 test("35404670: hospitalização por IC e infecção genital ficam sem ressalva", () => {
@@ -85,13 +92,26 @@ test("35404670: hospitalização por IC e infecção genital ficam sem ressalva"
   assert.doesNotMatch(answer.answer, /certeza limitada|certeza baixa|cautela/);
 });
 
-test("42914763: MASH recebe a ressalva genérica da mesma frase", () => {
+test("42914763: MASH com DM2 passa e a ressalva não vira item de Cuidados", () => {
   const answer = validateSynthesis(JSON.stringify({
-    itens: [{ texto: "Os inibidores de SGLT2 melhoraram os parâmetros hepáticos e metabólicos.", pmid: "42914763" }],
+    itens: [
+      { texto: "Os inibidores de SGLT2 melhoraram os parâmetros hepáticos e metabólicos em pessoas com DM2.", pmid: "42914763" },
+      { texto: "Cuidados: os achados têm certeza limitada e pedem cautela.", pmid: "42914763" },
+    ],
   }), [fixture("42914763")], ["sglt2 inhibitors"]);
   assert.equal(answer.sufficient, true);
   assert.match(answer.answer, /hepáticos/);
+  assert.match(answer.answer, /DM2/);
   assert.match(answer.answer, /certeza limitada/);
+  assert.doesNotMatch(answer.answer, /Cuidados:/);
+  const orphan = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "Os inibidores de SGLT2 reduzem a hospitalização por IC.", pmid: "38583093" },
+      { texto: "Cuidados: certeza limitada.", pmid: "38583093" },
+    ],
+  }), [fixture("38583093")], ["sglt2 inhibitors"]);
+  assert.equal(orphan.sufficient, false);
+  assert.doesNotMatch(orphan.answer, /Cuidados:|certeza limitada/);
 });
 
 test("38583093: hospitalização por IC só da introdução é rejeitada", () => {
@@ -101,11 +121,12 @@ test("38583093: hospitalização por IC só da introdução é rejeitada", () =>
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(rejected.sufficient, false);
   const kept = validateSynthesis(JSON.stringify({
-    itens: [{ texto: "Os inibidores de SGLT2 reduzem eventos cardiovasculares.", pmid: "38583093" }],
+    itens: [{ texto: "IniciaÇÃO com inibidores de SGLT2 reduz a morte cardiovascular.", pmid: "38583093" }],
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(kept.sufficient, true);
-  assert.match(kept.answer, /cardiovasculares/);
-  assert.doesNotMatch(kept.answer, /hospitaliza/);
+  assert.match(kept.answer, /Iniciação/);
+  assert.match(kept.answer, /morte cardiovascular/);
+  assert.doesNotMatch(kept.answer, /IniciaÇÃO|hospitaliza/);
 });
 
 test("42811398 mantém o qualificador associado à metformina", () => {
@@ -166,10 +187,44 @@ test("32036861 continua selecionável pelo cotransportador sem o algarismo 2", (
   assert.deepEqual(selected.map((item) => item.pmid), ["32036861"]);
 });
 
+test("41202026 mantém benefício renal, hospitalização e mortalidade com ou sem diabetes", () => {
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 trazem benefícios renais, de hospitalização e de mortalidade independentemente de diabetes.", pmid: "41202026" }],
+  }), [fixture("41202026")], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  assert.match(answer.answer, /renais/);
+  assert.match(answer.answer, /hospitalização/);
+  assert.match(answer.answer, /mortalidade/);
+  assert.match(answer.answer, /diabetes/);
+});
+
+test("41203232 aceita DRC quando o resultado diz CKD", () => {
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduzem a progressão da DRC.", pmid: "41203232" }],
+  }), [fixture("41203232")], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  assert.match(answer.answer, /DRC/);
+});
+
+test("40884036: o negativo isolado sai e a conclusão do conjunto fica", () => {
+  const article = fixture("40884036");
+  const isolated = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "A dapagliflozina não reduziu a morte cardiovascular nem a piora da IC.", pmid: "40884036" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(isolated.sufficient, false);
+  const pooled = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "O conjunto dos ensaios sugere que iniciar iSGLT2 na internação pode reduzir a morte cardiovascular ou a piora da IC.", pmid: "40884036" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(pooled.sufficient, true);
+  assert.match(pooled.answer, /conjunto dos ensaios/);
+  assert.match(pooled.answer, /pode reduzir/);
+  assert.doesNotMatch(pooled.answer, /não reduziu/);
+});
+
 test("39163798: reduz sem comparação de doses sai; comparando doses, 750 mg/dia fica", () => {
   const article = fixture("39163798");
   const refused = validateSynthesis(JSON.stringify({
-    itens: [{ texto: "A metformina reduz a incidência de diabetes.", pmid: "39163798" }],
+    itens: [{ texto: "A metformina reduz a incidência de diabetes em comparação com outras doses.", pmid: "39163798" }],
   }), [article], ["metformin"]);
   assert.equal(refused.sufficient, false);
   const kept = validateSynthesis(JSON.stringify({

@@ -27,6 +27,7 @@ export function insufficientAnswer(message: string, discarded: string[] = []): C
 
 function tidy(text: string) {
   return text
+    .replace(/([a-záàâãéêíóôõúç])([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{2,})/g, (_match, lower: string, upper: string) => lower + upper.toLowerCase())
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/\(\s*\)/g, "")
     .replace(/[ \t]{2,}/g, " ")
@@ -144,12 +145,11 @@ export function stripInventedCertainty(line: string, excerpt: string) {
 type Outcome = { stems: string[]; tokens: string[] };
 
 const OUTCOMES: Outcome[] = [
-  { stems: ["hospitali", "hospitalizac"], tokens: [] },
+  { stems: ["hospitali", "hospitalizac", "hospitalization", "hospitalisation"], tokens: [] },
   { stems: ["heart failure", "insuficiencia cardiaca"], tokens: ["ic", "hf", "icfer"] },
-  { stems: ["mortalit", "morte"], tokens: [] },
+  { stems: ["mortalit", "mortalid", "morte", "death", "deaths"], tokens: [] },
   { stems: ["cardiovascular"], tokens: [] },
-  { stems: ["kidney", "renal"], tokens: ["drc"] },
-  { stems: ["diabetes", "diabet"], tokens: ["dm2"] },
+  { stems: ["kidney", "renal"], tokens: ["drc", "ckd"] },
   { stems: ["albuminuria"], tokens: [] },
   { stems: ["fracture", "fratura"], tokens: [] },
   { stems: ["weight", "peso"], tokens: [] },
@@ -165,8 +165,16 @@ const OUTCOMES: Outcome[] = [
 
 const OTHER_DRUGS = ["semaglutide", "liraglutide", "dulaglutide", "tirzepatide", "exenatide", "insulin", "sitagliptin"];
 
+function withAbbreviations(text: string) {
+  return fold(text)
+    .replace(/\btype ii dm\b/g, "type 2 diabetes")
+    .replace(/\bt2dm\b/g, "type 2 diabetes")
+    .replace(/\bckd\b/g, "ckd kidney")
+    .replace(/\bhf\b/g, "hf heart failure");
+}
+
 function textHasOutcome(text: string, outcome: Outcome) {
-  const folded = fold(text);
+  const folded = withAbbreviations(text);
   if (outcome.stems.some((stem) => folded.includes(stem))) return true;
   return outcome.tokens.some((token) => new RegExp(`(?:^|[^a-z0-9])${token}(?:[^a-z0-9]|$)`).test(folded));
 }
@@ -254,7 +262,10 @@ export function rejectionNote(raw: string, records: EvidenceRecord[]) {
       return "Não comece com Sim. Diga o que o estudo comparou. Só use Sim se o trecho comparar com placebo, controle ou sem tratamento.";
     }
     if (text && record && unsupportedDoseClaim(text, record.abstract || "")) {
-      return "Não diga que reduz sem a comparação. Se o estudo comparou doses, escreva comparando doses e a dose, por exemplo 750 mg/dia.";
+      return "Não diga que reduz sem a comparação. Se o estudo comparou doses, a frase tem de dizer comparando doses, por exemplo 750 mg/dia.";
+    }
+    if (text && record && ignoresPooledConclusion(text, record.abstract || "")) {
+      return "Não fique só no ensaio negativo. A frase tem de trazer a conclusão do conjunto, quando o trecho disser however, totality ou pooled.";
     }
   }
   return "Cada frase tem de estar no trecho do PMID citado. Não invente comparação nem efeito de outro fármaco.";
@@ -279,7 +290,33 @@ export function unsupportedDoseClaim(line: string, excerpt: string) {
   if (!comparesDoses(excerpt) || hasControlComparison(excerpt)) return false;
   const folded = fold(line);
   if (!/\breduz/.test(folded)) return false;
-  return !/comparando doses|em comparacao|outras doses|versus/.test(folded);
+  return !/comparando doses/.test(folded);
+}
+
+function hasIsolatedNegative(excerpt: string) {
+  return /did not (?:significantly )?reduce|not significantly reduce/i.test(excerpt);
+}
+
+function hasPooledBenefit(excerpt: string) {
+  return excerpt.split(/\n+|(?<=[.!?])\s+/).some((sentence) =>
+    /however|overall|totality|pooled|meta-analys/i.test(sentence) && /may reduce|reduced|suggests/i.test(sentence));
+}
+
+/** The line stays on the single negative trial when the excerpt already gives the pooled conclusion. */
+export function ignoresPooledConclusion(line: string, excerpt: string) {
+  if (!hasIsolatedNegative(excerpt) || !hasPooledBenefit(excerpt)) return false;
+  const folded = fold(line);
+  if (!/\bnao (?:reduz|diminui|houve reduc)/.test(folded)) return false;
+  return !/conjunto|totalidade|metanalise|agrupad|pooled|however/.test(folded);
+}
+
+/** A Cuidados item that only restates certainty. The finding line already carries that suffix. */
+export function isCertaintyOnlyCaveat(text: string) {
+  const folded = fold(text);
+  if (!/^[-•\s]*cuidados:/.test(folded)) return false;
+  const body = folded.replace(/^[-•\s]*cuidados:\s*/, "");
+  if (!/certeza|cautel|limitad|incerta/.test(body)) return false;
+  return !/infec|fratur|suspens|perioperator|cetoacid|hipotens|amput|genital|hipoglic|sarcopen|muscul|ossea|osso|queda/.test(body);
 }
 
 /** Keeps a combination the supporting sentence actually states, such as SGLT2 plus metformin. */
@@ -432,7 +469,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept) {
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
   if (claimOutsideResults(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
-  if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract)) return null;
+  if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract) || ignoresPooledConclusion(text, citedAbstract)) return null;
   text = ensureCertaintyCaveat(text, citedAbstract);
   if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };
@@ -460,6 +497,7 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
   const kept: Array<{ text: string; resolved: EvidenceRecord[] }> = [];
   const appearance: string[] = [];
   for (const draft of drafts) {
+    if (isCertaintyOnlyCaveat(draft.text)) continue;
     const accepted = acceptDraft(draft, concept);
     if (!accepted) continue;
     for (const record of accepted.resolved) {

@@ -988,7 +988,7 @@ test("validador pede outra resposta quando todo item cai", async () => {
         if (prompts.length === 1) {
           return JSON.stringify({ itens: [{ texto: "Sim, a metformina reduz a glicose.", pmid: "93" }] });
         }
-        return JSON.stringify({ itens: [{ texto: "A metformina 750 mg reduziu a glicose em comparação com outras doses.", pmid: "93" }] });
+        return JSON.stringify({ itens: [{ texto: "Comparando doses, a metformina 750 mg reduziu a glicose.", pmid: "93" }] });
       },
     },
     search: async () => [article],

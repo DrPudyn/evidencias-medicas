@@ -21,7 +21,7 @@ export const SUMMARY_SYSTEM = [
   "Se o trecho comparar doses, a frase diz a comparação, como comparando doses, 750 mg/dia. Não diga só que reduz.",
   "O benefício tem de ser desse fármaco. Se o trecho atribuir o efeito a outro fármaco, não o apresente como efeito da classe perguntada.",
   "Se o trecho falar de um só fármaco e não da classe, nomeie esse fármaco.",
-  "Se um artigo falar de precaução, suspensão ou efeito adverso, inclua um item que comece com Cuidados:, só com o que esse trecho disser.",
+  "Se um artigo falar de precaução, suspensão ou efeito adverso, inclua um item que comece com Cuidados:, só com o que esse trecho disser. Não faça um item de Cuidados que seja só ressalva de certeza: a ressalva fica no fim da frase do achado.",
   "Só escreva certeza alta, moderada, baixa ou muito baixa se o trecho disser essa certeza. Se disser limited certainty, interpreted cautiously, low certainty ou very low certainty, o texto tem de dizer certeza limitada ou que o resultado pede cautela.",
   "Escreva só em português. Traduza o desfecho, a classe e a sigla. MASH = esteato-hepatite associada à disfunção metabólica. SGLT2 = cotransportador sódio-glicose 2. IC = insuficiência cardíaca. ICFEr = insuficiência cardíaca com fração de ejeção reduzida. DRC = doença renal crônica. DM2 = diabetes tipo 2.",
   "Só escreva número, limiar ou risco que apareça no trecho do artigo citado. Se o trecho não tiver o dado, não o mencione.",
