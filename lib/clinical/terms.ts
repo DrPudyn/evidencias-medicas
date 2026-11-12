@@ -327,6 +327,52 @@ export async function readFinalSet(key: string, db?: TermCacheDb | null, now = D
   }
 }
 
+export type ApprovedCard = {
+  sufficient: true;
+  answer: string;
+  references: Array<{ n: number; pmid: string; title: string; url: string; type?: string }>;
+  discardedCitations: string[];
+  disclaimer: string;
+};
+
+const approvedCards = new Map<string, { card: ApprovedCard; at: number }>();
+
+export function cardCacheKey(question: string) {
+  return `card|${normalizeQuestion(question)}`;
+}
+
+export async function readApprovedCard(question: string, db?: TermCacheDb | null, now = Date.now()) {
+  const key = cardCacheKey(question);
+  const memory = approvedCards.get(key);
+  if (memory && now - memory.at < RESULT_TTL_MS) return memory.card;
+  if (memory) approvedCards.delete(key);
+  if (!db) return null;
+  try {
+    const row = await db.prepare("SELECT pmids, updated_at FROM clinical_result_cache WHERE query_key = ?").bind(key).first<{ pmids: string; updated_at: number }>();
+    if (!row?.pmids || now - row.updated_at >= RESULT_TTL_MS) return null;
+    const parsed = JSON.parse(row.pmids) as { card?: ApprovedCard };
+    if (!parsed?.card?.sufficient || !parsed.card.answer) return null;
+    approvedCards.set(key, { card: parsed.card, at: row.updated_at });
+    return parsed.card;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeApprovedCard(question: string, card: ApprovedCard, db?: TermCacheDb | null, now = Date.now()) {
+  if (!card.sufficient || !card.answer.trim()) return;
+  const key = cardCacheKey(question);
+  approvedCards.set(key, { card, at: now });
+  if (!db) return;
+  try {
+    await db.prepare(
+      "INSERT INTO clinical_result_cache (query_key, pmids, updated_at) VALUES (?, ?, ?) ON CONFLICT(query_key) DO UPDATE SET pmids = excluded.pmids, updated_at = excluded.updated_at",
+    ).bind(key, JSON.stringify({ card }), now).run();
+  } catch {
+    // The table may not exist yet. The memory cache still applies.
+  }
+}
+
 export async function writeFinalSet(key: string, items: FinalSetItem[], db?: TermCacheDb | null, now = Date.now()) {
   const unique = items.filter((item, index) => item.pmid && item.excerpt && items.findIndex((other) => other.pmid === item.pmid) === index);
   if (!unique.length) return;

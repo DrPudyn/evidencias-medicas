@@ -5,9 +5,8 @@ import { displayPublicationType } from "../evidence-filter";
 import { answerClinicalQuestion } from "./answer";
 import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
 import { isHeartFailureSlot, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { evidenceQuery, expandClassTerms, finalSetKey, forceMetforminType2, readFinalSet, readResultCache, writeFinalSet, writeResultCache } from "./terms";
-import { normalizeOddCaps, sourceExcerpt, validateSynthesis } from "./validate";
-import { createWorkersAi } from "./provider";
+import { evidenceQuery, expandClassTerms, finalSetKey, forceMetforminType2, readApprovedCard, readFinalSet, readResultCache, writeApprovedCard, writeFinalSet, writeResultCache } from "./terms";
+import { isCaveatSentence, normalizeOddCaps, sourceExcerpt, validateSynthesis } from "./validate";
 import type { EvidenceRecord } from "./types";
 
 const PMIDs = [
@@ -912,18 +911,23 @@ test("30424892 mantém internação por IC e progressão renal em DM2", () => {
   assert.equal(widened.sufficient, false);
 });
 
-test("38287703 associa e não usa pode na frase negativa", () => {
+test("38287703 aceita pode ou associa-se e não usa pode na frase negativa", () => {
   const article = fixture("38287703");
   const fonte = sourceExcerpt(article);
   assert.match(fonte, /associated with a significant reduction/i);
   assert.doesNotMatch(fonte, /did not significantly reduce HbA1c/i);
+  assert.equal(isCaveatSentence(fonte), false);
   const linked = validateSynthesis(JSON.stringify({
     itens: [{ texto: "reduz a mortalidade.", pmid: "38287703", trecho: fonte }],
   }), [article], ["sglt2 inhibitors"]);
   assert.equal(linked.sufficient, true);
-  assert.match(linked.answer, /associa-se a uma redução/);
-  assert.doesNotMatch(linked.answer, /\bpode\b/);
-  assert.doesNotMatch(linked.answer, /\breduz\b/);
+  assert.match(linked.answer, /pode reduzir/);
+  const named = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "associa-se a uma redução da mortalidade.", pmid: "38287703", trecho: fonte }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(named.sufficient, true);
+  assert.match(named.answer, /associa-se/);
+  assert.doesNotMatch(named.answer, /pode reduzir/);
   const negative = validateSynthesis(JSON.stringify({
     itens: [{
       texto: "pode reduzir a HbA1c.",
@@ -949,6 +953,25 @@ test("32036861, 40702593 e 39781571 usam a frase-fonte e Cuidados não duplica",
   assert.equal(answer.answer.split("\n").filter((line) => /Cuidados/.test(line)).length, 1);
   assert.match(answer.answer, /^Cuidados:/);
   assert.doesNotMatch(answer.answer, /^DM2:/);
+  const stroke = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "O iSGLT2 reduz o AVC.", pmid: "40702593", trecho: sourceExcerpt(fixture("40702593")) }],
+  }), [fixture("40702593")], ["sglt2 inhibitors"]);
+  assert.equal(stroke.sufficient, false);
+});
+
+test("ressalva não vira frase-fonte", () => {
+  assert.equal(isCaveatSentence("However, these findings should be regarded as exploratory."), true);
+  assert.equal(isCaveatSentence("However, the totality of trial data suggests that SGLT2 inhibitors may reduce cardiovascular death."), false);
+  const mash = fixture("42914763");
+  assert.doesNotMatch(sourceExcerpt(mash), /should be interpreted/i);
+  const dropped = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "melhora os parâmetros hepáticos.",
+      pmid: "42914763",
+      trecho: "these findings should be interpreted cautiously",
+    }],
+  }), [mash], ["sglt2 inhibitors"]);
+  assert.equal(dropped.sufficient, false);
 });
 
 test("o conjunto final fica no cache por sete dias e ignora a ordem da busca", async () => {
@@ -998,7 +1021,7 @@ test("o conjunto final fica no cache por sete dias e ignora a ordem da busca", a
       });
     },
   };
-  await answerClinicalQuestion({
+  const first = await answerClinicalQuestion({
     question,
     cacheTerms: true,
     db: adapter,
@@ -1008,9 +1031,10 @@ test("o conjunto final fica no cache por sete dias e ignora a ordem da busca", a
       return articles;
     },
   });
-  capture = true;
+  assert.equal(first.sufficient, true);
   const before = searches;
-  await answerClinicalQuestion({
+  const summaries = seen.length;
+  const second = await answerClinicalQuestion({
     question,
     cacheTerms: true,
     db: adapter,
@@ -1020,74 +1044,16 @@ test("o conjunto final fica no cache por sete dias e ignora a ordem da busca", a
       return [fixture("34693515"), ...articles].reverse();
     },
   });
-  assert.deepEqual(seen[1], seen[0]);
-  assert.equal(seen[1]?.includes("34693515"), false);
-  assert.equal(searches - before, 1);
-});
-
-test("a tradução segue a frase-fonte e o verificador derruba a linha infiel", async () => {
-  const calls = { translate: 0, verify: 0 };
-  const judged: string[] = [];
-  const answer = await answerClinicalQuestion({
-    question: "Quais as indicações de iSGLT2 na tradução fiel?",
-    ai: {
-      async searchTerms() {
-        return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
-      },
-      async summarize() {
-        throw new Error("não deve parafrasear");
-      },
-      async translate(_question, pairs) {
-        calls.translate += 1;
-        return JSON.stringify({
-          itens: pairs.map((pair) => ({
-            pmid: pair.pmid,
-            trecho: pair.fonte,
-            texto: pair.pmid === "40702593"
-              ? "associa-se a melhora da sobrevida e dos desfechos cardiovasculares."
-              : pair.pmid === "30424892"
-                ? "reduz a internação por IC e a progressão renal."
-                : "O conjunto dos ensaios pode reduzir a morte cardiovascular ou a piora da IC.",
-          })),
-        });
-      },
-      async verify(pairs) {
-        calls.verify += 1;
-        for (const pair of pairs) judged.push(pair.pmid);
-        return JSON.stringify({
-          itens: pairs.map((pair) => ({
-            pmid: pair.pmid,
-            fiel: pair.pmid !== "40702593",
-            motivo: pair.pmid === "40702593" ? "atribuição conjunta GLP-1" : "",
-          })),
-        });
-      },
-    },
-    search: async () => [fixture("30424892"), fixture("40884036"), fixture("40702593"), fixture("32036861"), fixture("39781571")],
-  });
-  assert.equal(answer.sufficient, true);
-  assert.match(answer.answer, /internação por IC/);
-  assert.match(answer.answer, /progressão renal/);
-  assert.match(answer.answer, /^DM2:/m);
-  assert.match(answer.answer, /conjunto dos ensaios/);
-  assert.match(answer.answer, /pode reduzir/);
-  assert.doesNotMatch(answer.answer, /sobrevida/);
-  assert.ok(judged.includes("40702593"));
-  assert.equal(calls.translate, 2);
-  assert.equal(calls.verify, 2);
-});
-
-test("tradução e verificador usam temperatura zero", async () => {
-  const calls: Array<{ temperature?: number }> = [];
-  const ai = createWorkersAi({
-    async run(_model, input) {
-      calls.push(input as { temperature?: number });
-      return { response: { itens: [] } };
-    },
-  });
-  await ai.translate!("Quais as indicações de iSGLT2?", [{ pmid: "30424892", fonte: "SGLT2i reduced hospitalisation for heart failure and progression of renal disease." }]);
-  await ai.verify!([{ pmid: "30424892", texto: "reduz a internação por IC.", fonte: "SGLT2i reduced hospitalisation for heart failure." }]);
-  assert.equal(calls[0]?.temperature, 0);
-  assert.equal(calls[1]?.temperature, 0);
-  assert.match(JSON.stringify(calls[1]), /fiel/);
+  assert.equal(second.answer, first.answer);
+  assert.equal(searches, before);
+  assert.equal(seen.length, summaries);
+  await writeApprovedCard("Pergunta do card aprovado isolado", {
+    sufficient: true,
+    answer: "DM2: reduz a internação por IC. [1]",
+    references: [{ n: 1, pmid: "30424892", title: "Zelniker", url: "https://pubmed.ncbi.nlm.nih.gov/30424892/" }],
+    discardedCitations: [],
+    disclaimer: "teste",
+  }, adapter, writtenAt);
+  assert.match((await readApprovedCard("Pergunta do card aprovado isolado", adapter, writtenAt + 6 * 24 * 60 * 60 * 1000))?.answer || "", /internação por IC/);
+  assert.equal(await readApprovedCard("Pergunta do card aprovado isolado", adapter, writtenAt + 8 * 24 * 60 * 60 * 1000), null);
 });

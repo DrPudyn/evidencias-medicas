@@ -74,7 +74,7 @@ Requer Node >=22.13.0. Use `npm ci` (ou `npm run install:ci`). Crie `.openai/hos
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0005_plans_and_quota.sql
 ```
 
-O comando acima exemplifica a migração de planos. Num banco novo aplique também 0000, 0001, 0002, 0003 e 0004 antes dela, e `0006_term_cache.sql` e `0007_result_cache.sql` depois. Não execute uma migração já aplicada. 0005 acrescenta assinatura, cota diária da pergunta clínica e eventos do webhook. 0006 guarda os termos de busca já gerados. 0007 guarda, por sete dias, o conjunto de PMIDs de cada consulta e o conjunto final selecionado, com os trechos. Não aplique 0005, 0006 nem 0007 em produção até o deploy combinado.
+O comando acima exemplifica a migração de planos. Num banco novo aplique também 0000, 0001, 0002, 0003 e 0004 antes dela, e `0006_term_cache.sql` e `0007_result_cache.sql` depois. Não execute uma migração já aplicada. 0005 acrescenta assinatura, cota diária da pergunta clínica e eventos do webhook. 0006 guarda os termos de busca já gerados. 0007 guarda, por sete dias, o conjunto de PMIDs de cada consulta, o conjunto final selecionado com os trechos, e o card aprovado da pergunta. Não aplique 0005, 0006 nem 0007 em produção até o deploy combinado.
 
 3. `npm run preview:local` para servir o Worker compilado em localhost:5173; `npm run dev` para desenvolvimento com recarga.
 

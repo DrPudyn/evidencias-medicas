@@ -1,7 +1,7 @@
 import { DEFAULT_AI_MODEL } from "../brand";
-import type { ClinicalAi, EvidenceRecord, SourcePair, VerdictPair } from "./types";
+import type { ClinicalAi, EvidenceRecord } from "./types";
 import { fallbackSearchTerms } from "./terms";
-import { TERMS_SYSTEM, TRANSLATE_SYSTEM, VERIFY_SYSTEM, summarySystem, summaryUser } from "./prompts";
+import { TERMS_SYSTEM, summarySystem, summaryUser } from "./prompts";
 
 export type AiBinding = {
   run: (model: string, input: Record<string, unknown>) => Promise<unknown>;
@@ -86,25 +86,6 @@ export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): Clinic
     },
     summarize(question, records, options) {
       return complete(summarySystem(question, options?.direct !== false), summaryUser(question, records), 800, SUMMARY_SCHEMA, 0.2);
-    },
-    translate(question, pairs: SourcePair[]) {
-      return complete(TRANSLATE_SYSTEM, `Pergunta:\n${question}\n\nFrases:\n${JSON.stringify(pairs)}`, 700, SUMMARY_SCHEMA, 0);
-    },
-    verify(pairs: VerdictPair[]) {
-      return complete(VERIFY_SYSTEM, JSON.stringify({ pares: pairs }), 400, {
-        type: "object",
-        properties: {
-          itens: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: { pmid: { type: "string" }, fiel: { type: "boolean" }, motivo: { type: "string" } },
-              required: ["pmid", "fiel"],
-            },
-          },
-        },
-        required: ["itens"],
-      }, 0);
     },
   };
 }

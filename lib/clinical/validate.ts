@@ -314,7 +314,7 @@ export function ensureModalHedge(line: string, excerpt: string) {
 
 export function supportCertainty(support: string): "firm" | "hedge" {
   if (/high[ -]certainty|(?<!low to )high coe|moderate-to-high|moderate to high|moderate-\s+to high|\bdemonstrates\b/i.test(support)) return "firm";
-  if (/\b(suggest(?:s|ed|ing)?|may|might|likely)\b|\bassociated\b|very low[ -]certainty|(?<!very )low[ -]certainty/i.test(support)) return "hedge";
+  if (/\b(suggest(?:s|ed|ing)?|may|might|likely)\b|\bassociated\b|\blinked\b|very low[ -]certainty|(?<!very )low[ -]certainty/i.test(support)) return "hedge";
   return "firm";
 }
 
@@ -330,32 +330,17 @@ function stripHedge(line: string) {
     .replace(/\bpode\s+representar\b/gi, "representa");
 }
 
-/** A negative source sentence never takes pode. Association is not a benefit verb. */
+/** A negative source sentence never takes pode. */
 export function sourceIsNegative(support: string) {
   if (/\bmay reduce\b/i.test(support) && /however|totality|pooled/i.test(support)) return false;
-  return /\b(?:did not|do not|does not)\s+(?:significantly\s+)?(?:reduce|lower|decrease)|\bnot significantly\b|\bno significant (?:effect|reduction|difference)\b|\bdid not demonstrate\b/i.test(support);
+  return /\b(?:did not|do not|does not)\s+(?:significantly\s+)?(?:reduce|lower|decrease)|\bnot significantly\b|\bno significant (?:effect|reduction|difference)\b|\bdid not demonstrate\b|\bnot associated\b|\bnot linked\b|\bno association\b/i.test(support);
 }
 
 export function applyCodeCertainty(line: string, support: string) {
   if (sourceIsNegative(support)) return stripHedge(line).replace(/\bpodem\b/gi, "").replace(/\bpode\b/gi, "").replace(/\s{2,}/g, " ").trim();
-  if (/\b(?:associated with|linked with|linked to)\b/i.test(support)) return line;
+  if (/associa-se|associam-se/.test(fold(line))) return line;
   if (supportCertainty(support) === "hedge") return hedgeCoordinatedVerbs(line) || line;
   return stripHedge(line);
-}
-
-function applyAssociation(line: string, support: string) {
-  if (sourceIsNegative(support) || !/\b(?:associated with|linked with|linked to)\b/i.test(support)) return line;
-  if (/associa-se|associam-se/.test(fold(line))) return line;
-  return line
-    .replace(/\bpode(?:m)?\s+reduzir\b/gi, "associa-se a uma redução")
-    .replace(/\breduziram\b/gi, "associam-se a uma redução")
-    .replace(/\breduzem\b/gi, "associam-se a uma redução")
-    .replace(/\breduziu\b/gi, "associa-se a uma redução")
-    .replace(/\breduz\b/gi, "associa-se a uma redução")
-    .replace(/\bassocia-se a uma redução\s+a\s+/gi, "associa-se a uma redução da ")
-    .replace(/\bassocia-se a uma redução\s+o\s+/gi, "associa-se a uma redução do ")
-    .replace(/\bassocia-se a uma redução\s+as\s+/gi, "associa-se a uma redução das ")
-    .replace(/\bassocia-se a uma redução\s+os\s+/gi, "associa-se a uma redução dos ");
 }
 
 function polarityFlipped(line: string, support: string) {
@@ -828,17 +813,23 @@ function resultSentences(abstract: string) {
   return resultsAndConclusions(abstract).split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 40);
 }
 
-/** The code picks the results or conclusion sentence. The model only translates it. */
+/** A caveat is not a source sentence. A pooled "However … may reduce" still is. */
+export function isCaveatSentence(sentence: string) {
+  if (/should be regarded|should be interpreted|interpreted with caution|\bexploratory\b/i.test(sentence)) return true;
+  return /^however\b/i.test(sentence.trim()) && !/\b(reduc|benefit|associated|linked|lower)\w*/i.test(sentence);
+}
+
+/** The code picks a results or conclusion sentence for the reserved line and the cache. */
 export function sourceExcerpt(record: EvidenceRecord) {
-  const sentences = resultSentences(record.abstract || "");
+  const sentences = resultSentences(record.abstract || "").filter((sentence) => !isCaveatSentence(sentence));
   const care = sentences.find((sentence) => /should omit|omit them the day before/i.test(sentence));
   if (care) return care;
   const pooled = sentences.find((sentence) =>
-    /however|totality|pooled/i.test(sentence)
+    /totality|pooled/i.test(sentence)
     && /may reduce|reduc/i.test(sentence)
     && !/\b(?:did not|not significantly|did not demonstrate)\b/i.test(sentence)
     && /sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(sentence));
-  if (pooled && sentences.some((sentence) => /\b(?:did not|not significantly)\b/i.test(sentence))) return pooled;
+  if (pooled) return pooled;
   const robust = sentences.find((sentence) => /hospitali[sz]ation for heart failure/i.test(sentence) && /renal/i.test(sentence) && /regardless/i.test(sentence));
   if (robust) return withNamedClass(sentences, robust);
   const direct = sentences.find((sentence) => /cotransport inhibitors reduce the risk/i.test(sentence));
@@ -849,15 +840,15 @@ export function sourceExcerpt(record: EvidenceRecord) {
   if (associated) return associated;
   const effect = sentences.find((sentence) => /significantly (?:reduced|reduce)/i.test(sentence) && !/\b(?:did not|not significantly)\b/i.test(sentence));
   if (effect) return withNamedClass(sentences, effect);
-  const last = sentences.at(-1) || resultsAndConclusions(record.abstract || "").slice(0, 500);
-  return withNamedClass(sentences, last);
+  const benefit = sentences.find((sentence) => /\b(reduc|benefit|associated|linked)\w*/i.test(sentence) && !/\b(?:did not|not significantly)\b/i.test(sentence));
+  return benefit ? withNamedClass(sentences, benefit) : "";
 }
 
 function withNamedClass(sentences: string[], picked: string) {
   if (/sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(picked)) return picked;
   const index = sentences.indexOf(picked);
   const previous = index > 0 ? sentences[index - 1] : "";
-  if (/sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(previous)) return `${previous} ${picked}`;
+  if (previous && !isCaveatSentence(previous) && /sglt-?2|gliflozin|sodium[-\s]?glucose|cotransport/i.test(previous)) return `${previous} ${picked}`;
   return picked;
 }
 
@@ -1016,6 +1007,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
   const sentence = draft.support ? sentenceContaining(draft.support, citedAbstract) : citedAbstract;
   const support = sentence;
+  if (draft.support && isCaveatSentence(support)) return null;
   let text = stripInventedCertainty(draft.text, support);
   text = attributeSpecificDrug(text, support);
   if (!cuidadosAllowed(text, support) || mixesDoseWithProgression(text)) return null;
@@ -1056,7 +1048,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   if (expandsConfinedPopulation(text, support)) return null;
   const hedged = ensureModalHedge(text, certaintySource);
   if (!hedged) return null;
-  text = applyAssociation(hedged, certaintySource);
+  text = hedged;
   text = ensureCertaintyCaveat(text, support);
   if (concept && (attributesForeignBenefit(text, support, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };

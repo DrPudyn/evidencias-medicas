@@ -36,14 +36,9 @@ export type ClinicalSearchOptions = {
   includeTrials?: boolean;
 };
 
-export type SourcePair = { pmid: string; fonte: string };
-export type VerdictPair = { pmid: string; texto: string; fonte: string };
-
 export type ClinicalAi = {
   searchTerms(question: string): Promise<string>;
   summarize(question: string, records: EvidenceRecord[], options?: { direct?: boolean }): Promise<string>;
-  translate?(question: string, pairs: SourcePair[]): Promise<string>;
-  verify?(pairs: VerdictPair[]): Promise<string>;
 };
 
 export const CLINICAL_DISCLAIMER =
