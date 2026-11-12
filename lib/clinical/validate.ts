@@ -141,30 +141,38 @@ export function stripInventedCertainty(line: string, excerpt: string) {
   return tidy(result);
 }
 
-const OUTCOME_PAIRS: Array<[string, string]> = [
-  ["hospitalization", "hospitalizacao"],
-  ["heart failure", "insuficiencia cardiaca"],
-  ["mortality", "mortalidade"],
-  ["cardiovascular", "cardiovascular"],
-  ["kidney", "renal"],
-  ["albuminuria", "albuminuria"],
-  ["fracture", "fratura"],
-  ["weight", "peso"],
-  ["myocardial", "infarto"],
-  ["infection", "infec"],
-  ["genital", "genital"],
-  ["hepatic", "hepatic"],
-  ["metabolic", "metabolic"],
-  ["liver", "figad"],
-  ["steatosis", "esteatose"],
-  ["histolog", "histolog"],
+type Outcome = { stems: string[]; tokens: string[] };
+
+const OUTCOMES: Outcome[] = [
+  { stems: ["hospitali", "hospitalizac"], tokens: [] },
+  { stems: ["heart failure", "insuficiencia cardiaca"], tokens: ["ic", "hf", "icfer"] },
+  { stems: ["mortalit", "morte"], tokens: [] },
+  { stems: ["cardiovascular"], tokens: [] },
+  { stems: ["kidney", "renal"], tokens: ["drc"] },
+  { stems: ["diabetes", "diabet"], tokens: ["dm2"] },
+  { stems: ["albuminuria"], tokens: [] },
+  { stems: ["fracture", "fratura"], tokens: [] },
+  { stems: ["weight", "peso"], tokens: [] },
+  { stems: ["myocardial", "infarto"], tokens: [] },
+  { stems: ["infection", "infec"], tokens: [] },
+  { stems: ["genital"], tokens: [] },
+  { stems: ["hepatic"], tokens: [] },
+  { stems: ["metabolic"], tokens: [] },
+  { stems: ["liver", "figad"], tokens: [] },
+  { stems: ["steatosis", "esteatose"], tokens: [] },
+  { stems: ["histolog"], tokens: [] },
 ];
 
 const OTHER_DRUGS = ["semaglutide", "liraglutide", "dulaglutide", "tirzepatide", "exenatide", "insulin", "sitagliptin"];
 
+function textHasOutcome(text: string, outcome: Outcome) {
+  const folded = fold(text);
+  if (outcome.stems.some((stem) => folded.includes(stem))) return true;
+  return outcome.tokens.some((token) => new RegExp(`(?:^|[^a-z0-9])${token}(?:[^a-z0-9]|$)`).test(folded));
+}
+
 function outcomeHits(line: string) {
-  const folded = fold(line);
-  return OUTCOME_PAIRS.filter(([english, portuguese]) => folded.includes(portuguese) || folded.includes(english));
+  return OUTCOMES.filter((outcome) => textHasOutcome(line, outcome));
 }
 
 function sentenceHasClass(sentence: string, needles: string[]) {
@@ -185,29 +193,48 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
   const hits = outcomeHits(line);
   if (!needles.length || !hits.length) return false;
   const sentences = excerpt.split(/\n+|(?<=[.!?])\s+/);
-  const supporting = sentences.filter((sentence) => {
-    const folded = fold(sentence);
-    return hits.some(([english, portuguese]) => folded.includes(english) || folded.includes(portuguese));
-  });
+  const supporting = sentences.filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome)));
   if (!supporting.length) return true;
   return !supporting.some((sentence) => sentenceHasClass(sentence, needles) && !sentenceHasOtherDrug(sentence, needles));
 }
 
 const LIMITED_CERTAINTY = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i;
+const RESULT_LABEL = /^(results?|findings|resultados|data synthesis|conclusions?|interpretation|summary|implicat|conclus|recommendations?)\b/i;
+
+function labeledSections(excerpt: string) {
+  const sections: Array<{ label: string; text: string }> = [];
+  for (const line of excerpt.split(/\n+/)) {
+    const match = line.match(/^([^:]{2,48}):\s*([\s\S]+)$/);
+    if (match) sections.push({ label: match[1].trim(), text: match[2].trim() });
+  }
+  return sections;
+}
+
+/** A claimed outcome that never appears in results or conclusions is not support. */
+export function claimOutsideResults(line: string, excerpt: string) {
+  const sections = labeledSections(excerpt);
+  const results = sections.filter((section) => RESULT_LABEL.test(section.label)).map((section) => section.text).join(" ");
+  if (sections.length < 2 || !results) return false;
+  const hits = outcomeHits(line);
+  if (!hits.length) return false;
+  return hits.some((outcome) => !textHasOutcome(results, outcome));
+}
 
 function hasGenericCaveat(excerpt: string) {
-  return LIMITED_CERTAINTY.test(excerpt)
-    && /these findings|these results|overall|owing to the limited|should be interpreted/i.test(excerpt);
+  return excerpt.split(/\n+|(?<=[.!?])\s+/).some((sentence) => {
+    const limited = /very low[ -]certainty|low[ -]certainty|limited certainty/i.test(sentence);
+    const generic = /these findings|these results|interpreted cautiously/i.test(sentence);
+    if (!limited || !generic) return false;
+    return !OUTCOMES.some((outcome) => textHasOutcome(sentence, outcome));
+  });
 }
 
 /** Adds the caveat when the supporting sentence, or a generic caveat for the whole abstract, states limited certainty. */
 export function ensureCertaintyCaveat(line: string, excerpt: string) {
-  const generic = hasGenericCaveat(excerpt);
   const hits = outcomeHits(line);
-  const supporting = excerpt.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => {
-    const folded = fold(sentence);
-    return hits.some(([english, portuguese]) => folded.includes(english) || folded.includes(portuguese));
-  });
+  const supporting = excerpt.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => hits.some((outcome) => textHasOutcome(sentence, outcome)));
+  if (supporting.some((sentence) => /\bhigh certainty\b/i.test(sentence) || /certeza alta/.test(fold(sentence)))) return line;
+  const generic = hasGenericCaveat(excerpt);
   const sentenceLevel = supporting.some((sentence) => LIMITED_CERTAINTY.test(sentence));
   if (!generic && (!hits.length || !supporting.length || !sentenceLevel)) return line;
   if (/baixa|incerta|limitad|cautel/.test(fold(line))) return line;
@@ -226,13 +253,45 @@ export function rejectionNote(raw: string, records: EvidenceRecord[]) {
     if (text && record && unsupportedYes(text, record.abstract || "")) {
       return "Não comece com Sim. Diga o que o estudo comparou. Só use Sim se o trecho comparar com placebo, controle ou sem tratamento.";
     }
+    if (text && record && unsupportedDoseClaim(text, record.abstract || "")) {
+      return "Não diga que reduz sem a comparação. Se o estudo comparou doses, escreva comparando doses e a dose, por exemplo 750 mg/dia.";
+    }
   }
   return "Cada frase tem de estar no trecho do PMID citado. Não invente comparação nem efeito de outro fármaco.";
 }
 
+function comparesDoses(excerpt: string) {
+  const folded = fold(excerpt);
+  return /dose|mg\/d|mg\/dia|\b750\b/.test(folded) && /compar|versus|dose group/.test(folded);
+}
+
+function hasControlComparison(excerpt: string) {
+  return /placebo|controle|control group|grupo controle|no treatment|sem tratamento|untreated/i.test(excerpt);
+}
+
 export function unsupportedYes(line: string, excerpt: string) {
   if (!/(^|\n)\s*[-•]?\s*sim\b/i.test(fold(line))) return false;
-  return !/placebo|controle|control group|grupo controle|no treatment|sem tratamento|untreated/i.test(excerpt);
+  return !hasControlComparison(excerpt);
+}
+
+/** A dose-versus-dose paper cannot be reported as a plain reduction. */
+export function unsupportedDoseClaim(line: string, excerpt: string) {
+  if (!comparesDoses(excerpt) || hasControlComparison(excerpt)) return false;
+  const folded = fold(line);
+  if (!/\breduz/.test(folded)) return false;
+  return !/comparando doses|em comparacao|outras doses|versus/.test(folded);
+}
+
+/** Keeps a combination the supporting sentence actually states, such as SGLT2 plus metformin. */
+export function dropsCombinationQualifier(line: string, excerpt: string) {
+  const folded = fold(line);
+  if (!/\b(reduz\w*|melhor\w*|menor)\b/.test(folded) || /metformin/.test(folded)) return false;
+  const hits = outcomeHits(line);
+  return excerpt.split(/\n+|(?<=[.!?])\s+/).some((sentence) => {
+    const text = fold(sentence);
+    if (!/metformin/.test(text) || !/sglt|gliflozin|sodium[ -]?glucose/.test(text)) return false;
+    return !hits.length || hits.some((outcome) => textHasOutcome(sentence, outcome));
+  });
 }
 
 export function leavesOutcomeInEnglish(line: string) {
@@ -372,7 +431,8 @@ function acceptDraft(draft: Draft, concept?: SearchConcept) {
   text = attributeSpecificDrug(text, citedAbstract);
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
-  if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract)) return null;
+  if (claimOutsideResults(text, citedAbstract) || dropsCombinationQualifier(text, citedAbstract)) return null;
+  if (creditsClassForSingleDrug(text, citedAbstract) || unsupportedYes(text, citedAbstract) || unsupportedDoseClaim(text, citedAbstract)) return null;
   text = ensureCertaintyCaveat(text, citedAbstract);
   if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };

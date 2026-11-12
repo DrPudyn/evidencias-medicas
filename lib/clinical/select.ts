@@ -68,7 +68,7 @@ export function isVeterinary(title: string) {
   return /\b(cats?|dogs?|felines?|canines?|veterinary|kittens?|puppies|equine|bovine|rodents?|rats?|mice|mouse|murine|preclinical|experimental|animal models?)\b/i.test(title);
 }
 
-const SOCIETY = /\b(ADA|KDIGO|ESC|EASD|AHA|ACC|SBD|SBC|KDOQI|NICE|AACE|USPSTF)\b|American Diabetes Association|European Society of Cardiology|Kidney Disease: Improving Global Outcomes|Sociedade Brasileira de Diabetes|Sociedade Brasileira de Cardiologia|Endocrine Society/i;
+const SOCIETY = /\b(ADA|KDIGO|ESC|EASD|AHA|ACC|SBD|SBC|CCS|CHFS|KDOQI|NICE|AACE|USPSTF)\b|American Diabetes Association|Canadian Cardiovascular Society|European Society of Cardiology|Kidney Disease: Improving Global Outcomes|Sociedade Brasileira de Diabetes|Sociedade Brasileira de Cardiologia|Endocrine Society/i;
 
 export function isSocietyGuideline(title: string) {
   return SOCIETY.test(title);
@@ -125,6 +125,21 @@ function combinationOnly(article: EvidenceRecord) {
   return /combination|combined|combinad|associad|\bplus\b/.test(foldText(article.title));
 }
 
+function notAnIndication(article: EvidenceRecord) {
+  return /sarcopenia|muscle mass|massa muscular|skeletal muscle/i.test(article.title);
+}
+
+/** Umbrella reviews and exercise-versus-metformin network meta-analyses lead prediabetes questions. */
+export function prediabetesPriority(article: EvidenceRecord, question: string) {
+  const asked = foldText(question);
+  if (!/pre-?diabet|impaired glucose|impaired fasting/.test(asked)) return 2;
+  const title = foldText(article.title);
+  const body = foldText(`${article.title} ${article.abstract}`);
+  if (/umbrella/.test(title)) return 0;
+  if (/network meta/.test(body) && /exercise/.test(body) && /metformin/.test(body)) return 1;
+  return 2;
+}
+
 function byDateThenPmid(a: EvidenceRecord, b: EvidenceRecord) {
   const byDate = publicationStamp(b.date) - publicationStamp(a.date);
   if (byDate) return byDate;
@@ -168,7 +183,9 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
     const narrowed = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
     if (narrowed.length || !pool.length) pool = narrowed;
   }
-  return mixTypes(pool).slice(0, limit);
+  return mixTypes(pool)
+    .sort((a, b) => prediabetesPriority(a, question) - prediabetesPriority(b, question))
+    .slice(0, limit);
 }
 
 /**
@@ -194,6 +211,7 @@ export function mergeIndicationRecords(input: {
       if (seen.has(article.pmid) || isVeterinary(article.title) || !matchesAskedCondition(article, input.question)) continue;
       const onTopic = !input.concept.length || conceptInFocus(article, input.concept, input.question);
       if (!onTopic) continue;
+      if (!precaution && notAnIndication(article)) continue;
       if (!precaution && input.question && indicationQuestion(input.question) && !/combinad|combination|seguran[cç]a|safety/i.test(input.question)) {
         if (safetyOnly(article) || combinationOnly(article)) continue;
       }
@@ -202,6 +220,7 @@ export function mergeIndicationRecords(input: {
     }
     return out;
   };
+  const diverted = [...input.metas, ...input.recent, ...input.supplemental, ...(input.outcomes || [])].filter(notAnIndication);
   const guides = keep(input.guidelines)
     .map((article, index) => ({ article, index, society: isSocietyGuideline(article.title) ? 0 : 1 }))
     .sort((a, b) => a.society - b.society || a.index - b.index)
@@ -210,7 +229,7 @@ export function mergeIndicationRecords(input: {
   const extra = keep(input.supplemental);
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
-  const cautions = keep(input.cautions || [], true);
+  const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];
   const used = new Set<string>();
   const take = (article?: EvidenceRecord) => {
@@ -220,9 +239,10 @@ export function mergeIndicationRecords(input: {
   };
   take(guides[0]);
   take(outcomes[0]);
+  take(outcomes[1]);
   take(cautions[0]);
   take(metas[0]);
-  const lanes = [guides.slice(1), metas.slice(1), extra, recent];
+  const lanes = [guides.slice(1), outcomes.slice(2), metas.slice(1), extra, recent];
   let pending = true;
   while (pending && picked.length < limit) {
     pending = false;
@@ -235,5 +255,5 @@ export function mergeIndicationRecords(input: {
       if (picked.length >= limit) break;
     }
   }
-  return picked;
+  return picked.sort((a, b) => prediabetesPriority(a, input.question) - prediabetesPriority(b, input.question));
 }

@@ -157,6 +157,18 @@ export function publicationDateClause(today: string) {
   return `("1900/01/01"[Date - Publication] : "${today}"[Date - Publication])`;
 }
 
+/** Adds the short forms a guideline or meta-analysis actually uses in the title. */
+export function expandClassTerms(concept: SearchConcept) {
+  const terms = [...concept];
+  const joined = concept.join(" ").toLowerCase();
+  if (/sglt|gliflozin|sodium[-\s]?glucose/.test(joined)) {
+    for (const term of ["SGLT2 inhibitors", "sodium-glucose cotransporter", "sodium-glucose co-transporter", "gliflozin"]) {
+      if (!terms.some((item) => item.toLowerCase() === term.toLowerCase())) terms.push(term);
+    }
+  }
+  return terms;
+}
+
 export function evidenceQuery(concepts: SearchConcept[], today?: string) {
   const groups = concepts.map((concept) => {
     const synonyms = concept.map((term) => {

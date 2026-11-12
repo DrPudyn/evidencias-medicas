@@ -1,6 +1,6 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
+import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, expandClassTerms, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, readTermCache, sanitizeConcepts, saoPauloPublicationDay, searchAttempts, writeTermCache, type TermCacheDb } from "./terms";
 import { isYesNoQuestion } from "./prompts";
 import { insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
@@ -26,10 +26,11 @@ async function gatherIndications(
   question: string,
   today: string,
 ) {
-  const classQuery = evidenceQuery([main], today);
+  const searchClass = expandClassTerms(main);
+  const classQuery = evidenceQuery([searchClass], today);
   const pairs = pairQueries(scoped, today).filter((term) => term !== classQuery);
-  const safetyQuery = evidenceQuery([main, ["adverse effects", "perioperative"]], today);
-  const outcomeQuery = evidenceQuery([main, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
+  const safetyQuery = evidenceQuery([searchClass, ["adverse effects", "perioperative"]], today);
+  const outcomeQuery = evidenceQuery([searchClass, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
   const [guidelines, metas, recent, cautions, outcomes, ...paired] = await Promise.all([
     search(classQuery, { kind: "guideline", sort: "relevance" }),
     search(classQuery, { kind: "meta", sort: "relevance" }),
@@ -44,8 +45,8 @@ async function gatherIndications(
     const conditions = conditionsFromGuideline(guide, question);
     if (conditions.length) {
       const extra = await Promise.all(conditions.map((condition) => condition === "type 2 diabetes"
-        ? search(evidenceQuery([main, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "relevance" })
-        : search(evidenceQuery([main, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "relevance" })));
+        ? search(evidenceQuery([searchClass, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "relevance" })
+        : search(evidenceQuery([searchClass, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "relevance" })));
       supplemental.push(...extra.flat());
     }
   }
