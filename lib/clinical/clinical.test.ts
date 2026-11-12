@@ -590,9 +590,9 @@ test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", as
       return [];
     },
   });
-  assert.ok(seen.filter((item) => item.kind === "guideline" && item.sort === "pub_date").length >= 1);
+  assert.ok(seen.filter((item) => item.kind === "guideline" && item.sort === "relevance").length >= 1);
   assert.ok(seen.some((item) => /heart failure/i.test(item.term) && /HFrEF|reduced ejection/i.test(item.term)));
-  assert.ok(seen.filter((item) => item.kind === "meta" && item.sort === "pub_date").length >= 2);
+  assert.ok(seen.filter((item) => item.kind === "meta" && item.sort === "relevance").length >= 2);
   assert.equal(seen.some((item) => /heart failure/i.test(item.term) && /sglt2/i.test(item.term)), true);
   assert.equal(answer.sufficient, true);
   assert.ok(answer.references.some((item) => item.pmid === "11"));
@@ -1021,11 +1021,12 @@ test("indicação sempre busca diretriz e desfechos cardiovasculares ou renais",
       return [];
     },
   });
-  assert.equal(seen.some((item) => item.kind === "guideline" && item.sort === "pub_date"), true);
-  assert.equal(seen.some((item) => /cardiovascular outcomes/i.test(item.term) && /kidney outcomes/i.test(item.term) && /mortality/i.test(item.term) && item.kind === "meta" && item.sort === "pub_date"), true);
-  assert.equal(seen.some((item) => /\(SGLT2 inhibitor\*\[tiab\]\) AND heart failure\[ti\]/.test(item.term) && item.sort === "pub_date"), true);
+  assert.equal(seen.some((item) => item.kind === "guideline" && item.sort === "relevance"), true);
+  assert.equal(seen.some((item) => /cardiovascular outcomes/i.test(item.term) && /kidney outcomes/i.test(item.term) && /mortality/i.test(item.term) && item.kind === "meta" && item.sort === "relevance"), true);
+  assert.equal(seen.some((item) => /\(SGLT2 inhibitor\*\[tiab\]\) AND heart failure\[ti\]/.test(item.term) && item.sort === "relevance"), true);
   const guide = record("1", "Diretriz", "sglt2 inhibitors heart failure");
   const heartFailure = record("4", "Meta-análise", "sglt2 inhibitors heart failure meta-analysis");
+  heartFailure.abstract = `${heartFailure.abstract} Hospitalization for heart failure and mortality fell.`;
   const outcome = record("2", "Meta-análise", "sglt2 inhibitors cardiovascular outcomes in type 2 diabetes");
   const merged = mergeIndicationRecords({
     guidelines: [guide],

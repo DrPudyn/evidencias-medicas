@@ -1,5 +1,5 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
-import type { SearchConcept } from "./terms";
+import { isMetforminPrediabetes, type SearchConcept } from "./terms";
 import { isYesNoQuestion } from "./prompts";
 import { classAliases, conceptNeedles } from "./select";
 import { CLINICAL_DISCLAIMER } from "./types";
@@ -193,7 +193,7 @@ function textHasOutcome(text: string, outcome: Outcome) {
 }
 
 function outcomeHits(line: string) {
-  const body = line.replace(/^(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+  const body = line.replace(/^(?:DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
   return OUTCOMES.filter((outcome) => textHasOutcome(body, outcome));
 }
 
@@ -368,7 +368,7 @@ export function dropMissingOutcomes(line: string, support: string) {
   const missing = claimed.filter(([, supportPattern]) => !supportPattern.test(support));
   const effect = /\b(reduz\w*|melhor\w*|aument\w*|represent\w*)\b/i.test(text);
   if (effect && claimed.length > 0 && missing.length === claimed.length) return null;
-  const body = text.replace(/^(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+  const body = text.replace(/^(?:DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
   if (!/[a-zà-ú]/i.test(body)) return null;
   return text;
 }
@@ -385,9 +385,9 @@ export function strokeBelongsToGlp1(line: string, support: string) {
 
 function dropStrokeClause(line: string) {
   let text = line.replace(/\s*(?:,| e)\s*(?:o |a )?avc(?: n[aã]o fatal)?\b/gi, "");
-  text = text.replace(/^(?:(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*)?.*?\b(?:reduz\w*|pode reduzir|melhor\w*)\s+(?:o |a )?avc(?: n[aã]o fatal)?\b/i, "");
+  text = text.replace(/^(?:(?:DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*)?.*?\b(?:reduz\w*|pode reduzir|melhor\w*)\s+(?:o |a )?avc(?: n[aã]o fatal)?\b/i, "");
   text = text.replace(/\s{2,}/g, " ").replace(/\s+([,.;])/g, "$1").trim();
-  const body = text.replace(/^(?:DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
+  const body = text.replace(/^(?:DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "");
   if (!/[a-zà-ú]/i.test(body) || /avc|acidente vascular|derrame/i.test(body)) return null;
   return text;
 }
@@ -434,6 +434,16 @@ function studiedPopulations(excerpt: string) {
   const heartFailureCohort = new RegExp(`${who} with (?:heart failure|hfref|hfpef)`, "i").test(text);
   const heartFailureAside = /history of heart failure|with and without[^.]{0,40}heart failure|regardless of[^.]{0,80}heart failure|irrespective of[^.]{0,80}heart failure/i.test(text);
   if ((heartFailureCohort || pops.has("ICFEr") || pops.has("ICFEp")) && !heartFailureAside) pops.add("IC");
+  if (/diabetic kidney disease|\bt2dm\b[^.]{0,40}\bckd\b|t2dm with ckd|t2dm and ckd|type 2 diabetes(?: mellitus)? and chronic kidney/i.test(text)) {
+    pops.add("DM2");
+    pops.add("DRC");
+    pops.add("DM2 com DRC");
+  }
+  if (!heartFailureAside && /type 2 diabetes(?: mellitus)? and heart failure|\bt2dm\b[^.]{0,50}(?:and |with )(?:heart failure|\bhf\b)|t2dm patients with hf\b/i.test(text)) {
+    pops.add("DM2");
+    pops.add("IC");
+    pops.add("DM2 com IC");
+  }
   if (pops.has("DM2") && pops.has("DRC")) pops.add("DM2 com DRC");
   if (pops.has("DM2") && /established cvd|known cvd|established cardiovascular disease|with cardiovascular disease/i.test(text)) pops.add("DM2 com DCV");
   return pops;
@@ -441,6 +451,7 @@ function studiedPopulations(excerpt: string) {
 
 function preferredPopulation(pops: Set<string>) {
   if (pops.has("DM2 com DRC")) return "DM2 com DRC";
+  if (pops.has("DM2 com IC")) return "DM2 com IC";
   if (pops.has("DM2 com DCV")) return "DM2 com DCV";
   if (pops.has("DM2")) return "DM2";
   if (pops.has("ICFEr")) return "ICFEr";
@@ -461,7 +472,7 @@ function addTitlePopulations(pops: Set<string>, title: string) {
 /** The label before the colon is derived from the excerpt and the title. */
 export function alignPopulationLabel(line: string, excerpt: string, title = "") {
   if (/^(sim|nao|cuidados)\b/i.test(fold(line))) return line;
-  const match = line.match(/^(DM2 com DRC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
+  const match = line.match(/^(DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
   const pops = studiedPopulations(excerpt);
   if (!pops.size) addTitlePopulations(pops, title);
   else if (pops.has("DM2") && /people with cardiovascular disease|established cvd|known cvd|established cardiovascular disease/i.test(`${title}\n${excerpt}`)) pops.add("DM2 com DCV");
@@ -543,6 +554,7 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
 
 const LIMITED_CERTAINTY = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i;
 const RESULT_LABEL = /^(results?|findings|resultados|data synthesis|conclusions?|interpretation|summary|implicat|conclus|recommendations?)\b/i;
+const CONTEXT_LABEL = /^(background|introduction|objective|objectives|purpose|aim|aims|methods?|data sources|study selection|data extraction|limitations|funding|registration|systematic review registration)\b/i;
 
 function labeledSections(excerpt: string) {
   const sections: Array<{ label: string; text: string }> = [];
@@ -716,12 +728,49 @@ function parseSynthesis(raw: string): Record<string, unknown> | null {
 
 type Draft = { text: string; resolved: EvidenceRecord[]; support?: string };
 
+function normQuote(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function resultsAndConclusions(abstract: string) {
+  const sections = labeledSections(abstract);
+  const picked = sections.filter((section) => RESULT_LABEL.test(section.label) && !CONTEXT_LABEL.test(section.label));
+  if (picked.length) return picked.map((section) => section.text).join(" ");
+  if (sections.some((section) => CONTEXT_LABEL.test(section.label))) {
+    return sections.filter((section) => !CONTEXT_LABEL.test(section.label)).map((section) => section.text).join(" ");
+  }
+  return abstract;
+}
+
 function verifiedQuote(quote: string, records: EvidenceRecord[]) {
-  const norm = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase();
-  const needle = norm(quote);
+  const needle = normQuote(quote);
   if (needle.length < 24) return "";
-  const hay = norm(records.map((record) => `${record.title}\n${record.abstract}`).join("\n"));
+  const hay = normQuote(records.map((record) => resultsAndConclusions(record.abstract || "")).join("\n"));
   return hay.includes(needle) ? quote.trim() : "";
+}
+
+function sentenceContaining(quote: string, abstract: string) {
+  const needle = normQuote(quote);
+  const sentences = abstract.split(/\n+|(?<=[.!?])\s+/);
+  return sentences.find((sentence) => normQuote(sentence).includes(needle)) || quote;
+}
+
+function glycemicEffect(support: string) {
+  const cleaned = support.replace(/glyc(?:a)?emic control strateg\w*/gi, " ");
+  return /glyc(?:a)?emic-lowering|(?:reduc|improv|lower|decreas)\w*[^.]{0,50}(?:hba1c|glycated|glucose|glycaem|glycemic)/i.test(cleaned);
+}
+
+export function dropsStatedCombination(line: string, support: string) {
+  if (!/triple (?:oral )?therapy|dual therapy|double therapy|combined with|in combination with|combination therapy/i.test(support)) return false;
+  return !/tripl|dupl|associad|combina|junto com|metformin|dpp/.test(fold(line));
+}
+
+export function bareIndication(line: string, record: EvidenceRecord, support: string) {
+  if (/^[-•\s]*cuidados\b/i.test(fold(line))) return false;
+  if (outcomeHits(line).length || /controle glic|glicemi|hba1c|hemoglobina glicada/i.test(line)) return false;
+  if (!/indicad|recomend|para adultos com|deve ser us/.test(fold(line))) return false;
+  const guideline = /guideline|diretriz|consensus/i.test(`${record.type} ${record.title}`);
+  return !(guideline && /\b(we recommend|recommend(?:ed|ation)s?|should be)\b/i.test(support));
 }
 
 function resolveToken(token: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>) {
@@ -820,10 +869,14 @@ export function synthesisNeedsRetry(raw: string, records: EvidenceRecord[]) {
 function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = false) {
   const citedText = draft.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
   const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
-  const support = draft.support || citedAbstract;
+  const sentence = draft.support ? sentenceContaining(draft.support, citedAbstract) : citedAbstract;
+  const support = sentence;
   let text = stripInventedCertainty(draft.text, support);
   text = attributeSpecificDrug(text, support);
   if (!cuidadosAllowed(text, support) || mixesDoseWithProgression(text)) return null;
+  if (draft.support && dropsStatedCombination(text, support)) return null;
+  if (bareIndication(text, draft.resolved[0], support)) return null;
+  if (/controle glic|glicemi/i.test(text) && !glycemicEffect(support) && !outcomeHits(text).length) return null;
   const pruned = dropMissingOutcomes(text, support);
   if (!pruned) return null;
   text = pruned;
@@ -833,7 +886,7 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
     text = withoutStroke;
   }
   const citedTitle = draft.resolved.map((record) => record.title).join("\n");
-  const labeled = alignPopulationLabel(text, citedAbstract, citedTitle);
+  const labeled = alignPopulationLabel(text, `${citedTitle}\n${support}`, citedTitle);
   if (!labeled) return null;
   text = labeled;
   if (!text) return null;
@@ -894,7 +947,12 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
       deferred.push(accepted);
       continue;
     }
-    if (!sawFinding && poolHasControl && !supportHasControl(excerpt)) continue;
+    if (!sawFinding && isMetforminPrediabetes(question)) {
+      const blob = accepted.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
+      const population = /pre-?diabetes|impaired glucose|impaired fasting|\bigt\b|\bifg\b/i.test(blob);
+      const control = /placebo|lifestyle|usual care|control group|\bno treatment\b/i.test(blob);
+      if (!population || !control) continue;
+    } else if (!sawFinding && poolHasControl && !supportHasControl(excerpt)) continue;
     sawFinding = true;
     remember(accepted);
   }

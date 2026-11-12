@@ -151,9 +151,38 @@ export function isIsolatedHeartFailureMeta(article: Pick<EvidenceRecord, "title"
 export function byTypeThenPmidDesc(a: EvidenceRecord, b: EvidenceRecord) {
   const type = typeRank(a.type) - typeRank(b.type);
   if (type) return type;
+  const relevance = (a.relevance ?? Number.MAX_SAFE_INTEGER) - (b.relevance ?? Number.MAX_SAFE_INTEGER);
+  if (relevance) return relevance;
   const pmid = Number(b.pmid) - Number(a.pmid);
   if (pmid) return pmid;
   return a.pmid < b.pmid ? 1 : -1;
+}
+
+const HEART_FAILURE_NICHE = /mitral regurgitation|aortic stenosis|hypertrophic cardiomyopathy|takotsubo|peripartum|chagas|amyloid|myocarditis|congenital heart|heart transplant|pulmonary hypertension/i;
+
+/** Heart-failure slot: a class meta-analysis with death, mortality or hospitalization, not a low-certainty niche. */
+export function isHeartFailureSlot(article: Pick<EvidenceRecord, "title" | "abstract">) {
+  if (!isIsolatedHeartFailureMeta(article)) return false;
+  if (HEART_FAILURE_NICHE.test(article.title)) return false;
+  const conclusion = `${article.title}\n${conclusionText(article.abstract || "")}`;
+  if (!/death|mortalit|hospitali[sz]/i.test(conclusion)) return false;
+  const low = /very low[ -]certainty|low[ -]certainty/i.test(conclusion);
+  const firm = /moderate|high[ -]certainty|high coe/i.test(conclusion);
+  return !low || firm;
+}
+
+/** Drops a special population the question did not name. */
+export function excludedSpecialPopulation(article: Pick<EvidenceRecord, "title">, question: string) {
+  if (!/metformin|pre-?diabet|impaired glucose|impaired fasting/i.test(question)) return false;
+  const asked = question.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  const title = article.title;
+  const blocked: Array<[RegExp, RegExp]> = [
+    [/schizophrenia|antipsychotic/i, /esquizofr|antipsicot/],
+    [/polycystic ovary|\bpcos\b/i, /\bpcos\b|ovario polic|sop\b/],
+    [/\b(children|child|pediatric|paediatric)\b/i, /crian|pediatr|infantil/],
+    [/pregnan|gestation/i, /gestan|gravid|pregnan/],
+  ];
+  return blocked.some(([paper, named]) => paper.test(title) && !named.test(asked));
 }
 
 function synthesisRank(article: EvidenceRecord, question: string) {
@@ -217,7 +246,7 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
   const focused = mainConcept.length ? humans.filter((article) => conceptInFocus(article, mainConcept, question)) : humans;
   const passing = mainConcept.length ? humans.filter((article) => mentionsConcept(article, mainConcept)) : humans;
   let pool = focused.length ? focused : (passing.length ? [] : humans);
-  pool = pool.filter((article) => matchesAskedCondition(article, question));
+  pool = pool.filter((article) => matchesAskedCondition(article, question) && !excludedSpecialPopulation(article, question));
   if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
     const narrowed = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
     if (narrowed.length || !pool.length) pool = narrowed;
@@ -248,7 +277,7 @@ export function mergeIndicationRecords(input: {
     const out: EvidenceRecord[] = [];
     const seen = new Set<string>();
     for (const article of [...list].sort(byTypeThenPmidDesc)) {
-      if (seen.has(article.pmid) || isVeterinary(article.title) || !matchesAskedCondition(article, input.question)) continue;
+      if (seen.has(article.pmid) || isVeterinary(article.title) || excludedSpecialPopulation(article, input.question) || !matchesAskedCondition(article, input.question)) continue;
       const onTopic = !input.concept.length || conceptInFocus(article, input.concept, input.question);
       if (!onTopic) continue;
       if (!precaution && notAnIndication(article)) continue;
@@ -270,8 +299,9 @@ export function mergeIndicationRecords(input: {
   const recent = keep(input.recent);
   const outcomes = keep(input.outcomes || []);
   const dm2Outcomes = outcomes.filter((article) => isType2DiabetesTitle(article.title)).sort(byTypeThenPmidDesc);
-  const dedicatedHeartFailure = keep(input.heartFailure || []).filter((article) => isIsolatedHeartFailureMeta(article)).sort(byTypeThenPmidDesc);
-  const hfMetas = [...dedicatedHeartFailure, ...[...outcomes, ...metas].filter((article) => isIsolatedHeartFailureMeta(article)).sort(byTypeThenPmidDesc)];
+  const hfMetas = [...keep(input.heartFailure || []), ...outcomes, ...metas]
+    .filter((article) => isHeartFailureSlot(article))
+    .sort(byTypeThenPmidDesc);
   const otherOutcomes = outcomes.filter((article) => !isType2DiabetesTitle(article.title) && !isHeartFailureTitle(article.title)).sort(byTypeThenPmidDesc);
   const cautions = keep([...(input.cautions || []), ...diverted], true);
   const picked: EvidenceRecord[] = [];

@@ -8,6 +8,8 @@ export type EvidenceRecord = {
   doi?: string;
   url: string;
   abstract: string;
+  /** Position in the PubMed relevance list. Lower is more relevant. */
+  relevance?: number;
 };
 
 export type ClinicalReference = {

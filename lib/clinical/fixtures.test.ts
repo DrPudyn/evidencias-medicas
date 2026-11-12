@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
 import { SUMMARY_SYSTEM, YES_NO_LINE } from "./prompts";
-import { mergeIndicationRecords, selectForSynthesis } from "./select";
+import { isHeartFailureSlot, mergeIndicationRecords, selectForSynthesis } from "./select";
 import { evidenceQuery, expandClassTerms, forceMetforminType2, readResultCache, writeResultCache } from "./terms";
 import { normalizeOddCaps, validateSynthesis } from "./validate";
 import type { EvidenceRecord } from "./types";
@@ -36,6 +36,8 @@ const PMIDs = [
   "28941313",
   "39242178",
   "38639549",
+  "42952754",
+  "41084961",
 ];
 
 type Row = { pmid: string; title: string; types: string[]; abstract: string };
@@ -517,17 +519,17 @@ test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho 
       return [];
     },
   });
-  const guideline = seen.find((item) => item.kind === "guideline" && item.sort === "pub_date");
+  const guideline = seen.find((item) => item.kind === "guideline" && item.sort === "relevance");
   const outcome = seen.find((item) => item.kind === "meta" && /kidney outcomes/i.test(item.term) && /cardiovascular outcomes/i.test(item.term));
   assert.ok(guideline);
   assert.match(guideline.term, /Practice Guideline/);
   assert.match(guideline.term, /sodium-glucose co-transporter/);
   assert.match(guideline.term, /SGLT2 inhibitors/);
   assert.ok(outcome);
-  assert.equal(outcome.sort, "pub_date");
+  assert.equal(outcome.sort, "relevance");
   const heartFailure = seen.find((item) => /\(SGLT2 inhibitor\*\[tiab\]\) AND heart failure\[ti\]/.test(item.term));
   assert.ok(heartFailure);
-  assert.equal(heartFailure.sort, "pub_date");
+  assert.equal(heartFailure.sort, "relevance");
   assert.match(heartFailure.term, /NOT \(combination\[tiab\] OR quadruple\[tiab\]\)/);
   assert.doesNotMatch(heartFailure.term, /AND NOT/);
   assert.match(SUMMARY_SYSTEM, /até 40 palavras/);
@@ -543,7 +545,7 @@ test("a consulta fixa de indicação amplia a classe e pede diretriz e desfecho 
   assert.doesNotMatch(SUMMARY_SYSTEM, /curta/);
   const dm2Query = seen.find((item) => item.kind === "meta" && /type 2 diabetes/i.test(item.term) && /T2DM/.test(item.term) && /cardiovascular/i.test(item.term) && /renal/i.test(item.term));
   assert.ok(dm2Query);
-  assert.equal(dm2Query.sort, "pub_date");
+  assert.equal(dm2Query.sort, "relevance");
 });
 
 test("metformina no pré-diabetes busca incidência, progressão ou prevenção", async () => {
@@ -569,7 +571,7 @@ test("metformina no pré-diabetes busca incidência, progressão ou prevenção"
   assert.match(query.term, /Randomized Controlled Trial/);
   assert.match(query.term, /Meta-Analysis/);
   assert.doesNotMatch(query.term, /AND NOT/);
-  assert.equal(query.sort, "pub_date");
+  assert.equal(query.sort, "relevance");
   assert.equal(query.includeTrials, true);
   assert.doesNotMatch(query.term, /type 2 diabetes/i);
 });
@@ -648,4 +650,129 @@ test("o conjunto de PMIDs fica estável por sete dias", async () => {
   await writeResultCache(key, ["32877652", "30697905"], adapter, writtenAt);
   assert.deepEqual(await readResultCache(key, adapter, writtenAt + 6 * 24 * 60 * 60 * 1000), ["32877652", "30697905"]);
   assert.equal(await readResultCache(key, adapter, writtenAt + 8 * 24 * 60 * 60 * 1000), null);
+});
+
+test("relevância do PubMed desempata antes do PMID", () => {
+  const older = { ...fixture("33031522"), pmid: "100", relevance: 0 };
+  const newer = { ...fixture("33031522"), pmid: "900", relevance: 4, title: fixture("33031522").title };
+  const merged = mergeIndicationRecords({
+    guidelines: [],
+    metas: [],
+    outcomes: [newer, older],
+    recent: [],
+    supplemental: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  });
+  assert.equal(merged[0].pmid, "100");
+});
+
+test("trecho fora de resultados ou conclusão derruba a frase", () => {
+  const article = fixture("42952754");
+  const objective = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "DM2 com IC: reduz a internação por IC.",
+      pmid: "42952754",
+      trecho: "This study aims to evaluate the cardiovascular and renal benefits of novel hypoglycemic agents",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(objective.sufficient, false);
+  const title = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "DM2 com IC: reduz a internação por IC.",
+      pmid: "42952754",
+      trecho: "Network and pairwise meta-analysis of the effects of novel hypoglycemic agents",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(title.sufficient, false);
+  const suggested = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "DM2: reduz os desfechos cardiovasculares.",
+      pmid: "42952754",
+      trecho: "These findings suggest that both SGLT-2is and GLP-1RAs are preferred glycemic control strategies for improving cardiovascular outcomes in T2DM patients with HF",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(suggested.sufficient, true);
+  assert.match(suggested.answer, /\bpode\b/);
+  assert.match(suggested.answer, /^DM2 com IC:/);
+  assert.match(suggested.answer, /cardiovasculares/);
+  const glycemic = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "DM2: melhora o controle glicêmico.",
+      pmid: "42952754",
+      trecho: "These findings suggest that both SGLT-2is and GLP-1RAs are preferred glycemic control strategies for improving cardiovascular outcomes in T2DM patients with HF",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(glycemic.sufficient, false);
+});
+
+test("terapia tripla sem o qualificador cai e indicação sem desfecho cai", () => {
+  const article = fixture("41084961");
+  const trecho = "Triple oral therapy with metformin, dipeptidyl peptidase-4 inhibitors (DPP-4i), and sodium-glucose cotransporter-2 inhibitors (SGLT2i) has demonstrated high and durable glycaemic-lowering efficacy";
+  const bare = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "O iSGLT2 é indicado para adultos com DM2.", pmid: "41084961", trecho }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(bare.sufficient, false);
+  const alone = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "O iSGLT2 reduz a glicemia.", pmid: "41084961", trecho }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(alone.sufficient, false);
+  const kept = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "A terapia tripla com metformina reduz a glicemia.", pmid: "41084961", trecho }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(kept.sufficient, true);
+  assert.match(kept.answer, /tripl/);
+});
+
+test("vaga de IC exige desfecho clínico e não aceita nicho nem certeza baixa", () => {
+  const mitral = {
+    ...fixture("32877652"),
+    pmid: "700",
+    title: "SGLT2 inhibitors for mitral regurgitation and heart failure: a meta-analysis",
+    abstract: "CONCLUSIONS: Mortality and hospitalization for heart failure fell.",
+  };
+  const low = {
+    ...fixture("32877652"),
+    pmid: "701",
+    title: "SGLT2 inhibitors in heart failure: a meta-analysis",
+    abstract: "CONCLUSIONS: Low-certainty evidence suggests less hospitalization for heart failure.",
+  };
+  assert.equal(isHeartFailureSlot(mitral), false);
+  assert.equal(isHeartFailureSlot(low), false);
+  assert.equal(isHeartFailureSlot(fixture("32877652")), true);
+  const merged = mergeIndicationRecords({
+    guidelines: [],
+    metas: [],
+    outcomes: [],
+    heartFailure: [mitral, low, fixture("32877652")],
+    recent: [],
+    supplemental: [],
+    concept: ["sglt2 inhibitors"],
+    question: "quais indicações de uso de sglt2",
+    limit: 6,
+  });
+  assert.equal(merged[0]?.pmid, "32877652");
+});
+
+test("pré-diabetes exige placebo e deixa de fora população especial", () => {
+  const special = {
+    ...fixture("41151201"),
+    pmid: "702",
+    title: "Metformin for prediabetes in schizophrenia: a meta-analysis",
+    abstract: "RESULTS: Metformin reduced diabetes versus placebo in schizophrenia.",
+  };
+  const question = "A metformina reduz a progressão do pré-diabetes?";
+  const selected = selectForSynthesis([special, fixture("41151201"), fixture("39163798")], ["metformin"], 6, question);
+  assert.equal(selected.some((item) => item.pmid === "702"), false);
+  assert.equal(selected[0].pmid, "41151201");
+  const lead = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "A metformina reduz a incidência de diabetes.", pmid: "39163798" },
+      { texto: "A metformina reduz a incidência de diabetes em relação ao placebo.", pmid: "41151201" },
+    ],
+  }), [fixture("39163798"), fixture("41151201")], ["metformin"], question);
+  assert.equal(lead.sufficient, true);
+  assert.match(lead.answer.split("\n")[0], /41151201|placebo/);
+  assert.doesNotMatch(lead.answer.split("\n")[0], /39163798/);
 });

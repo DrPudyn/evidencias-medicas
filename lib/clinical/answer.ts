@@ -4,6 +4,10 @@ import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evi
 import { isYesNoQuestion } from "./prompts";
 import { benefitLineCount, firstItemMissedControl, insufficientAnswer, rejectionNote, synthesisIsEmpty, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
+function stampRelevance(articles: EvidenceRecord[]) {
+  return articles.map((article, index) => ({ ...article, relevance: article.relevance ?? index }));
+}
+
 function uniqueRecords(articles: EvidenceRecord[]) {
   const byId = new Map<string, EvidenceRecord>();
   for (const article of articles) {
@@ -33,19 +37,19 @@ async function gatherIndications(
   const outcomeQuery = evidenceQuery([searchClass, ["cardiovascular outcomes", "kidney outcomes", "mortality"]], today);
   const dm2OutcomeQuery = evidenceQuery([searchClass, ["type 2 diabetes", "T2DM"], ["cardiovascular", "kidney", "renal"]], today);
   const prediabetesSearch = isMetforminPrediabetes(question)
-    ? search(metforminPrediabetesQuery(today), { sort: "pub_date", includeTrials: true })
+    ? search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true })
     : Promise.resolve([] as EvidenceRecord[]);
   const heartFailureQuery = isolatedHeartFailureQuery(today);
   const [guidelines, metas, recent, cautions, outcomes, dm2Outcomes, heartFailure, prediabetesTrials, ...paired] = await Promise.all([
-    search(classQuery, { kind: "guideline", sort: "pub_date" }),
-    search(classQuery, { kind: "meta", sort: "pub_date" }),
-    search(classQuery, { kind: "high-level", sort: "pub_date" }),
-    search(safetyQuery, { kind: "high-level", sort: "pub_date" }),
-    search(outcomeQuery, { kind: "meta", sort: "pub_date" }),
-    search(dm2OutcomeQuery, { kind: "meta", sort: "pub_date" }),
-    search(heartFailureQuery, { kind: "high-level", sort: "pub_date" }),
+    search(classQuery, { kind: "guideline", sort: "relevance" }),
+    search(classQuery, { kind: "meta", sort: "relevance" }),
+    search(classQuery, { kind: "high-level", sort: "relevance" }),
+    search(safetyQuery, { kind: "high-level", sort: "relevance" }),
+    search(outcomeQuery, { kind: "meta", sort: "relevance" }),
+    search(dm2OutcomeQuery, { kind: "meta", sort: "relevance" }),
+    search(heartFailureQuery, { kind: "high-level", sort: "relevance" }),
     prediabetesSearch,
-    ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
+    ...pairs.map((term) => search(term, { kind: "high-level", sort: "relevance" })),
   ]);
   const supplemental: EvidenceRecord[] = [];
   const guide = guidelines.find((article) => !isVeterinary(article.title) && conceptInFocus(article, main));
@@ -53,18 +57,18 @@ async function gatherIndications(
     const conditions = conditionsFromGuideline(guide, question);
     if (conditions.length) {
       const extra = await Promise.all(conditions.map((condition) => condition === "type 2 diabetes"
-        ? search(evidenceQuery([searchClass, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "pub_date" })
-        : search(evidenceQuery([searchClass, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "pub_date" })));
+        ? search(evidenceQuery([searchClass, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "relevance" })
+        : search(evidenceQuery([searchClass, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "relevance" })));
       supplemental.push(...extra.flat());
     }
   }
   const merged = mergeIndicationRecords({
-    guidelines,
-    metas,
-    recent: [...recent, ...paired.flat(), ...prediabetesTrials],
-    supplemental,
-    outcomes: [...dm2Outcomes, ...outcomes],
-    heartFailure,
+    guidelines: stampRelevance(guidelines),
+    metas: stampRelevance(metas),
+    recent: stampRelevance([...recent, ...paired.flat(), ...prediabetesTrials]),
+    supplemental: stampRelevance(supplemental),
+    outcomes: stampRelevance([...dm2Outcomes, ...outcomes]),
+    heartFailure: stampRelevance(heartFailure),
     cautions,
     concept: main,
     question,
@@ -122,7 +126,7 @@ export async function answerClinicalQuestion(input: {
   } else {
     const pairTerms = pairQueries(scoped, today);
     const searches = pairTerms.map((term) => input.search(term));
-    if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "pub_date", includeTrials: true }));
+    if (isMetforminPrediabetes(question)) searches.push(input.search(metforminPrediabetesQuery(today), { sort: "relevance", includeTrials: true }));
     if (searches.length) {
       const batches = await Promise.all(searches);
       records = selectForSynthesis(uniqueRecords(batches.flat()), main, 6, question);

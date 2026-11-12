@@ -9,7 +9,7 @@ import { body, currentUser, json, rateLimit, sameOrigin, settings } from "@/lib/
 async function searchHighLevel(term: string, options?: ClinicalSearchOptions): Promise<EvidenceRecord[]> {
   const kind = options?.kind || "high-level";
   const query = queryForKind(term, kind);
-  const sort = options?.sort || "pub_date";
+  const sort = options?.sort || "relevance";
   const retmax = 30;
   const key = resultCacheKey(query, sort, retmax);
   const cached = await readResultCache(key, settings().DB);
