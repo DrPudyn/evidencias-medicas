@@ -337,8 +337,10 @@ export type ApprovedCard = {
 
 const approvedCards = new Map<string, { card: ApprovedCard; at: number }>();
 
+export const CARD_PIPELINE = "10";
+
 export function cardCacheKey(question: string) {
-  return `card|${normalizeQuestion(question)}`;
+  return `card|${CARD_PIPELINE}|${normalizeQuestion(question)}`;
 }
 
 export async function readApprovedCard(question: string, db?: TermCacheDb | null, now = Date.now()) {

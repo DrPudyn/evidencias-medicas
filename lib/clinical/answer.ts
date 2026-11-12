@@ -24,27 +24,19 @@ function answerLines(answer: ClinicalAnswer) {
 }
 
 function mergeAnswers(first: ClinicalAnswer, second: ClinicalAnswer, records: EvidenceRecord[], concept: ReturnType<typeof conceptsForQuestion>[number], question: string) {
-  const items = answerLines(first).map((line) => ({ texto: line.texto, pmid: line.pmid }));
-  const seen = new Set(items.map((item) => `${item.pmid}:${item.texto}`));
-  for (const line of answerLines(second)) {
-    const key = `${line.pmid}:${line.texto}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    items.push({ texto: line.texto, pmid: line.pmid });
+  const order: string[] = [];
+  const byPmid = new Map<string, { texto: string; pmid: string }>();
+  for (const line of answerLines(first)) {
+    if (!byPmid.has(line.pmid)) order.push(line.pmid);
+    byPmid.set(line.pmid, { texto: line.texto, pmid: line.pmid });
   }
+  for (const line of answerLines(second)) {
+    if (!byPmid.has(line.pmid)) order.push(line.pmid);
+    byPmid.set(line.pmid, { texto: line.texto, pmid: line.pmid });
+  }
+  const items = order.map((pmid) => byPmid.get(pmid)).filter((item): item is { texto: string; pmid: string } => Boolean(item));
   if (!items.length) return second.sufficient ? second : first;
   return validateSynthesis(JSON.stringify({ itens: items }), records, concept, question);
-}
-
-function reservedWithoutLine(records: EvidenceRecord[], answer: ClinicalAnswer, question: string) {
-  if (!isIndicationQuestion(question)) return [];
-  const lines = answerLines(answer);
-  return records.filter((record) => {
-    const cited = lines.filter((line) => line.pmid === record.pmid);
-    if (isCareGuideline(record)) return !cited.some((line) => line.care);
-    if (isHeartFailureSlot(record) || isType2DiabetesTitle(record.title)) return cited.length === 0;
-    return false;
-  });
 }
 
 const RETRY_WARNING = [
@@ -201,7 +193,11 @@ export async function answerClinicalQuestion(input: {
   try {
     input.onStage?.("reading");
     input.onStage?.("writing");
-    let raw = await input.ai.summarize(question, records, { direct: isYesNoQuestion(question) });
+    const reserved = records.filter((record) => isCareGuideline(record) || isHeartFailureSlot(record) || isType2DiabetesTitle(record.title));
+    const brief = reserved.length
+      ? `\n\nEscreva uma linha para cada vaga, com o desfecho da frase. Não comece com Cuidados: o código coloca o rótulo. Não troque procedure por cirurgia.\n${reserved.map((record) => `PMID ${record.pmid}: ${resultSentence(record)}`).join("\n")}`
+      : "";
+    let raw = await input.ai.summarize(`${question}${brief}`, records, { direct: isYesNoQuestion(question) });
     let retried = false;
     if (synthesisNeedsRetry(raw, records)) {
       retried = true;
@@ -226,17 +222,7 @@ export async function answerClinicalQuestion(input: {
         answer = mergeAnswers(answer, validateSynthesis(retryRaw, records, main, question), records, main, question);
       }
     }
-    const missing = reservedWithoutLine(records, answer, question);
-    if (missing.length) {
-      const brief = missing.map((record) => `PMID ${record.pmid}: ${resultSentence(record)}`).join("\n");
-      const extraRaw = await input.ai.summarize(
-        `Escreva só uma linha por PMID, com o desfecho da frase de resultado. Se a frase for de omissão ou suspensão, comece com Cuidados:.\n${brief}`,
-        missing,
-        { direct: false },
-      );
-      answer = mergeAnswers(answer, validateSynthesis(extraRaw, missing, main, question), records, main, question);
-    }
-    if (input.db && answer.sufficient) await writeApprovedCard(question, { ...answer, sufficient: true }, input.db);
+    if (input.db && answer.sufficient && answer.discardedCitations.length === 0) await writeApprovedCard(question, { ...answer, sufficient: true }, input.db);
     return answer;
   } catch {
     return insufficientAnswer(

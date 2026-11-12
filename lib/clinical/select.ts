@@ -143,7 +143,7 @@ export function isHeartFailureTitle(title: string) {
 export function isIsolatedHeartFailureMeta(article: Pick<EvidenceRecord, "title" | "abstract">) {
   const conclusion = conclusionText(article.abstract || "");
   const blob = `${article.title}\n${conclusion}`;
-  if (/quadruple|quintuple|network of regimens|\bcombination\b/i.test(blob)) return false;
+  if (/quadruple|quintuple|\bregimens?\b|\bcombination\b|together with/i.test(blob)) return false;
   const classNamed = /sglt-?2|sodium[-\s]?glucose|gliflozin/i.test(blob);
   return classNamed && isHeartFailureTitle(blob);
 }
@@ -202,8 +202,9 @@ function synthesisRank(article: EvidenceRecord, question: string) {
   if (isYesNoQuestion(question) && /metformin/.test(asked)) {
     const title = foldText(article.title);
     const body = foldText(`${article.title} ${article.abstract}`);
-    const control = /placebo|controle|control group|grupo controle|no treatment|sem tratamento|untreated/.test(body);
+    const control = /placebo|controle|\bcontrol\b|control group|grupo controle|no treatment|sem tratamento|untreated/.test(body);
     if (control && /umbrella/.test(title)) return 0;
+    if (control && /metformin/.test(body) && /incidence|incident diabetes|prevent/.test(body) && !/optimal dose/.test(title)) return 0;
     if (control && /network meta/.test(body)) return 1;
   }
   return 10 + prediabetesPriority(article, question);
@@ -264,7 +265,7 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
     if (narrowed.length || !pool.length) pool = narrowed;
   }
   return mixTypes(pool)
-    .sort((a, b) => synthesisRank(a, question) - synthesisRank(b, question) || byTypeThenPmidDesc(a, b))
+    .sort((a, b) => synthesisRank(a, question) - synthesisRank(b, question) || Number(/umbrella/i.test(b.title)) - Number(/umbrella/i.test(a.title)) || byTypeThenPmidDesc(a, b))
     .slice(0, limit);
 }
 

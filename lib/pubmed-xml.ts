@@ -49,6 +49,21 @@ function labeledSections(text: string) {
   return sections;
 }
 
+function readableTail(text: string, max: number) {
+  if (text.length <= max) return text.trim();
+  let tail = text.slice(text.length - max);
+  const boundary = tail.search(/(?<=[.!?])\s+/);
+  if (boundary >= 0 && boundary < tail.length / 2) tail = tail.slice(boundary).trim();
+  if (!/placebo|compared with control|\bversus control\b/i.test(tail)) {
+    const prior = text.split(/(?<=[.!?])\s+/).find((sentence) => /placebo|compared with control|\bversus control\b/i.test(sentence) && /reduc|lower|metformin/i.test(sentence));
+    if (prior) {
+      const joined = `${prior.trim()} ${tail}`.trim();
+      tail = joined.length <= max ? joined : prior.trim();
+    }
+  }
+  return tail.trim();
+}
+
 /** Keeps conclusions, then results. Unstructured text keeps the ending, where the conclusion usually sits. */
 export function focusAbstract(text: string, max = 1800) {
   const clean = text.replace(/\s+\n/g, "\n").trim();
@@ -61,17 +76,18 @@ export function focusAbstract(text: string, max = 1800) {
     let excerpt = "";
     for (const section of picked) {
       const piece = `${section.label}: ${section.text}`;
+      const clipped = piece.length > max ? readableTail(piece, max) : piece;
       if (!excerpt) {
-        excerpt = piece.length > max ? piece.slice(piece.length - max) : piece;
+        excerpt = clipped;
         continue;
       }
-      if (excerpt.length + piece.length + 1 > max) break;
-      excerpt = `${excerpt}\n${piece}`;
+      if (excerpt.length + clipped.length + 1 > max) break;
+      excerpt = `${excerpt}\n${clipped}`;
     }
     return excerpt.trim();
   }
   if (clean.length <= max) return clean;
-  return clean.slice(clean.length - max).trim();
+  return readableTail(clean, max);
 }
 
 /** Conclusion section, or the last sentences when the abstract has no label. */

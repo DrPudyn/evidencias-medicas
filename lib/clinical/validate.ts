@@ -313,8 +313,8 @@ export function ensureModalHedge(line: string, excerpt: string) {
 }
 
 export function supportCertainty(support: string): "firm" | "hedge" {
-  if (/high[ -]certainty|(?<!low to )high coe|moderate-to-high|moderate to high|moderate-\s+to high|\bdemonstrates\b/i.test(support)) return "firm";
-  if (/\b(suggest(?:s|ed|ing)?|may|might|likely)\b|\bassociated\b|\blinked\b|very low[ -]certainty|(?<!very )low[ -]certainty/i.test(support)) return "hedge";
+  if (/\b(we recommend|is recommended|recommendations?)\b|high[ -]certainty|(?<!low to )high coe|moderate-to-high|moderate to high|moderate-\s+to high|\bdemonstrates\b/i.test(support)) return "firm";
+  if (/\b(suggest(?:s|ed|ing)?|appears?|may|might|likely)\b|\bassociated\b|\blinked\b|very low[ -]certainty|(?<!very )low[ -]certainty/i.test(support)) return "hedge";
   return "firm";
 }
 
@@ -467,7 +467,7 @@ function studiedPopulations(excerpt: string) {
     pops.add("DM2 com IC");
   }
   if (pops.has("DM2") && pops.has("DRC")) pops.add("DM2 com DRC");
-  if (pops.has("DM2") && /established cvd|known cvd|established cardiovascular disease|with cardiovascular disease/i.test(text)) pops.add("DM2 com DCV");
+  if (pops.has("DM2") && /established cvd|known cvd|established cardiovascular disease|with cardiovascular disease|and cardiovascular disease/i.test(text)) pops.add("DM2 com DCV");
   return pops;
 }
 
@@ -497,7 +497,7 @@ export function alignPopulationLabel(line: string, excerpt: string, title = "") 
   const match = line.match(/^(DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:/i);
   const pops = studiedPopulations(excerpt);
   if (!pops.size) addTitlePopulations(pops, title);
-  else if (pops.has("DM2") && /people with cardiovascular disease|established cvd|known cvd|established cardiovascular disease/i.test(`${title}\n${excerpt}`)) pops.add("DM2 com DCV");
+  else if (pops.has("DM2") && /people with cardiovascular disease|established cvd|known cvd|established cardiovascular disease|and cardiovascular disease/i.test(`${title}\n${excerpt}`)) pops.add("DM2 com DCV");
   const replacement = preferredPopulation(pops);
   if (!replacement) return line;
   if (!match) return `${replacement}: ${line}`;
@@ -507,7 +507,11 @@ export function alignPopulationLabel(line: string, excerpt: string, title = "") 
 export function treatsRankingAsEffect(line: string, excerpt: string) {
   if (!/sucra|probability of being best|ranking probability|probabilities of being/i.test(excerpt)) return false;
   const folded = fold(line);
-  return /\breduz/.test(folded) && /sucra|probabilidade/.test(folded);
+  if (!/\breduz/.test(folded)) return false;
+  if (/sucra|probabilidade|ranking/.test(folded)) return true;
+  if (/placebo|controle/.test(folded)) return false;
+  const direct = excerpt.split(/(?<=[.!?])\s+/).some((sentence) => /placebo|\bcontrol\b/i.test(sentence) && /reduc/i.test(sentence) && !/sucra|ranking probability|probability of being/i.test(sentence));
+  return !direct;
 }
 
 export function omitsSuperiorAlternative(line: string, excerpt: string) {
@@ -696,6 +700,36 @@ export function isCertaintyOnlyCaveat(text: string) {
   const body = folded.replace(/^[-•\s]*cuidados:\s*/, "");
   if (!/certeza|cautel|limitad|incerta/.test(body)) return false;
   return !/infec|fratur|suspens|perioperator|cetoacid|hipotens|amput|genital|hipoglic|sarcopen|muscul|ossea|osso|queda/.test(body);
+}
+
+/** A multi-drug regimen is not an effect of SGLT2 alone. */
+export function attributesComboToClass(line: string, support: string) {
+  const folded = fold(line);
+  if (/combin|quadrupl|quintupl|regimen|junto com|associad|arni|betabloq|espironolact|antagonista mineral/.test(folded)) return false;
+  if (!/\b(reduz|pode|associa|melhor)/.test(folded)) return false;
+  return support.split(/\n+|(?<=[.!?])\s+/).some((sentence) => {
+    if (!/combination|quadruple|quintuple|\bregimens?\b|together with/i.test(sentence)) return false;
+    const hits = outcomeHits(line);
+    return !hits.length || hits.some((outcome) => textHasOutcome(sentence, outcome));
+  });
+}
+
+/** Age or treatment-interaction findings are not an indication. */
+export function onlySubgroupSupport(line: string, support: string, title = "") {
+  if (/age and sex differences|differences in efficacy/i.test(title) && /\b(reduz|pode|associa|melhor)/.test(fold(line))) return true;
+  const interaction = /age\s*[×x]\s*treatment|treatment\s*[×x]\s*age|interactions suggested/i;
+  const sentences = support.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => {
+    const hits = outcomeHits(line);
+    return !hits.length || hits.some((outcome) => textHasOutcome(sentence, outcome));
+  });
+  const pool = sentences.length ? sentences : [support];
+  return pool.every((sentence) => interaction.test(sentence));
+}
+
+/** "Cardiovascular disease" in the population is not the outcome. */
+export function claimsDiseaseAsOutcome(line: string, support: string) {
+  if (!/doenca cardiovascular/.test(fold(line))) return false;
+  return !/reduc\w*[^.]{0,40}cardiovascular disease/i.test(support);
 }
 
 /** Keeps a combination the supporting sentence actually states, such as SGLT2 plus metformin. */
@@ -1046,9 +1080,23 @@ function acceptDraft(draft: Draft, concept?: SearchConcept, requireControl = fal
   if (treatsRankingAsEffect(text, support) || omitsSuperiorAlternative(text, support)) return null;
   if (draft.support && polarityFlipped(text, support)) return null;
   if (expandsConfinedPopulation(text, support)) return null;
+  if (attributesComboToClass(text, support) || onlySubgroupSupport(text, support, citedTitle) || claimsDiseaseAsOutcome(text, support)) return null;
   const hedged = ensureModalHedge(text, certaintySource);
   if (!hedged) return null;
   text = hedged;
+  if (/may represent the optimal dose/i.test(certaintySource)) {
+    text = text.replace(/pode representar a dose [oó]tima/gi, "pode ser a dose ideal").replace(/\brepresenta a dose [oó]tima/gi, "pode ser a dose ideal");
+  }
+  if (/appears to be superior/i.test(`${support}\n${certaintySource}`)) {
+    text = text.replace(/s[aã]o superiores/gi, "parecem superiores").replace(/é superior/gi, "parece superior");
+  }
+  const procedureSentence = support.split(/\n+|(?<=[.!?])\s+/).some((sentence) => /procedure/i.test(sentence) && /omit|day before/i.test(sentence) && !/surgery|surgical/i.test(sentence));
+  if (procedureSentence) {
+    text = text.replace(/cirurgias/gi, "procedimentos").replace(/cirurgia/gi, "procedimento");
+  }
+  if (/should omit|omit them the day before|day of a procedure/i.test(support) && !/^cuidados\b/i.test(fold(text))) {
+    text = `Cuidados: ${text.replace(/^(?:Pré-diabetes|DM2 com DRC|DM2 com IC|DM2 com DCV|ICFEr|ICFEp|DM2|DRC|IC)\s*:\s*/i, "")}`;
+  }
   text = ensureCertaintyCaveat(text, support);
   if (concept && (attributesForeignBenefit(text, support, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };
@@ -1093,7 +1141,10 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
   for (const draft of drafts) {
     if (isCertaintyOnlyCaveat(draft.text)) continue;
     const accepted = acceptDraft(draft, concept, yesNo && !sawFinding, question);
-    if (!accepted) continue;
+    if (!accepted) {
+      for (const record of draft.resolved) discarded.push(record.pmid);
+      continue;
+    }
     const excerpt = accepted.support || accepted.resolved.map((record) => record.abstract || "").join("\n");
     if (!sawFinding && isDoseLine(accepted.text)) {
       deferred.push(accepted);
@@ -1109,6 +1160,12 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
     remember(accepted);
   }
   for (const later of deferred) remember(later);
+  const seenBody = new Set<string>();
+  for (let index = kept.length - 1; index >= 0; index -= 1) {
+    const key = fold(kept[index].text).replace(/\s+/g, " ").trim();
+    if (seenBody.has(key)) kept.splice(index, 1);
+    else seenBody.add(key);
+  }
   const seenCare = new Set<string>();
   for (let index = kept.length - 1; index >= 0; index -= 1) {
     if (!/^cuidados\b/i.test(fold(kept[index].text))) continue;
