@@ -14,7 +14,7 @@ async function searchHighLevel(term: string): Promise<EvidenceRecord[]> {
     abstracts: true,
     highLevelOnly: true,
   });
-  return result.articles.slice(0, 6).map((article) => ({
+  return result.articles.slice(0, 20).map((article) => ({
     pmid: article.id,
     title: article.title,
     journal: article.journal,

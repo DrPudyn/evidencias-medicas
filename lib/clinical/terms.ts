@@ -169,13 +169,46 @@ export function evidenceQuery(concepts: SearchConcept[], today?: string) {
   return today ? `${typed} AND ${publicationDateClause(today)}` : typed;
 }
 
-/** Most specific query first, then fewer concepts, and a last try of the main concept without the date window. */
-export function searchAttempts(concepts: SearchConcept[], today: string) {
-  const attempts: string[] = [];
-  for (let count = concepts.length; count >= 1; count -= 1) {
-    attempts.push(evidenceQuery(concepts.slice(0, count), today));
+const CONTEXT_PHRASES = [
+  "family practice", "family medicine", "general practice", "general practitioner",
+  "primary care", "primary health care", "primary health", "ambulatory care",
+  "outpatient", "community health", "community medicine", "care setting",
+];
+
+/** Setting of care, not the drug or the disease. These are dropped before clinical concepts. */
+export function isContextConcept(concept: SearchConcept) {
+  return concept.length > 0 && concept.every((term) => CONTEXT_PHRASES.some((phrase) => term.includes(phrase)));
+}
+
+function pairsOf(concepts: SearchConcept[]) {
+  const pairs: SearchConcept[][] = [];
+  for (let left = 0; left < concepts.length; left += 1) {
+    for (let right = left + 1; right < concepts.length; right += 1) {
+      pairs.push([concepts[left], concepts[right]]);
+    }
   }
-  attempts.push(evidenceQuery(concepts.slice(0, 1)));
+  return pairs;
+}
+
+/**
+ * Full query, then the same query without context concepts, then clinical pairs,
+ * then single clinical concepts, and a last try of the main concept without the date window.
+ */
+export function searchAttempts(concepts: SearchConcept[], today: string) {
+  const clinical = concepts.filter((concept) => !isContextConcept(concept));
+  const context = concepts.filter((concept) => isContextConcept(concept));
+  const core = clinical.length ? clinical : concepts;
+  const attempts: string[] = [];
+  const push = (group: SearchConcept[], dated: boolean) => {
+    if (!group.length) return;
+    const term = dated ? evidenceQuery(group, today) : evidenceQuery(group);
+    if (!attempts.includes(term)) attempts.push(term);
+  };
+  push([...core, ...context], true);
+  if (context.length) push(core, true);
+  for (const pair of pairsOf(core)) push(pair, true);
+  for (const concept of core) push([concept], true);
+  push([core[0]], false);
   return attempts;
 }
 

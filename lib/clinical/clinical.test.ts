@@ -2,22 +2,24 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
+import { validateSynthesis } from "./validate";
 import { highLevelPmids } from "../pubmed-xml";
+import { selectForSynthesis } from "./select";
 import { fallbackSearchTerms, sanitizeConcepts, searchAttempts } from "./terms";
 import { createClinicalAi, createWorkersAi } from "./provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "./quota";
 import type { ClinicalAi, EvidenceRecord } from "./types";
 
-const record = (pmid: string, type = "Meta-análise"): EvidenceRecord => ({
+const record = (pmid: string, type = "Meta-análise", about = "diabetes"): EvidenceRecord => ({
   pmid,
-  title: `Título ${pmid}`,
+  title: `${about} ${pmid}`,
   journal: "Journal",
   date: "2024",
   authors: "Alguém",
   type,
   doi: `10.1000/test.${pmid}`,
   url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
-  abstract: `Resumo recuperado do PMID ${pmid}. Redução relatada no abstract.`,
+  abstract: `${about}. Resumo recuperado do PMID ${pmid}. Redução relatada no abstract.`,
 });
 
 function memoryDb() {
@@ -95,20 +97,56 @@ test("busca vazia refaz a consulta só com o conceito principal", async () => {
     ai,
     search: async (term) => {
       seen.push(term);
-      return /primary care|family medicine/i.test(term) ? [] : [record("12345678")];
+      return /primary care|family medicine/i.test(term) ? [] : [record("12345678", "Meta-análise", "sglt2 inhibitors")];
     },
   });
   assert.equal(answer.sufficient, true);
-  assert.equal(seen.length, 3);
+  assert.equal(seen.length, 2);
   assert.match(seen[0], /sglt2 inhibitors/);
-  assert.match(seen[0], / OR /);
   assert.match(seen[0], /primary care/);
-  assert.match(seen[2], /sglt2 inhibitors/);
-  assert.doesNotMatch(seen[2], /primary care|family medicine/);
-  assert.match(seen[2], /1900\/01\/01/);
+  assert.match(seen[1], /sglt2 inhibitors/);
+  assert.doesNotMatch(seen[1], /primary care|family medicine/);
   const attempts = searchAttempts([["sglt2 inhibitors"], ["primary care"]], "2026/11/11");
   assert.equal(attempts.length, 3);
   assert.doesNotMatch(attempts[2], /1900\/01\/01/);
+});
+
+test("fallback tira o contexto antes e prova o par clínico antes do conceito único", async () => {
+  const seen: string[] = [];
+  const ai: ClinicalAi = {
+    async searchTerms() {
+      return JSON.stringify({
+        concepts: [["sglt2 inhibitors"], ["family practice"], ["type 2 diabetes"]],
+      });
+    },
+    async summarize() {
+      return JSON.stringify({
+        sufficient: true,
+        answer: "No diabetes tipo 2, a indicação citada está no artigo [1].",
+        citations: ["99999999"],
+      });
+    },
+  };
+  const answer = await answerClinicalQuestion({
+    question: "Quais as indicações de uso de iSGLT2 na prática de saúde da família?",
+    ai,
+    search: async (term) => {
+      seen.push(term);
+      const hasFamily = /family practice/i.test(term);
+      const hasDiabetes = /type 2 diabetes/i.test(term);
+      const hasSglt = /sglt2/i.test(term);
+      return !hasFamily && hasSglt && hasDiabetes
+        ? [record("12345678", "Diretriz", "sglt2 inhibitors type 2 diabetes")]
+        : [];
+    },
+  });
+  assert.equal(answer.sufficient, true);
+  assert.equal(seen.length, 2);
+  assert.match(seen[0], /family practice/);
+  assert.match(seen[1], /sglt2/);
+  assert.match(seen[1], /type 2 diabetes/);
+  assert.doesNotMatch(seen[1], /family practice/);
+  assert.equal(answer.references[0]?.pmid, "12345678");
 });
 
 test("efetch descarta caso-controle e mantém revisão sistemática", () => {
@@ -134,7 +172,7 @@ test("efetch descarta caso-controle e mantém revisão sistemática", () => {
 });
 
 test("pergunta clínica normal cita só PMIDs recuperados", async () => {
-  const records = [record("12345678"), record("87654321", "Revisão sistemática")];
+  const records = [record("12345678", "Revisão sistemática"), record("87654321", "Revisão sistemática")];
   let summaries = 0;
   const ai: ClinicalAi = {
     async searchTerms() {
@@ -210,7 +248,7 @@ test("PMID inventado pela IA é descartado e não vira conclusão", async () => 
   const answer = await answerClinicalQuestion({
     question: "Como conduzir insuficiência cardíaca?",
     ai,
-    search: async () => [record("12345678")],
+    search: async () => [record("12345678", "Meta-análise", "heart failure")],
   });
   assert.equal(answer.sufficient, false);
   assert.equal(answer.references.length, 0);
@@ -219,32 +257,38 @@ test("PMID inventado pela IA é descartado e não vira conclusão", async () => 
   assert.doesNotMatch(answer.answer, /sempre interne|Conduta geral|99999999/);
 });
 
-test("citação inválida sai do texto e a válida é renumerada", async () => {
-  const ai: ClinicalAi = {
-    async searchTerms() {
-      return JSON.stringify({ terms: ["diabetes"] });
-    },
-    async summarize() {
-      return JSON.stringify({
-        sufficient: true,
-        answer: "Fonte externa [1]. A revisão recuperada descreve redução [2].",
-        citations: ["99999999", "12345678"],
-      });
-    },
-  };
-  const answer = await answerClinicalQuestion({
-    question: "A metformina reduz eventos no diabetes?",
-    ai,
-    search: async () => [record("12345678")],
-  });
+test("número da frase aponta para o artigo enviado, não para a ordem do array citations", () => {
+  const sent = [
+    record("11111111", "Revisão sistemática", "sglt2"),
+    record("22222222", "Meta-análise", "sglt2"),
+    record("33333333", "Revisão sistemática", "sglt2"),
+    record("44444444", "Diretriz", "sglt2"),
+  ];
+  const answer = validateSynthesis(JSON.stringify({
+    sufficient: true,
+    answer: "Na insuficiência cardíaca, a diretriz cita o uso [4].\nNo diabetes tipo 2, a metanálise descreve o benefício [2].\nConduta inventada [9].",
+    citations: ["11111111", "33333333"],
+  }), sent);
   assert.equal(answer.sufficient, true);
-  assert.match(answer.answer, /\[1\]/);
-  assert.doesNotMatch(answer.answer, /\[2\]|Fonte externa|99999999/);
-  assert.deepEqual(answer.references.map((item) => ({ n: item.n, pmid: item.pmid, url: item.url })), [{
-    n: 1,
-    pmid: "12345678",
-    url: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
-  }]);
+  assert.match(answer.answer, /insuficiência cardíaca[\s\S]*\[1\]/);
+  assert.match(answer.answer, /diabetes tipo 2[\s\S]*\[2\]/);
+  assert.doesNotMatch(answer.answer, /inventada|\[9\]|\[4\]/);
+  assert.deepEqual(answer.references.map((item) => item.pmid), ["44444444", "22222222"]);
+});
+
+test("seleção prioriza diretriz e revisão recente e descarta artigo fora do tema", () => {
+  const papers = [
+    { ...record("10000001", "Revisão sistemática", "sglt2 inhibitors"), date: "2024 Jan" },
+    { ...record("10000002", "Diretriz", "sglt2 inhibitors"), date: "2020" },
+    { ...record("10000003", "Meta-análise", "sglt2 inhibitors"), date: "2023 Jun" },
+    { ...record("10000004", "Revisão sistemática", "vitamin b12 metformin"), date: "2024" },
+    { ...record("10000005", "Diretriz", "sglt2 inhibitors"), date: "2022 Mar" },
+  ];
+  const selected = selectForSynthesis(papers, ["sglt2 inhibitors"], 8);
+  assert.deepEqual(selected.map((item) => item.pmid), ["10000005", "10000002", "10000001", "10000003"]);
+  assert.equal(selectForSynthesis([
+    record("10000006", "Revisão sistemática", "Empagliflozin in heart failure"),
+  ], ["sglt2 inhibitors"]).length, 1);
 });
 
 test("limites de plano: anônimo, grátis, assinante e outro dia", async () => {

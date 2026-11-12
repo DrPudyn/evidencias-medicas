@@ -1,7 +1,7 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
 import { CLINICAL_DISCLAIMER } from "./types";
 
-const ANSWER_MAX = 1400;
+const ANSWER_MAX = 2200;
 
 export function toReference(record: EvidenceRecord, n: number): ClinicalReference {
   return {
@@ -22,18 +22,37 @@ export function insufficientAnswer(message: string, discarded: string[] = []): C
   };
 }
 
-function pmidOf(value: unknown) {
-  const pmid = String(value ?? "").replace(/\D/g, "");
-  return /^\d{1,9}$/.test(pmid) ? pmid : "";
-}
-
 function tidy(text: string) {
   return text
-    .replace(/PMID[:\s]*\d{1,9}/gi, "")
     .replace(/\s+([,.;:!?])/g, "$1")
     .replace(/\(\s*\)/g, "")
-    .replace(/\s{2,}/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function splitUnits(text: string) {
+  return text
+    .split(/\n+/)
+    .flatMap((line) => line.split(/(?<=[.!?;])\s+/))
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+}
+
+/** [n] is the number printed on the article we sent. A longer number is a PMID. */
+export function recordForMarker(raw: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>) {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return null;
+  const asIndex = Number(digits);
+  if (String(asIndex) === digits && asIndex >= 1 && asIndex <= records.length) return records[asIndex - 1];
+  return byId.get(digits) ?? null;
+}
+
+function markersOf(unit: string) {
+  const found: string[] = [];
+  for (const match of unit.matchAll(/\[(\d{1,9})\]/g)) found.push(match[1]);
+  for (const match of unit.matchAll(/\bPMID[:\s]*(\d{1,9})\b/gi)) found.push(match[1]);
+  return found;
 }
 
 export function validateSynthesis(raw: string, records: EvidenceRecord[]): ClinicalAnswer {
@@ -52,57 +71,59 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[]): Clini
     : "Não encontramos revisões sistemáticas, metanálises ou diretrizes no PubMed para esta pergunta. Não há conclusão clínica a partir desta busca.";
   if (!parsed || parsed.sufficient === false) return insufficientAnswer(emptyMessage);
 
-  const listed = Array.isArray(parsed.citations) ? parsed.citations : [];
   const discarded: string[] = [];
-  const cited: EvidenceRecord[] = [];
-  const indexMap = new Map<number, number>();
-  listed.forEach((item, index) => {
-    const pmid = pmidOf(item);
-    if (!pmid || !byId.has(pmid)) {
-      if (pmid) discarded.push(pmid);
-      return;
+  if (Array.isArray(parsed.citations)) {
+    for (const item of parsed.citations) {
+      const pmid = String(item ?? "").replace(/\D/g, "");
+      if (pmid && !byId.has(pmid)) discarded.push(pmid);
     }
-    let position = cited.findIndex((record) => record.pmid === pmid);
-    if (position < 0) {
-      cited.push(byId.get(pmid)!);
-      position = cited.length - 1;
-    }
-    indexMap.set(index + 1, position + 1);
-  });
-
-  const source = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
-  const allowed = new Set(cited.map((record) => record.pmid));
-  for (const match of source.matchAll(/PMID[:\s]*(\d{1,9})/gi)) {
-    if (!allowed.has(match[1])) discarded.push(match[1]);
   }
-  const sentences = source.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
-  const keptSentences = sentences.filter((sentence) => {
-    const mentioned = [...sentence.matchAll(/PMID[:\s]*(\d{1,9})/gi)].map((match) => match[1]);
-    if (mentioned.some((pmid) => !allowed.has(pmid))) return false;
-    const marks = [...sentence.matchAll(/\[(\d{1,2})\]/g)].map((match) => Number(match[1]));
-    return marks.some((mark) => indexMap.has(mark));
-  });
-  let text = tidy(keptSentences.join(" ").replace(/\[(\d{1,2})\]/g, (token, raw) => {
-    const next = indexMap.get(Number(raw));
-    return next ? `[${next}]` : "";
-  }));
-  const used = new Set([...text.matchAll(/\[(\d{1,2})\]/g)].map((match) => Number(match[1])));
-  const kept = cited.filter((_, index) => used.has(index + 1));
-  if (!kept.length) {
+  const source = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
+  const kept: string[] = [];
+  const appearance: string[] = [];
+  for (const unit of splitUnits(source)) {
+    const markers = markersOf(unit);
+    if (!markers.length) continue;
+    const resolved: EvidenceRecord[] = [];
+    let invalid = false;
+    for (const marker of markers) {
+      const record = recordForMarker(marker, records, byId);
+      if (!record) {
+        invalid = true;
+        if (/^\d{5,9}$/.test(marker)) discarded.push(marker);
+        else discarded.push(marker);
+        break;
+      }
+      if (!resolved.some((item) => item.pmid === record.pmid)) resolved.push(record);
+    }
+    if (invalid || !resolved.length) continue;
+    for (const record of resolved) {
+      if (!appearance.includes(record.pmid)) appearance.push(record.pmid);
+    }
+    kept.push(unit);
+  }
+  if (!kept.length || !appearance.length) {
     return insufficientAnswer(
       "A busca recuperou registros, mas não houve afirmação que pudesse ser ligada somente a esses artigos. Nenhuma conclusão foi produzida.",
       discarded,
     );
   }
-  const finalNumber = new Map<number, number>();
-  kept.forEach((record, index) => {
-    finalNumber.set(cited.findIndex((item) => item.pmid === record.pmid) + 1, index + 1);
-  });
-  text = tidy(text.replace(/\[(\d{1,2})\]/g, (token, raw) => {
-    const next = finalNumber.get(Number(raw));
-    return next ? `[${next}]` : "";
-  })).slice(0, ANSWER_MAX);
-  if (!/\[[1-9]\d?\]/.test(text)) {
+  const display = new Map(appearance.map((pmid, index) => [pmid, index + 1]));
+  const answer = tidy(kept.map((unit) => unit
+    .replace(/\[(\d{1,9})\]/g, (_token, raw: string) => {
+      const record = recordForMarker(raw, records, byId);
+      return record ? `[${display.get(record.pmid)}]` : "";
+    })
+    .replace(/\bPMID[:\s]*(\d{1,9})\b/gi, (_token, raw: string) => {
+      const record = byId.get(raw);
+      return record ? `[${display.get(record.pmid)}]` : "";
+    })).join("\n")).slice(0, ANSWER_MAX);
+  const used = new Set([...answer.matchAll(/\[(\d{1,2})\]/g)].map((match) => Number(match[1])));
+  const references = appearance
+    .map((pmid, index) => ({ pmid, n: index + 1 }))
+    .filter((item) => used.has(item.n))
+    .map((item) => toReference(byId.get(item.pmid)!, item.n));
+  if (!references.length || !/\[[1-9]\d?\]/.test(answer)) {
     return insufficientAnswer(
       "A busca recuperou registros, mas não houve afirmação que pudesse ser ligada somente a esses artigos. Nenhuma conclusão foi produzida.",
       discarded,
@@ -110,8 +131,8 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[]): Clini
   }
   return {
     sufficient: true,
-    answer: text,
-    references: kept.map((record, index) => toReference(record, index + 1)),
+    answer,
+    references,
     discardedCitations: [...new Set(discarded)],
     disclaimer: CLINICAL_DISCLAIMER,
   };

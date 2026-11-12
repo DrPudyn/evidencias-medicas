@@ -1,5 +1,6 @@
 import type { ClinicalAi, EvidenceRecord } from "./types";
-import { fallbackSearchTerms, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
+import { selectForSynthesis } from "./select";
+import { fallbackSearchTerms, isContextConcept, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
 import { insufficientAnswer, validateSynthesis } from "./validate";
 
 export async function answerClinicalQuestion(input: {
@@ -22,10 +23,15 @@ export async function answerClinicalQuestion(input: {
     );
   }
   const attempts = searchAttempts(concepts, saoPauloPublicationDay());
+  const main = concepts.find((concept) => !isContextConcept(concept)) || concepts[0];
   let records: EvidenceRecord[] = [];
   for (const term of attempts) {
-    records = await input.search(term);
-    if (records.length) break;
+    const found = await input.search(term);
+    const selected = selectForSynthesis(found, main, 8);
+    if (selected.length) {
+      records = selected;
+      break;
+    }
   }
   if (!records.length) {
     return insufficientAnswer(
