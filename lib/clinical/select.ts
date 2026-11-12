@@ -63,6 +63,8 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
       if (byType) return byType;
       const byDate = publicationStamp(b.article.date) - publicationStamp(a.article.date);
       if (byDate) return byDate;
+      const pmidDelta = Number(a.article.pmid) - Number(b.article.pmid);
+      if (pmidDelta) return pmidDelta;
       return a.index - b.index;
     })
     .slice(0, limit)

@@ -8,13 +8,13 @@ import { body, currentUser, json, rateLimit, sameOrigin, settings } from "@/lib/
 async function searchHighLevel(term: string): Promise<EvidenceRecord[]> {
   const result = await queryPubmed({
     term,
-    sort: "relevance",
+    sort: "pub_date",
     page: 1,
-    retmax: 20,
+    retmax: 30,
     abstracts: true,
     highLevelOnly: true,
   });
-  return result.articles.slice(0, 20).map((article) => ({
+  return result.articles.map((article) => ({
     pmid: article.id,
     title: article.title,
     journal: article.journal,

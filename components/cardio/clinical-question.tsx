@@ -1,10 +1,35 @@
 "use client";
 
-import type { FormEvent } from "react";
-import { useState } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { ArrowRight, Search } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import type { ClinicalAnswer } from "@/lib/clinical/types";
+
+function AnswerText({ text }: { text: string }) {
+  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const blocks: ReactNode[] = [];
+  let items: string[] = [];
+  function flush(key: string) {
+    if (!items.length) return;
+    const list = items;
+    items = [];
+    blocks.push(
+      <ul className="answer-list" key={key}>
+        {list.map((item, index) => <li key={`${key}-${index}`}>{item.replace(/^[-•]\s+/, "")}</li>)}
+      </ul>,
+    );
+  }
+  lines.forEach((line, index) => {
+    if (/^[-•]\s+/.test(line)) {
+      items.push(line);
+      return;
+    }
+    flush(`list-${index}`);
+    blocks.push(<p className="answer-conclusion" key={`p-${index}`}>{line}</p>);
+  });
+  flush("list-end");
+  return <>{blocks}</>;
+}
 
 export function ClinicalQuestion({
   q,
@@ -117,7 +142,7 @@ export function ClinicalQuestion({
         )}
         {answer && !pending && (
           <article className="glass-card answer-card">
-            <p className="answer-conclusion">{answer.answer}</p>
+            <AnswerText text={answer.answer} />
             {answer.references.length > 0 && (
               <ol className="reference-list">
                 {answer.references.map((item) => (

@@ -31,9 +31,47 @@ export function extractLanguage(xml: string) {
   return language || undefined;
 }
 
-export function abstractPlainText(xml: string, max = 4000) {
+export function abstractPlainText(xml: string, max = 8000) {
   const text = extractSections(xml).map((section) => `${section.label}: ${section.text}`).join("\n");
   return text.slice(0, max);
+}
+
+const CONCLUSION_LABEL = /^(conclusions?|interpretation|summary|implicat|conclus)/i;
+const RESULTS_LABEL = /^(results?|findings|resultados|main outcome)/i;
+
+function labeledSections(text: string) {
+  const sections: { label: string; text: string }[] = [];
+  for (const line of text.split(/\n+/)) {
+    const match = line.match(/^([^:]{2,40}):\s*([\s\S]+)$/);
+    if (!match) continue;
+    sections.push({ label: match[1].trim(), text: match[2].trim() });
+  }
+  return sections;
+}
+
+/** Keeps conclusions, then results. Unstructured text keeps the ending, where the conclusion usually sits. */
+export function focusAbstract(text: string, max = 1800) {
+  const clean = text.replace(/\s+\n/g, "\n").trim();
+  if (!clean) return "";
+  const sections = labeledSections(clean);
+  const conclusions = sections.filter((section) => CONCLUSION_LABEL.test(section.label));
+  const results = sections.filter((section) => RESULTS_LABEL.test(section.label) && !CONCLUSION_LABEL.test(section.label));
+  const picked = [...conclusions, ...results];
+  if (picked.length) {
+    let excerpt = "";
+    for (const section of picked) {
+      const piece = `${section.label}: ${section.text}`;
+      if (!excerpt) {
+        excerpt = piece.length > max ? piece.slice(piece.length - max) : piece;
+        continue;
+      }
+      if (excerpt.length + piece.length + 1 > max) break;
+      excerpt = `${excerpt}\n${piece}`;
+    }
+    return excerpt.trim();
+  }
+  if (clean.length <= max) return clean;
+  return clean.slice(clean.length - max).trim();
 }
 
 export function publicationTypesFromArticle(xml: string) {

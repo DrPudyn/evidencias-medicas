@@ -108,7 +108,7 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
   const started = Date.now();
   try {
     const page = Math.min(100, Math.max(1, input.page));
-    const retmax = Math.min(20, Math.max(1, input.retmax));
+    const retmax = Math.min(40, Math.max(1, input.retmax));
     const params: Record<string, string> = {
       term: input.term,
       sort: input.sort,

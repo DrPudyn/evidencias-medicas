@@ -3,7 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { answerClinicalQuestion } from "./answer";
 import { validateSynthesis } from "./validate";
-import { highLevelPmids } from "../pubmed-xml";
+import { focusAbstract, highLevelPmids } from "../pubmed-xml";
+import { summaryUser } from "./prompts";
 import { selectForSynthesis } from "./select";
 import { fallbackSearchTerms, sanitizeConcepts, searchAttempts } from "./terms";
 import { createClinicalAi, createWorkersAi } from "./provider";
@@ -142,11 +143,47 @@ test("fallback tira o contexto antes e prova o par clínico antes do conceito ú
   });
   assert.equal(answer.sufficient, true);
   assert.equal(seen.length, 2);
-  assert.match(seen[0], /family practice/);
+  assert.match(seen[0], /sglt2/);
+  assert.match(seen[0], /type 2 diabetes/);
+  assert.doesNotMatch(seen[0], /family practice/);
   assert.match(seen[1], /sglt2/);
-  assert.match(seen[1], /type 2 diabetes/);
-  assert.doesNotMatch(seen[1], /family practice/);
+  assert.doesNotMatch(seen[1], /type 2 diabetes|family practice/);
   assert.equal(answer.references[0]?.pmid, "12345678");
+});
+
+test("fármaco é buscado com cada condição clínica e os resultados se unem", async () => {
+  const seen: string[] = [];
+  let sentToSummary: string[] = [];
+  const ai: ClinicalAi = {
+    async searchTerms() {
+      return JSON.stringify({
+        concepts: [["sglt2 inhibitors"], ["heart failure"], ["type 2 diabetes"], ["family practice"]],
+      });
+    },
+    async summarize(_question, records) {
+      sentToSummary = records.map((item) => item.pmid);
+      return JSON.stringify({
+        sufficient: true,
+        answer: "- Menos hospitalização por insuficiência cardíaca [1].\n- Menos eventos no diabetes [2].",
+        citations: [],
+      });
+    },
+  };
+  const answer = await answerClinicalQuestion({
+    question: "Quais as indicações de uso de iSGLT2 na prática de saúde da família?",
+    ai,
+    search: async (term) => {
+      seen.push(term);
+      if (/heart failure/i.test(term)) return [record("10", "Diretriz", "sglt2 heart failure hospitalization")];
+      if (/type 2 diabetes/i.test(term)) return [record("20", "Revisão sistemática", "sglt2 type 2 diabetes events")];
+      return [];
+    },
+  });
+  assert.equal(seen.filter((term) => /heart failure/i.test(term) && /sglt2/i.test(term)).length, 1);
+  assert.equal(seen.filter((term) => /type 2 diabetes/i.test(term) && /sglt2/i.test(term)).length, 1);
+  assert.deepEqual(sentToSummary, ["10", "20"]);
+  assert.equal(answer.sufficient, true);
+  assert.deepEqual(answer.references.map((item) => item.pmid), ["10", "20"]);
 });
 
 test("efetch descarta caso-controle e mantém revisão sistemática", () => {
@@ -286,9 +323,42 @@ test("seleção prioriza diretriz e revisão recente e descarta artigo fora do t
   ];
   const selected = selectForSynthesis(papers, ["sglt2 inhibitors"], 8);
   assert.deepEqual(selected.map((item) => item.pmid), ["10000005", "10000002", "10000001", "10000003"]);
+  const tied = selectForSynthesis([
+    { ...record("30", "Revisão sistemática", "sglt2 inhibitors"), date: "2024" },
+    { ...record("10", "Revisão sistemática", "sglt2 inhibitors"), date: "2024" },
+  ], ["sglt2 inhibitors"]);
+  assert.deepEqual(tied.map((item) => item.pmid), ["10", "30"]);
   assert.equal(selectForSynthesis([
     record("10000006", "Revisão sistemática", "Empagliflozin in heart failure"),
   ], ["sglt2 inhibitors"]).length, 1);
+});
+
+test("o trecho enviado prioriza conclusão e resultados", () => {
+  const background = `BACKGROUND: ${"método ".repeat(400)}`;
+  const structured = `${background}\nRESULTS: reduziu hospitalização.\nCONCLUSIONS: menos internações por insuficiência cardíaca.`;
+  const excerpt = focusAbstract(structured, 500);
+  assert.match(excerpt, /CONCLUSIONS: menos internações/);
+  assert.match(excerpt, /RESULTS: reduziu hospitalização/);
+  assert.doesNotMatch(excerpt, /método método/);
+  const packed = summaryUser("Pergunta clínica de teste?", [{
+    ...record("1", "Revisão sistemática", "sglt2"),
+    abstract: structured,
+  }]);
+  assert.match(packed, /menos internações por insuficiência cardíaca/);
+  assert.doesNotMatch(packed, /método método/);
+});
+
+test("frase que copia o exemplo do prompt sai quando o resumo não diz isso", () => {
+  const article = record("12345678", "Revisão sistemática", "sglt2");
+  article.abstract = "Reduced hospitalization for heart failure.";
+  const answer = validateSynthesis(JSON.stringify({
+    sufficient: true,
+    answer: "- Indicado com critérios práticos de TFG e albuminúria [1].\n- Reduziu hospitalização por insuficiência cardíaca [1].",
+    citations: ["12345678"],
+  }), [article]);
+  assert.equal(answer.sufficient, true);
+  assert.doesNotMatch(answer.answer, /TFG|albuminúria|critérios práticos|Condição:/i);
+  assert.match(answer.answer, /hospitalização por insuficiência cardíaca \[1\]/);
 });
 
 test("limites de plano: anônimo, grátis, assinante e outro dia", async () => {

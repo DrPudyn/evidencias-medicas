@@ -48,6 +48,25 @@ export function recordForMarker(raw: string, records: EvidenceRecord[], byId: Ma
   return byId.get(digits) ?? null;
 }
 
+const PROMPT_ECHOES = [
+  "criterios praticos",
+  "criterio pratico",
+  "outra condicao",
+  "condicao:",
+  "tfg e albuminuria",
+];
+
+function fold(value: string) {
+  return value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+}
+
+/** Drops a line that repeats the prompt example unless that same wording is in the cited abstract. */
+export function echoesPrompt(unit: string, citedText: string) {
+  const folded = fold(unit);
+  const source = fold(citedText);
+  return PROMPT_ECHOES.some((leak) => folded.includes(leak) && !source.includes(leak));
+}
+
 function markersOf(unit: string) {
   const found: string[] = [];
   for (const match of unit.matchAll(/\[(\d{1,9})\]/g)) found.push(match[1]);
@@ -97,6 +116,8 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[]): Clini
       if (!resolved.some((item) => item.pmid === record.pmid)) resolved.push(record);
     }
     if (invalid || !resolved.length) continue;
+    const citedText = resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
+    if (echoesPrompt(unit, citedText)) continue;
     for (const record of resolved) {
       if (!appearance.includes(record.pmid)) appearance.push(record.pmid);
     }

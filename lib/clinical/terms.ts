@@ -71,7 +71,7 @@ const PT_EN: Array<[string, string]> = [
 
 export type SearchConcept = string[];
 
-const MAX_CONCEPTS = 3;
+const MAX_CONCEPTS = 5;
 const MAX_SYNONYMS = 4;
 
 function fold(value: string) {
@@ -210,6 +210,16 @@ export function searchAttempts(concepts: SearchConcept[], today: string) {
   for (const concept of core) push([concept], true);
   push([core[0]], false);
   return attempts;
+}
+
+/** Drug or class plus each other clinical condition, then the anchor alone. Context settings are not paired. */
+export function pairQueries(concepts: SearchConcept[], today: string) {
+  const clinical = concepts.filter((concept) => !isContextConcept(concept));
+  if (clinical.length < 2) return [];
+  const [anchor, ...conditions] = clinical;
+  const queries = conditions.map((condition) => evidenceQuery([anchor, condition], today));
+  queries.push(evidenceQuery([anchor], today));
+  return [...new Set(queries)];
 }
 
 export function saoPauloPublicationDay(now = new Date()) {
