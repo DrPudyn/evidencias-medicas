@@ -1,6 +1,6 @@
 import { conclusionText } from "../pubmed-xml";
 import type { EvidenceRecord } from "./types";
-import type { SearchConcept } from "./terms";
+import { requiredConditionMarks, type SearchConcept } from "./terms";
 
 const WEAK_TOKENS = new Set([
   "inhibitor", "inhibitors", "sodium", "glucose", "transporter", "type", "disease", "diseases",
@@ -36,8 +36,10 @@ function distinctiveTokens(term: string) {
 export function classAliases(text: string) {
   const folded = text.toLowerCase().replace(/[‐–—]/g, "-");
   const aliases: string[] = [];
-  if (/sodium[-\s]?glucose(?:\s+co-?|\s+co\s)?\s*transporter(?:-|\s)?2/.test(folded) || /sglt-?2|gliflozin/.test(folded)) {
-    aliases.push("sglt2", "sglt-2", "gliflozin");
+  if (/sodium[-\s]?glucose(?:\s+co-?)?\s*(?:transporters?|cotransporters?|cotransport)/.test(folded)
+    || /sglt-?2i?\b|gliflozins?/.test(folded)
+    || /empagliflozin|dapagliflozin|canagliflozin|ertugliflozin|sotagliflozin|bexagliflozin/.test(folded)) {
+    aliases.push("sglt2", "sglt-2", "sglt2i", "gliflozin", "sodium glucose cotransporter", "sodium glucose cotransport");
   }
   if (/dipeptidyl[-\s]peptidase(?:-|\s)?4|\bdpp-?4\b/.test(folded)) aliases.push("dpp-4", "dpp4");
   if (/glucagon[-\s]like peptide(?:-|\s)?1|\bglp-?1\b/.test(folded)) aliases.push("glp-1", "glp1");
@@ -80,10 +82,27 @@ function textHasConcept(text: string, concept: SearchConcept) {
   return aliases.some((alias) => needles.some((needle) => alias.includes(needle) || needle.includes(alias)));
 }
 
-export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract">, concept: SearchConcept) {
+function labeledConclusion(abstract: string) {
+  return abstract.split(/\n+/).filter((line) => /^(conclusions?|interpretation|summary|conclus)/i.test(line.trim())).join(" ");
+}
+
+function isGuideline(article: Pick<EvidenceRecord, "type">) {
+  const value = (article.type || "").toLowerCase();
+  return value.includes("diretriz") || value.includes("guideline");
+}
+
+export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract" | "type">, concept: SearchConcept) {
   if (!conceptNeedles(concept).length) return false;
   if (textHasConcept(article.title, concept)) return true;
+  if (isGuideline(article)) return textHasConcept(labeledConclusion(article.abstract || ""), concept);
   return textHasConcept(conclusionText(article.abstract || ""), concept);
+}
+
+function matchesAskedCondition(article: Pick<EvidenceRecord, "title" | "abstract">, question: string) {
+  const marks = requiredConditionMarks(question);
+  if (!marks.length) return true;
+  const haystack = `${article.title} ${article.abstract}`.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  return marks.some((mark) => haystack.includes(mark));
 }
 
 function foldText(value: string) {
@@ -143,6 +162,7 @@ export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: Sear
   const focused = mainConcept.length ? humans.filter((article) => conceptInFocus(article, mainConcept)) : humans;
   const passing = mainConcept.length ? humans.filter((article) => mentionsConcept(article, mainConcept)) : humans;
   let pool = focused.length ? focused : (passing.length ? [] : humans);
+  pool = pool.filter((article) => matchesAskedCondition(article, question));
   if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
     const narrowed = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
     if (narrowed.length || !pool.length) pool = narrowed;
@@ -169,7 +189,7 @@ export function mergeIndicationRecords(input: {
     const out: EvidenceRecord[] = [];
     const seen = new Set<string>();
     for (const article of list) {
-      if (seen.has(article.pmid) || isVeterinary(article.title)) continue;
+      if (seen.has(article.pmid) || isVeterinary(article.title) || !matchesAskedCondition(article, input.question)) continue;
       const onTopic = !input.concept.length || conceptInFocus(article, input.concept);
       if (!onTopic) continue;
       if (!precaution && input.question && indicationQuestion(input.question) && !/combinad|combination|seguran[cç]a|safety/i.test(input.question)) {

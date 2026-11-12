@@ -1,6 +1,6 @@
 import type { ClinicalAnswer, ClinicalReference, EvidenceRecord } from "./types";
 import type { SearchConcept } from "./terms";
-import { conceptNeedles } from "./select";
+import { classAliases, conceptNeedles } from "./select";
 import { CLINICAL_DISCLAIMER } from "./types";
 
 const ANSWER_MAX = 2200;
@@ -11,6 +11,7 @@ export function toReference(record: EvidenceRecord, n: number): ClinicalReferenc
     pmid: record.pmid,
     title: record.title,
     url: `https://pubmed.ncbi.nlm.nih.gov/${record.pmid}/`,
+    type: record.type || undefined,
   };
 }
 
@@ -93,7 +94,7 @@ function drugsInExcerpt(excerpt: string) {
 }
 
 function excerptNamesClass(excerpt: string) {
-  return /sglt-?2|\binhibitors\b/.test(fold(excerpt));
+  return /sglt-?2i?\b|\bgliflozins?\b|sodium[-\s]?glucose(?:\s+co-?)?\s*(?:transporters?|cotransporters?|cotransport)/.test(fold(excerpt));
 }
 
 /** A finding about one drug is written as that drug, not as the whole class. */
@@ -150,6 +151,8 @@ const OUTCOME_PAIRS: Array<[string, string]> = [
   ["fracture", "fratura"],
   ["weight", "peso"],
   ["myocardial", "infarto"],
+  ["infection", "infec"],
+  ["genital", "genital"],
 ];
 
 const OTHER_DRUGS = ["semaglutide", "liraglutide", "dulaglutide", "tirzepatide", "exenatide", "insulin", "sitagliptin"];
@@ -161,7 +164,9 @@ function outcomeHits(line: string) {
 
 function sentenceHasClass(sentence: string, needles: string[]) {
   const folded = fold(sentence);
-  return needles.some((needle) => folded.includes(needle));
+  if (needles.some((needle) => folded.includes(needle))) return true;
+  const aliases = classAliases(sentence);
+  return aliases.some((alias) => needles.some((needle) => alias.includes(needle) || needle.includes(alias)));
 }
 
 function sentenceHasOtherDrug(sentence: string, needles: string[]) {
@@ -183,10 +188,21 @@ export function attributesForeignBenefit(line: string, excerpt: string, concept:
   return !supporting.some((sentence) => sentenceHasClass(sentence, needles) && !sentenceHasOtherDrug(sentence, needles));
 }
 
-export function omitsLowCertainty(line: string, excerpt: string) {
-  const limited = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i.test(excerpt);
-  if (!limited) return false;
-  return !/baixa|incerta|limitad|cautel/.test(fold(line));
+const LIMITED_CERTAINTY = /very low[ -]certainty|low[ -]certainty|limited certainty|interpreted cautiously|with caution/i;
+
+/** Adds the caveat only when the sentence that supports this outcome states limited certainty. */
+export function ensureCertaintyCaveat(line: string, excerpt: string) {
+  const hits = outcomeHits(line);
+  if (!hits.length) return line;
+  const supporting = excerpt.split(/\n+|(?<=[.!?])\s+/).filter((sentence) => {
+    const folded = fold(sentence);
+    return hits.some(([english, portuguese]) => folded.includes(english) || folded.includes(portuguese));
+  });
+  if (!supporting.length || !supporting.some((sentence) => LIMITED_CERTAINTY.test(sentence))) return line;
+  if (/baixa|incerta|limitad|cautel/.test(fold(line))) return line;
+  const note = supporting.some((sentence) => /very low/i.test(sentence)) ? "com certeza muito baixa" : "com certeza limitada";
+  if (/\[\d+\]/.test(line)) return line.replace(/\s*(\[\d+\])/, `, ${note} $1`);
+  return `${line.replace(/[.\s]*$/, "")}, ${note}.`;
 }
 
 export function leavesOutcomeInEnglish(line: string) {
@@ -296,7 +312,8 @@ function acceptDraft(draft: Draft, concept?: SearchConcept) {
   if (!text) return null;
   if (echoesPrompt(text, citedText)) return null;
   if (creditsClassForSingleDrug(text, citedAbstract)) return null;
-  if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || omitsLowCertainty(text, citedAbstract) || leavesOutcomeInEnglish(text))) return null;
+  text = ensureCertaintyCaveat(text, citedAbstract);
+  if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || leavesOutcomeInEnglish(text))) return null;
   return { ...draft, text };
 }
 

@@ -173,11 +173,29 @@ const CONTEXT_PHRASES = [
   "family practice", "family medicine", "general practice", "general practitioner",
   "primary care", "primary health care", "primary health", "ambulatory care",
   "outpatient", "community health", "community medicine", "care setting",
+  "saude da familia", "atencao primaria", "pratica de saude", "healthcare", "medicina de familia",
 ];
 
 /** Setting of care, not the drug or the disease. These are dropped before clinical concepts. */
 export function isContextConcept(concept: SearchConcept) {
-  return concept.length > 0 && concept.every((term) => CONTEXT_PHRASES.some((phrase) => term.includes(phrase)));
+  return concept.length > 0 && concept.every((term) => {
+    const folded = fold(term);
+    return CONTEXT_PHRASES.some((phrase) => folded.includes(phrase));
+  });
+}
+
+export function normalizeQuestion(question: string) {
+  return fold(question).replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+const termCache = new Map<string, string>();
+
+export function cachedSearchTerms(question: string) {
+  return termCache.get(normalizeQuestion(question));
+}
+
+export function rememberSearchTerms(question: string, raw: string) {
+  if (raw.trim()) termCache.set(normalizeQuestion(question), raw);
 }
 
 function mentionsPhrase(haystack: string, phrase: string) {
@@ -263,7 +281,7 @@ const CONDITION_ALIASES: Array<{ id: string; search: string[]; pattern: RegExp; 
   },
 ];
 
-const GUIDELINE_CONDITIONS = ["hf", "ckd", "mash"];
+const GUIDELINE_CONDITIONS = ["hf", "ckd", "t2dm", "mash"];
 
 function aliasNamedInQuestion(question: string, alias: (typeof CONDITION_ALIASES)[number]) {
   const asked = fold(question);
@@ -289,6 +307,17 @@ export function stripUnnamedConditions(term: string, question: string) {
     text = text.replace(new RegExp(english.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ");
   }
   return text.replace(/\s+/g, " ").trim();
+}
+
+/** Marks that must appear in the title or abstract when the question names that condition. */
+export function requiredConditionMarks(question: string) {
+  const asked = fold(question);
+  const marks: string[] = [];
+  if (/pre-?diabet/.test(asked)) marks.push("prediabet");
+  else if (/(?:^|[^a-z0-9-])diabetes(?:[^a-z0-9-]|$)/.test(` ${asked} `)) marks.push("diabetes");
+  if (/insuficiencia cardiaca/.test(asked)) marks.push("heart failure");
+  if (/doenca renal|\bdrc\b/.test(asked)) marks.push("kidney");
+  return marks;
 }
 
 export function conditionSearchTerms(label: string) {
@@ -337,7 +366,7 @@ export function conceptsForQuestion(concepts: SearchConcept[], question: string)
       return terms;
     })
     .filter((concept) => concept.length);
-  const kept = stripped.filter((concept) => questionNamesConcept(question, concept));
+  const kept = stripped.filter((concept) => !isContextConcept(concept) && questionNamesConcept(question, concept));
   if (kept.length) return kept;
   const anchor = stripped.find((concept) => concept.some((term) => !isConditionTerm(term)));
   return anchor ? [anchor] : [];

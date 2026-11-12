@@ -15,7 +15,7 @@ export const SUMMARY_SYSTEM = [
   "Responda a um médico usando somente os artigos enviados. Cada artigo tem PMID e um trecho de resultados ou conclusão.",
   "JSON com a chave itens, um array de objetos {\"texto\":\"...\",\"pmid\":\"12345678\"}.",
   "pmid é o PMID do artigo que sustenta essa frase, um dos PMIDs recebidos. Não escreva [n] nem /pmid no texto.",
-  "Português do Brasil, natural. Em pergunta de indicação ou tratamento, uma linha por condição, começando com hífen.",
+  "Português do Brasil, natural. A primeira linha responde direto à pergunta: sim ou não, o efeito e a magnitude, quando o trecho tiver esses dados. Em pergunta de indicação ou tratamento, uma linha por condição, começando com hífen.",
   "Cada texto diz o benefício concreto, o desfecho, da classe ou do fármaco perguntado, e os cuidados somente se o mesmo trecho os trouxer.",
   "O benefício tem de ser desse fármaco. Se o trecho atribuir o efeito a outro fármaco, não o apresente como efeito da classe perguntada.",
   "Se o trecho falar de um só fármaco e não da classe, nomeie esse fármaco.",

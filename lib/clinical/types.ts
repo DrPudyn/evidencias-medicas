@@ -15,6 +15,7 @@ export type ClinicalReference = {
   pmid: string;
   title: string;
   url: string;
+  type?: string;
 };
 
 export type ClinicalAnswer = {

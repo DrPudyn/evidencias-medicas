@@ -159,6 +159,14 @@ main#inicio { padding-top: 108px; }
 .claim-list span, .reference-list small { display: block; margin-top: 6px; color: #6a5e53; font-size: 13px; }
 .reference-list { display: grid; gap: 14px; margin: 12px 0 0; padding-left: 18px; }
 .reference-list a { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 800px) {
+  .reference-list a {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
 .answer-block h3 { font-family: var(--font-display), Fraunces, Georgia, serif; font-size: 1.4rem; margin: 22px 0 8px; }
 .quiet-card ul { color: #4f453c; }
 

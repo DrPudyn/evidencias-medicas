@@ -1,6 +1,6 @@
 import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
 import { conceptInFocus, isVeterinary, mergeIndicationRecords, selectForSynthesis } from "./select";
-import { conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
+import { cachedSearchTerms, conceptsForQuestion, conditionSearchTerms, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, rememberSearchTerms, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
 import { insufficientAnswer, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
@@ -40,10 +40,9 @@ async function gatherIndications(
   if (guide) {
     const conditions = conditionsFromGuideline(guide, question);
     if (conditions.length) {
-      const extra = await Promise.all(conditions.map((condition) => search(
-        evidenceQuery([main, conditionSearchTerms(condition)], today),
-        { kind: "guideline", sort: "relevance" },
-      )));
+      const extra = await Promise.all(conditions.map((condition) => condition === "type 2 diabetes"
+        ? search(evidenceQuery([main, conditionSearchTerms(condition), ["cardiovascular", "kidney", "heart failure"]], today), { kind: "meta", sort: "relevance" })
+        : search(evidenceQuery([main, conditionSearchTerms(condition)], today), { kind: "guideline", sort: "relevance" })));
       supplemental.push(...extra.flat());
     }
   }
@@ -71,11 +70,14 @@ export async function answerClinicalQuestion(input: {
   ai: ClinicalAi;
   search: (term: string, options?: ClinicalSearchOptions) => Promise<EvidenceRecord[]>;
   onStage?: (stage: "pubmed" | "reading" | "writing") => void;
+  cacheTerms?: boolean;
 }) {
   const question = input.question.trim();
   let concepts = [] as ReturnType<typeof sanitizeConcepts>;
   try {
-    const raw = await input.ai.searchTerms(question);
+    const cached = input.cacheTerms ? cachedSearchTerms(question) : "";
+    const raw = cached || await input.ai.searchTerms(question);
+    if (input.cacheTerms && !cached && raw.trim()) rememberSearchTerms(question, raw);
     concepts = sanitizeConcepts(parseJsonObject(raw));
   } catch {
     concepts = [];

@@ -183,6 +183,7 @@ export function ClinicalQuestion({
                 {answer.references.map((item) => (
                   <li key={item.pmid} value={item.n}>
                     <a href={item.url} target="_blank" rel="noreferrer">{item.title}</a>
+                    {item.type ? <small>{item.type}</small> : null}
                   </li>
                 ))}
               </ol>

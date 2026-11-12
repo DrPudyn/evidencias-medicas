@@ -439,7 +439,8 @@ test("benefício fica quando a mesma frase do resumo cita a classe", () => {
     answer: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca [1].",
     citations: [],
   }), [article], ["sglt2 inhibitors"]);
-  assert.equal(rejected.sufficient, false);
+  assert.equal(rejected.sufficient, true);
+  assert.match(rejected.answer, /certeza limitada/);
   const kept = validateSynthesis(JSON.stringify({
     sufficient: true,
     answer: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca, com certeza baixa [1].",
@@ -657,11 +658,12 @@ test("pré-diabetes não puxa diabetes tipo 2 e o fallback tira esse conceito an
 
 test("certeza limitada e interpretação cautelosa exigem ressalva", () => {
   const article = record("71", "Diretriz", "sglt2 inhibitors");
-  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure. The evidence has limited certainty and should be interpreted cautiously.";
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure with limited certainty and the result should be interpreted cautiously.";
   const missing = validateSynthesis(JSON.stringify({
     itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca.", pmid: "71" }],
   }), [article], ["sglt2 inhibitors"]);
-  assert.equal(missing.sufficient, false);
+  assert.equal(missing.sufficient, true);
+  assert.match(missing.answer, /certeza limitada/);
   const kept = validateSynthesis(JSON.stringify({
     itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca, com certeza limitada.", pmid: "71" }],
   }), [article], ["sglt2 inhibitors"]);
@@ -705,7 +707,7 @@ test("diretriz de sociedade vem primeiro e o corpo da diretriz abre IC e DRC", a
   assert.equal(merged[1].pmid, "32");
   assert.equal(merged.length, 6);
   const guide = record("33", "Diretriz", "sglt2 inhibitors");
-  guide.title = "KDIGO clinical practice guideline";
+  guide.title = "KDIGO guideline on SGLT2 inhibitors";
   guide.abstract = "RECOMMENDATIONS: SGLT2 inhibitors are used in HFrEF and in chronic kidney disease. CONCLUSIONS: Further trials are welcome.";
   assert.deepEqual(conditionsFromGuideline(guide, "indicações de sglt2"), ["chronic kidney disease", "heart failure"]);
   const seen: string[] = [];
@@ -755,6 +757,95 @@ test("o front mostra as três etapas da pergunta", async () => {
   assert.match(screen, /Buscando no PubMed…/);
   assert.match(screen, /Lendo artigos…/);
   assert.match(screen, /Escrevendo resposta…/);
+});
+
+test("certeza baixa em outra frase não derruba o achado de alta certeza", () => {
+  const article = record("35404670", "Revisão sistemática", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced heart failure hospitalization with high certainty. SGLT2 inhibitors increased genital infection with high certainty. Evidence on fractures has low certainty.";
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [
+      { texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca.", pmid: "35404670" },
+      { texto: "Os inibidores de SGLT2 aumentaram a infecção genital.", pmid: "35404670" },
+    ],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  assert.doesNotMatch(answer.answer, /certeza limitada|certeza baixa/);
+  assert.match(answer.answer, /hospitalização/);
+  assert.match(answer.answer, /infecção genital/);
+});
+
+test("cotransportador sem o 2 e os gliflozinas contam como a classe", () => {
+  const article = record("32036861", "Diretriz", "CCS");
+  article.title = "CCS guideline for sodium glucose cotransporter inhibitors";
+  article.abstract = "CONCLUSIONS: Sodium glucose cotransporter inhibitors reduce hospitalization for heart failure.";
+  const selected = selectForSynthesis([article], ["sglt2 inhibitors"], 6, "indicações de sglt2");
+  assert.deepEqual(selected.map((item) => item.pmid), ["32036861"]);
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca.", pmid: "32036861" }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  const amyloid = record("41171219", "Diretriz", "amiloidose");
+  amyloid.title = "Transthyretin amyloidosis guideline";
+  amyloid.abstract = "BACKGROUND: SGLT2 inhibitors are used in heart failure.\nCONCLUSIONS: Tafamidis is used for transthyretin amyloidosis.";
+  assert.deepEqual(selectForSynthesis([amyloid], ["sglt2 inhibitors"], 6, "indicações de sglt2").map((item) => item.pmid), []);
+});
+
+test("DM2 sai dos termos da IA e volta só como metanálise pedida pela diretriz", async () => {
+  const seen: Array<{ term: string; kind?: string }> = [];
+  const guide = record("50", "Diretriz", "sglt2 inhibitors");
+  guide.abstract = "CONCLUSIONS: SGLT2 inhibitors are indicated in type 2 diabetes.";
+  let calls = 0;
+  await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2 na prática de saúde da família",
+    cacheTerms: true,
+    ai: {
+      async searchTerms() {
+        calls += 1;
+        return JSON.stringify({ concepts: [["sglt2 inhibitors"], ["DM2"], ["prática de saúde da família"], ["atenção primária"], ["healthcare"]] });
+      },
+      async summarize() {
+        return JSON.stringify({ itens: [{ texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca", pmid: "50" }] });
+      },
+    },
+    search: async (term, options) => {
+      seen.push({ term, kind: options?.kind });
+      if (options?.kind === "guideline" && !/type 2 diabetes/i.test(term)) return [guide];
+      if (options?.kind === "meta" && /type 2 diabetes/i.test(term) && /cardiovascular/i.test(term)) {
+        return [record("51", "Meta-análise", "sglt2 inhibitors type 2 diabetes cardiovascular kidney")];
+      }
+      return [];
+    },
+  });
+  assert.equal(seen.some((item) => /\bdm2\b/i.test(item.term)), false);
+  assert.equal(seen.some((item) => /saúde da família|atenção primária|healthcare/i.test(item.term)), false);
+  assert.equal(seen.some((item) => item.kind === "meta" && /type 2 diabetes/i.test(item.term) && /cardiovascular/i.test(item.term) && /kidney/i.test(item.term)), true);
+  await answerClinicalQuestion({
+    question: "Quais indicações de uso de SGLT2 na prática de saúde da família?",
+    cacheTerms: true,
+    ai: {
+      async searchTerms() {
+        calls += 1;
+        return JSON.stringify({ concepts: [["totally different"]] });
+      },
+      async summarize() {
+        return JSON.stringify({ sufficient: false, answer: "", citations: [] });
+      },
+    },
+    search: async () => [],
+  });
+  assert.equal(calls, 1);
+});
+
+test("pré-diabetes exige a condição no título ou no resumo e a primeira linha responde a pergunta", () => {
+  const acne = record("60", "Revisão sistemática", "metformin acne gastrointestinal events");
+  const onTopic = record("61", "Revisão sistemática", "metformin prediabetes progression");
+  const selected = selectForSynthesis([acne, onTopic], ["metformin"], 6, "Metformina no pré-diabetes");
+  assert.deepEqual(selected.map((item) => item.pmid), ["61"]);
+  assert.match(SUMMARY_SYSTEM, /primeira linha responde direto/);
+  const screen = readFileSync(new URL("../../components/cardio/clinical-question.tsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../app/premium.css", import.meta.url), "utf8");
+  assert.match(screen, /item\.type/);
+  assert.match(css, /-webkit-line-clamp:\s*2/);
 });
 
 test("frase que copia o exemplo do prompt sai quando o resumo não diz isso", () => {
