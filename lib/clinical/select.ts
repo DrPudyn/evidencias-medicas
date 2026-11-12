@@ -1,3 +1,4 @@
+import { conclusionText } from "../pubmed-xml";
 import type { EvidenceRecord } from "./types";
 import type { SearchConcept } from "./terms";
 
@@ -60,6 +61,16 @@ export function mentionsConcept(article: Pick<EvidenceRecord, "title" | "abstrac
   return conceptNeedles(concept).some((needle) => haystack.includes(needle));
 }
 
+/** The class has to be the subject: title or conclusion, not a passing mention. */
+export function conceptInFocus(article: Pick<EvidenceRecord, "title" | "abstract">, concept: SearchConcept) {
+  const needles = conceptNeedles(concept);
+  if (!needles.length) return false;
+  const title = article.title.toLowerCase();
+  if (needles.some((needle) => title.includes(needle))) return true;
+  const conclusion = conclusionText(article.abstract || "").toLowerCase();
+  return needles.some((needle) => conclusion.includes(needle));
+}
+
 function foldText(value: string) {
   return value.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
 }
@@ -108,18 +119,78 @@ function mixTypes(articles: EvidenceRecord[]) {
   return mixed;
 }
 
+function eligible(article: EvidenceRecord, concept: SearchConcept, question: string) {
+  if (concept.length && !conceptInFocus(article, concept)) return false;
+  if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
+    if (safetyOnly(article) || combinationOnly(article)) return false;
+  }
+  return true;
+}
+
 /**
- * Drops off-topic, safety-only and combination papers when the question asks for indications.
- * If the topic filter would discard every PubMed hit, the original set is kept.
+ * Drops papers that mention the class only in passing.
+ * If no article matches the concept at all, the PubMed set is kept.
  */
 export function selectForSynthesis(articles: EvidenceRecord[], mainConcept: SearchConcept, limit = 8, question = "") {
-  const onTopic = mainConcept.length
-    ? articles.filter((article) => mentionsConcept(article, mainConcept))
-    : articles;
-  let pool = onTopic.length ? onTopic : articles;
+  const focused = mainConcept.length ? articles.filter((article) => conceptInFocus(article, mainConcept)) : articles;
+  const passing = mainConcept.length ? articles.filter((article) => mentionsConcept(article, mainConcept)) : articles;
+  let pool = focused.length ? focused : (passing.length ? [] : articles);
   if (question && indicationQuestion(question) && !/combinad|combination|seguran[cç]a|safety/i.test(question)) {
-    pool = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
-    if (!pool.length) pool = onTopic.length ? onTopic : articles;
+    const narrowed = pool.filter((article) => !safetyOnly(article) && !combinationOnly(article));
+    if (narrowed.length || !pool.length) pool = narrowed;
   }
   return mixTypes(pool).slice(0, limit);
+}
+
+/**
+ * Guidelines in relevance order, then large meta-analyses, then recent papers.
+ * The first guideline is kept when one survived the topic filter.
+ */
+export function mergeIndicationRecords(input: {
+  guidelines: EvidenceRecord[];
+  metas: EvidenceRecord[];
+  recent: EvidenceRecord[];
+  supplemental: EvidenceRecord[];
+  concept: SearchConcept;
+  question: string;
+  limit?: number;
+}) {
+  const limit = input.limit ?? 6;
+  const keep = (list: EvidenceRecord[]) => {
+    const out: EvidenceRecord[] = [];
+    const seen = new Set<string>();
+    for (const article of list) {
+      if (seen.has(article.pmid) || !eligible(article, input.concept, input.question)) continue;
+      seen.add(article.pmid);
+      out.push(article);
+    }
+    return out;
+  };
+  const guides = keep(input.guidelines);
+  const metas = keep(input.metas);
+  const extra = keep(input.supplemental);
+  const recent = keep(input.recent);
+  const picked: EvidenceRecord[] = [];
+  const used = new Set<string>();
+  const take = (article?: EvidenceRecord) => {
+    if (!article || used.has(article.pmid) || picked.length >= limit) return;
+    used.add(article.pmid);
+    picked.push(article);
+  };
+  take(guides[0]);
+  take(metas[0]);
+  const lanes = [guides.slice(1), metas.slice(1), extra, recent];
+  let pending = true;
+  while (pending && picked.length < limit) {
+    pending = false;
+    for (const lane of lanes) {
+      while (lane.length && used.has(lane[0].pmid)) lane.shift();
+      const next = lane.shift();
+      if (!next) continue;
+      pending = true;
+      take(next);
+      if (picked.length >= limit) break;
+    }
+  }
+  return picked;
 }

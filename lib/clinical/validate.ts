@@ -41,10 +41,11 @@ function splitUnits(text: string) {
     .filter(Boolean);
 }
 
-/** [n] is the number printed on the article we sent. A longer number is a PMID. */
+/** [n] is the number printed on the article we sent. Five or more digits are a PMID. */
 export function recordForMarker(raw: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>) {
   const digits = raw.replace(/\D/g, "");
   if (!digits) return null;
+  if (digits.length >= 5) return byId.get(digits) ?? null;
   const asIndex = Number(digits);
   if (String(asIndex) === digits && asIndex >= 1 && asIndex <= records.length) return records[asIndex - 1];
   return byId.get(digits) ?? null;
@@ -71,9 +72,72 @@ export function echoesPrompt(unit: string, citedText: string) {
 
 function markersOf(unit: string) {
   const found: string[] = [];
-  for (const match of unit.matchAll(/\[(\d{1,9})\]/g)) found.push(match[1]);
-  for (const match of unit.matchAll(/\bPMID[:\s]*(\d{1,9})\b/gi)) found.push(match[1]);
+  for (const match of unit.matchAll(/\[(\d{1,9})\]|\/?\bpmid[:\s]*(\d{1,9})\b/gi)) {
+    found.push(match[1] || match[2]);
+  }
   return found;
+}
+
+const SPECIFIC_DRUGS: Array<[string, string]> = [
+  ["dapagliflozin", "dapagliflozina"],
+  ["empagliflozin", "empagliflozina"],
+  ["canagliflozin", "canagliflozina"],
+  ["ertugliflozin", "ertugliflozina"],
+  ["sotagliflozin", "sotagliflozina"],
+  ["bexagliflozin", "bexagliflozina"],
+];
+
+function drugsInExcerpt(excerpt: string) {
+  const folded = fold(excerpt);
+  return SPECIFIC_DRUGS.filter(([english]) => folded.includes(english));
+}
+
+function excerptNamesClass(excerpt: string) {
+  return /sglt-?2|\binhibitors\b/.test(fold(excerpt));
+}
+
+/** A finding about one drug is written as that drug, not as the whole class. */
+export function attributeSpecificDrug(line: string, excerpt: string) {
+  const drugs = drugsInExcerpt(excerpt);
+  if (drugs.length !== 1 || excerptNamesClass(excerpt)) return line;
+  const portuguese = drugs[0][1];
+  if (fold(line).includes(fold(portuguese))) return line;
+  return line
+    .replace(/os inibidores de sglt-?2/gi, `a ${portuguese}`)
+    .replace(/inibidores de sglt-?2/gi, portuguese)
+    .replace(/\bisglt-?2\b/gi, portuguese);
+}
+
+export function creditsClassForSingleDrug(line: string, excerpt: string) {
+  const drugs = drugsInExcerpt(excerpt);
+  if (drugs.length !== 1 || excerptNamesClass(excerpt)) return false;
+  const shown = attributeSpecificDrug(line, excerpt);
+  return /inibidores de sglt-?2|\bisglt-?2\b/i.test(shown) && !fold(shown).includes(fold(drugs[0][1]));
+}
+
+const CERTAINTY_CLAIMS: Array<{ level: "very-low" | "low" | "moderate" | "high"; source: string }> = [
+  { level: "very-low", source: ",?\\s*com certeza muito baixa|,?\\s*certeza muito baixa" },
+  { level: "low", source: ",?\\s*com certeza baixa|(?<!muito )certeza baixa" },
+  { level: "moderate", source: ",?\\s*com certeza moderada|,?\\s*certeza moderada" },
+  { level: "high", source: ",?\\s*com certeza alta|,?\\s*certeza alta" },
+];
+
+function excerptHasCertainty(excerpt: string, level: "very-low" | "low" | "moderate" | "high") {
+  const text = excerpt.toLowerCase();
+  const folded = fold(excerpt);
+  if (level === "very-low") return /very low[ -]certainty/.test(text) || /certeza muito baixa/.test(folded);
+  if (level === "low") return /(?<!very )low[ -]certainty/.test(text) || /(?<!muito )certeza baixa/.test(folded);
+  if (level === "moderate") return /moderate[ -]certainty/.test(text) || /certeza moderada/.test(folded);
+  return /\bhigh certainty\b/.test(text) || /certeza alta/.test(folded);
+}
+
+/** Drops a certainty grade the cited excerpt does not state. */
+export function stripInventedCertainty(line: string, excerpt: string) {
+  let result = line;
+  for (const claim of CERTAINTY_CLAIMS) {
+    if (!excerptHasCertainty(excerpt, claim.level)) result = result.replace(new RegExp(claim.source, "gi"), "");
+  }
+  return tidy(result);
 }
 
 const OUTCOME_PAIRS: Array<[string, string]> = [
@@ -132,17 +196,114 @@ export function leavesOutcomeInEnglish(line: string) {
   return english && !portuguese;
 }
 
-export function validateSynthesis(raw: string, records: EvidenceRecord[], concept?: SearchConcept): ClinicalAnswer {
-  const byId = new Map(records.map((record) => [record.pmid, record]));
-  let parsed: Record<string, unknown> | null = null;
+function parseSynthesis(raw: string): Record<string, unknown> | null {
   try {
     const trimmed = raw.trim().replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
-    parsed = start >= 0 && end > start ? JSON.parse(trimmed.slice(start, end + 1)) as Record<string, unknown> : null;
+    if (start < 0 || end <= start) return null;
+    const value = JSON.parse(trimmed.slice(start, end + 1)) as unknown;
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
   } catch {
-    parsed = null;
+    return null;
   }
+}
+
+type Draft = { text: string; resolved: EvidenceRecord[] };
+
+function resolveToken(token: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>) {
+  return recordForMarker(token, records, byId);
+}
+
+function draftsFromItems(items: unknown[], records: EvidenceRecord[], byId: Map<string, EvidenceRecord>, discarded: string[]) {
+  const drafts: Draft[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as { texto?: unknown; pmid?: unknown; text?: unknown };
+    const text = typeof row.texto === "string" ? row.texto : typeof row.text === "string" ? row.text : "";
+    const field = row.pmid == null ? "" : String(row.pmid);
+    if (!text.trim()) continue;
+    if (field) {
+      const record = resolveToken(field, records, byId);
+      if (record) {
+        drafts.push({ text, resolved: [record] });
+        continue;
+      }
+      const digits = field.replace(/\D/g, "");
+      if (digits) discarded.push(digits);
+    }
+    const resolved: EvidenceRecord[] = [];
+    let invalid = false;
+    for (const token of markersOf(text)) {
+      const record = resolveToken(token, records, byId);
+      if (!record) {
+        invalid = true;
+        const digits = token.replace(/\D/g, "");
+        if (digits) discarded.push(digits);
+        break;
+      }
+      if (!resolved.some((current) => current.pmid === record.pmid)) resolved.push(record);
+    }
+    if (invalid || !resolved.length) continue;
+    drafts.push({ text, resolved });
+  }
+  return drafts;
+}
+
+function draftsFromAnswer(source: string, records: EvidenceRecord[], byId: Map<string, EvidenceRecord>, discarded: string[]) {
+  const drafts: Draft[] = [];
+  for (const unit of splitUnits(source)) {
+    const markers = markersOf(unit);
+    if (!markers.length) continue;
+    const resolved: EvidenceRecord[] = [];
+    let invalid = false;
+    for (const marker of markers) {
+      const record = resolveToken(marker, records, byId);
+      if (!record) {
+        invalid = true;
+        discarded.push(marker.replace(/\D/g, "") || marker);
+        break;
+      }
+      if (!resolved.some((current) => current.pmid === record.pmid)) resolved.push(record);
+    }
+    if (invalid || !resolved.length) continue;
+    drafts.push({ text: unit, resolved });
+  }
+  return drafts;
+}
+
+/** True when the model returned text that could not be tied to a retrieved PMID. */
+export function synthesisNeedsRetry(raw: string, records: EvidenceRecord[]) {
+  const parsed = parseSynthesis(raw);
+  if (!parsed) return true;
+  const byId = new Map(records.map((record) => [record.pmid, record]));
+  if (Array.isArray(parsed.itens)) {
+    if (!parsed.itens.length) return false;
+    return draftsFromItems(parsed.itens, records, byId, []).length === 0;
+  }
+  if (parsed.sufficient === false) return false;
+  const answer = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
+  if (!answer) return true;
+  const markers = markersOf(answer);
+  if (!markers.length) return true;
+  return !markers.some((marker) => resolveToken(marker, records, byId));
+}
+
+function acceptDraft(draft: Draft, concept?: SearchConcept) {
+  const citedText = draft.resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
+  const citedAbstract = draft.resolved.map((record) => record.abstract || "").join("\n");
+  let text = stripInventedCertainty(draft.text, citedAbstract);
+  text = attributeSpecificDrug(text, citedAbstract);
+  if (!text) return null;
+  if (echoesPrompt(text, citedText)) return null;
+  if (creditsClassForSingleDrug(text, citedAbstract)) return null;
+  if (concept && (attributesForeignBenefit(text, citedAbstract, concept) || omitsLowCertainty(text, citedAbstract) || leavesOutcomeInEnglish(text))) return null;
+  return { ...draft, text };
+}
+
+export function validateSynthesis(raw: string, records: EvidenceRecord[], concept?: SearchConcept): ClinicalAnswer {
+  const byId = new Map(records.map((record) => [record.pmid, record]));
+  const parsed = parseSynthesis(raw);
   const emptyMessage = records.length
     ? "A busca recuperou registros, mas eles não bastam para uma resposta direta. Nenhuma conclusão foi produzida."
     : "Não encontramos revisões sistemáticas, metanálises ou diretrizes no PubMed para esta pergunta. Não há conclusão clínica a partir desta busca.";
@@ -155,33 +316,19 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
       if (pmid && !byId.has(pmid)) discarded.push(pmid);
     }
   }
-  const source = typeof parsed.answer === "string" ? parsed.answer.trim() : "";
-  const kept: string[] = [];
+  const structured = Array.isArray(parsed.itens);
+  const drafts = structured
+    ? draftsFromItems(parsed.itens as unknown[], records, byId, discarded)
+    : draftsFromAnswer(typeof parsed.answer === "string" ? parsed.answer.trim() : "", records, byId, discarded);
+  const kept: Array<{ text: string; resolved: EvidenceRecord[] }> = [];
   const appearance: string[] = [];
-  for (const unit of splitUnits(source)) {
-    const markers = markersOf(unit);
-    if (!markers.length) continue;
-    const resolved: EvidenceRecord[] = [];
-    let invalid = false;
-    for (const marker of markers) {
-      const record = recordForMarker(marker, records, byId);
-      if (!record) {
-        invalid = true;
-        if (/^\d{5,9}$/.test(marker)) discarded.push(marker);
-        else discarded.push(marker);
-        break;
-      }
-      if (!resolved.some((item) => item.pmid === record.pmid)) resolved.push(record);
-    }
-    if (invalid || !resolved.length) continue;
-    const citedText = resolved.map((record) => `${record.title}\n${record.abstract}`).join("\n");
-    const citedAbstract = resolved.map((record) => record.abstract || "").join("\n");
-    if (echoesPrompt(unit, citedText)) continue;
-    if (concept && (attributesForeignBenefit(unit, citedAbstract, concept) || omitsLowCertainty(unit, citedAbstract) || leavesOutcomeInEnglish(unit))) continue;
-    for (const record of resolved) {
+  for (const draft of drafts) {
+    const accepted = acceptDraft(draft, concept);
+    if (!accepted) continue;
+    for (const record of accepted.resolved) {
       if (!appearance.includes(record.pmid)) appearance.push(record.pmid);
     }
-    kept.push(unit);
+    kept.push(accepted);
   }
   if (!kept.length || !appearance.length) {
     return insufficientAnswer(
@@ -190,15 +337,26 @@ export function validateSynthesis(raw: string, records: EvidenceRecord[], concep
     );
   }
   const display = new Map(appearance.map((pmid, index) => [pmid, index + 1]));
-  const answer = tidy(kept.map((unit) => unit
-    .replace(/\[(\d{1,9})\]/g, (_token, raw: string) => {
-      const record = recordForMarker(raw, records, byId);
-      return record ? `[${display.get(record.pmid)}]` : "";
-    })
-    .replace(/\bPMID[:\s]*(\d{1,9})\b/gi, (_token, raw: string) => {
-      const record = byId.get(raw);
-      return record ? `[${display.get(record.pmid)}]` : "";
-    })).join("\n")).slice(0, ANSWER_MAX);
+  const answer = tidy(kept.map((unit) => {
+    if (structured) {
+      const clean = unit.text
+        .replace(/\[(\d{1,9})\]/g, "")
+        .replace(/\/?\bpmid[:\s]*\d{1,9}\b/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      const marks = unit.resolved.map((record) => `[${display.get(record.pmid)}]`).join(" ");
+      return `${clean} ${marks}`.trim();
+    }
+    return unit.text
+      .replace(/\[(\d{1,9})\]/g, (_token, raw: string) => {
+        const record = recordForMarker(raw, records, byId);
+        return record ? `[${display.get(record.pmid)}]` : "";
+      })
+      .replace(/\/?\bpmid[:\s]*(\d{1,9})\b/gi, (_token, raw: string) => {
+        const record = byId.get(raw);
+        return record ? `[${display.get(record.pmid)}]` : "";
+      });
+  }).join("\n")).slice(0, ANSWER_MAX);
   const used = new Set([...answer.matchAll(/\[(\d{1,2})\]/g)].map((match) => Number(match[1])));
   const references = appearance
     .map((pmid, index) => ({ pmid, n: index + 1 }))

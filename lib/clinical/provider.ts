@@ -41,11 +41,19 @@ const TERMS_SCHEMA = {
 const SUMMARY_SCHEMA = {
   type: "object",
   properties: {
-    sufficient: { type: "boolean" },
-    answer: { type: "string" },
-    citations: { type: "array", items: { type: "string" } },
+    itens: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          texto: { type: "string" },
+          pmid: { type: "string" },
+        },
+        required: ["texto", "pmid"],
+      },
+    },
   },
-  required: ["sufficient", "answer", "citations"],
+  required: ["itens"],
 };
 
 export function createWorkersAi(ai: AiBinding, model = DEFAULT_AI_MODEL): ClinicalAi {
@@ -88,13 +96,11 @@ export function createFixtureAi(): ClinicalAi {
     },
     async summarize(_question, records: EvidenceRecord[]) {
       const used = records.slice(0, 3);
-      const marks = used.map((_, index) => `[${index + 1}]`).join(" ");
       return JSON.stringify({
-        sufficient: used.length > 0,
-        answer: used.length
-          ? `As revisões recuperadas nesta busca tratam da pergunta feita, e a leitura que sustenta a resposta está nos artigos citados ${marks}.`
-          : "",
-        citations: used.map((record) => record.pmid),
+        itens: used.map((record) => ({
+          texto: "As revisões recuperadas nesta busca tratam da pergunta feita, e a leitura que sustenta a resposta está neste artigo.",
+          pmid: record.pmid,
+        })),
       });
     },
   };

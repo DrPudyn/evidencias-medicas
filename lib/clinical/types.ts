@@ -25,6 +25,11 @@ export type ClinicalAnswer = {
   disclaimer: string;
 };
 
+export type ClinicalSearchOptions = {
+  sort?: "relevance" | "pub_date";
+  kind?: "high-level" | "guideline" | "meta";
+};
+
 export type ClinicalAi = {
   searchTerms(question: string): Promise<string>;
   summarize(question: string, records: EvidenceRecord[]): Promise<string>;

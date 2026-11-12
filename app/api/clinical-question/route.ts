@@ -1,14 +1,16 @@
 import { answerClinicalQuestion } from "@/lib/clinical/answer";
 import { createClinicalAi } from "@/lib/clinical/provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "@/lib/clinical/quota";
-import type { EvidenceRecord } from "@/lib/clinical/types";
+import type { ClinicalSearchOptions, EvidenceRecord } from "@/lib/clinical/types";
+import { queryForKind } from "@/lib/clinical/terms";
 import { queryPubmed } from "@/lib/pubmed";
 import { body, currentUser, json, rateLimit, sameOrigin, settings } from "@/lib/server";
 
-async function searchHighLevel(term: string): Promise<EvidenceRecord[]> {
+async function searchHighLevel(term: string, options?: ClinicalSearchOptions): Promise<EvidenceRecord[]> {
+  const kind = options?.kind || "high-level";
   const result = await queryPubmed({
-    term,
-    sort: "pub_date",
+    term: queryForKind(term, kind),
+    sort: options?.sort || (kind === "high-level" ? "pub_date" : "relevance"),
     page: 1,
     retmax: 30,
     abstracts: true,

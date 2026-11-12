@@ -1,7 +1,7 @@
-import type { ClinicalAi, EvidenceRecord } from "./types";
-import { selectForSynthesis } from "./select";
-import { conceptsForQuestion, fallbackSearchTerms, isContextConcept, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
-import { insufficientAnswer, validateSynthesis } from "./validate";
+import type { ClinicalAi, ClinicalSearchOptions, EvidenceRecord } from "./types";
+import { conceptInFocus, mergeIndicationRecords, selectForSynthesis } from "./select";
+import { conceptsForQuestion, conditionsFromGuideline, evidenceQuery, fallbackSearchTerms, isConditionTerm, isContextConcept, isIndicationQuestion, pairQueries, parseJsonObject, sanitizeConcepts, saoPauloPublicationDay, searchAttempts } from "./terms";
+import { insufficientAnswer, synthesisNeedsRetry, validateSynthesis } from "./validate";
 
 function uniqueRecords(articles: EvidenceRecord[]) {
   const byId = new Map<string, EvidenceRecord>();
@@ -11,10 +11,62 @@ function uniqueRecords(articles: EvidenceRecord[]) {
   return [...byId.values()];
 }
 
+const RETRY_WARNING = [
+  "A resposta anterior foi inválida.",
+  "Responda de novo somente com JSON {\"itens\":[{\"texto\":\"frase em português\",\"pmid\":\"PMID\"}]}.",
+  "Cada pmid tem de ser um destes artigos.",
+  "Não escreva /pmid nem [n] no texto.",
+].join(" ");
+
+async function gatherIndications(
+  search: (term: string, options?: ClinicalSearchOptions) => Promise<EvidenceRecord[]>,
+  scoped: ReturnType<typeof conceptsForQuestion>,
+  main: ReturnType<typeof conceptsForQuestion>[number],
+  question: string,
+  today: string,
+) {
+  const classQuery = evidenceQuery([main], today);
+  const pairs = pairQueries(scoped, today).filter((term) => term !== classQuery);
+  const [guidelines, metas, recent, ...paired] = await Promise.all([
+    search(classQuery, { kind: "guideline", sort: "relevance" }),
+    search(classQuery, { kind: "meta", sort: "relevance" }),
+    search(classQuery, { kind: "high-level", sort: "pub_date" }),
+    ...pairs.map((term) => search(term, { kind: "high-level", sort: "pub_date" })),
+  ]);
+  const supplemental: EvidenceRecord[] = [];
+  const guide = guidelines.find((article) => conceptInFocus(article, main));
+  if (guide) {
+    const conditions = conditionsFromGuideline(guide, question);
+    if (conditions.length) {
+      const extra = await Promise.all(conditions.map((condition) => search(
+        evidenceQuery([main, [condition]], today),
+        { kind: "high-level", sort: "relevance" },
+      )));
+      supplemental.push(...extra.flat());
+    }
+  }
+  const merged = mergeIndicationRecords({
+    guidelines,
+    metas,
+    recent: [...recent, ...paired.flat()],
+    supplemental,
+    concept: main,
+    question,
+    limit: 6,
+  });
+  if (merged.length) return merged;
+  for (const term of searchAttempts(scoped, today)) {
+    const found = await search(term);
+    const selected = selectForSynthesis(found, main, 6, question);
+    if (selected.length) return selected;
+  }
+  return [];
+}
+
 export async function answerClinicalQuestion(input: {
   question: string;
   ai: ClinicalAi;
-  search: (term: string) => Promise<EvidenceRecord[]>;
+  search: (term: string, options?: ClinicalSearchOptions) => Promise<EvidenceRecord[]>;
 }) {
   const question = input.question.trim();
   let concepts = [] as ReturnType<typeof sanitizeConcepts>;
@@ -31,22 +83,34 @@ export async function answerClinicalQuestion(input: {
     );
   }
   const today = saoPauloPublicationDay();
-  const scoped = conceptsForQuestion(concepts, question);
-  const attempts = searchAttempts(scoped, today);
-  const main = scoped.find((concept) => !isContextConcept(concept)) || scoped[0];
-  let records: EvidenceRecord[] = [];
-  const pairTerms = pairQueries(scoped, today);
-  if (pairTerms.length) {
-    const batches = await Promise.all(pairTerms.map((term) => input.search(term)));
-    records = selectForSynthesis(uniqueRecords(batches.flat()), main, 5, question);
+  let scoped = conceptsForQuestion(concepts, question);
+  if (!scoped.length) scoped = sanitizeConcepts({ terms: fallbackSearchTerms(question) });
+  if (!scoped.length) {
+    return insufficientAnswer(
+      "Não foi possível montar uma busca no PubMed a partir desta pergunta. Nenhuma conclusão foi completada com conhecimento geral.",
+    );
   }
-  if (!records.length) {
-    for (const term of attempts) {
-      const found = await input.search(term);
-      const selected = selectForSynthesis(found, main, 5, question);
-      if (selected.length) {
-        records = selected;
-        break;
+  const attempts = searchAttempts(scoped, today);
+  const main = scoped.find((concept) => !isContextConcept(concept) && !concept.every(isConditionTerm))
+    || scoped.find((concept) => !isContextConcept(concept))
+    || scoped[0];
+  let records: EvidenceRecord[] = [];
+  if (isIndicationQuestion(question)) {
+    records = await gatherIndications(input.search, scoped, main, question, today);
+  } else {
+    const pairTerms = pairQueries(scoped, today);
+    if (pairTerms.length) {
+      const batches = await Promise.all(pairTerms.map((term) => input.search(term)));
+      records = selectForSynthesis(uniqueRecords(batches.flat()), main, 6, question);
+    }
+    if (!records.length) {
+      for (const term of attempts) {
+        const found = await input.search(term);
+        const selected = selectForSynthesis(found, main, 6, question);
+        if (selected.length) {
+          records = selected;
+          break;
+        }
       }
     }
   }
@@ -56,7 +120,11 @@ export async function answerClinicalQuestion(input: {
     );
   }
   try {
-    const raw = await input.ai.summarize(question, records);
+    let raw = await input.ai.summarize(question, records);
+    if (synthesisNeedsRetry(raw, records)) {
+      const ids = records.map((record) => record.pmid).join(", ");
+      raw = await input.ai.summarize(`${question}\n\n${RETRY_WARNING} PMIDs: ${ids}.`, records);
+    }
     return validateSynthesis(raw, records, main);
   } catch {
     return insufficientAnswer(

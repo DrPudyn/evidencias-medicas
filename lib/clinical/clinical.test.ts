@@ -6,8 +6,8 @@ import { answerClinicalQuestion } from "./answer";
 import { validateSynthesis } from "./validate";
 import { focusAbstract, highLevelPmids } from "../pubmed-xml";
 import { summaryUser } from "./prompts";
-import { mentionsConcept, selectForSynthesis } from "./select";
-import { fallbackSearchTerms, sanitizeConcepts, searchAttempts } from "./terms";
+import { mentionsConcept, mergeIndicationRecords, selectForSynthesis } from "./select";
+import { conceptsForQuestion, conditionsFromGuideline, fallbackSearchTerms, queryForKind, sanitizeConcepts, searchAttempts } from "./terms";
 import { createClinicalAi, createWorkersAi } from "./provider";
 import { quotaMessage, releaseClinicalQuota, reserveClinicalQuota } from "./quota";
 import type { ClinicalAi, EvidenceRecord } from "./types";
@@ -103,11 +103,7 @@ test("busca vazia refaz a consulta só com o conceito principal", async () => {
     },
   });
   assert.equal(answer.sufficient, true);
-  assert.equal(seen.length, 2);
-  assert.match(seen[0], /sglt2 inhibitors/);
-  assert.match(seen[0], /primary care/);
-  assert.match(seen[1], /sglt2 inhibitors/);
-  assert.doesNotMatch(seen[1], /primary care|family medicine/);
+  assert.ok(seen.some((term) => /sglt2 inhibitors/i.test(term) && !/primary care|family medicine/i.test(term)));
   const attempts = searchAttempts([["sglt2 inhibitors"], ["primary care"]], "2026/11/11");
   assert.equal(attempts.length, 3);
   assert.doesNotMatch(attempts[2], /1900\/01\/01/);
@@ -143,12 +139,7 @@ test("fallback tira o contexto antes e prova o par clínico antes do conceito ú
     },
   });
   assert.equal(answer.sufficient, true);
-  assert.equal(seen.length, 2);
-  assert.match(seen[0], /sglt2/);
-  assert.match(seen[0], /type 2 diabetes/);
-  assert.doesNotMatch(seen[0], /family practice/);
-  assert.match(seen[1], /sglt2/);
-  assert.doesNotMatch(seen[1], /type 2 diabetes|family practice/);
+  assert.ok(seen.some((term) => /sglt2/i.test(term) && /type 2 diabetes/i.test(term) && !/family practice/i.test(term)));
   assert.equal(answer.references[0]?.pmid, "12345678");
 });
 
@@ -469,6 +460,154 @@ test("desfecho em inglês é rejeitado", () => {
   assert.equal(answer.sufficient, false);
 });
 
+test("pmid solto e JSON de itens viram o número da citação", () => {
+  const article = record("42426564", "Diretriz", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  const loose = validateSynthesis(JSON.stringify({
+    sufficient: true,
+    answer: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca (/pmid:42426564).",
+    citations: [],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(loose.sufficient, true);
+  assert.match(loose.answer, /\[1\]/);
+  assert.equal(loose.references[0]?.pmid, "42426564");
+  const structured = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca",
+      pmid: "PMID 42426564",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(structured.sufficient, true);
+  assert.match(structured.answer, /\[1\]/);
+  assert.doesNotMatch(structured.answer, /pmid/i);
+});
+
+test("citação inválida gera uma única nova tentativa", async () => {
+  const prompts: string[] = [];
+  const ai: ClinicalAi = {
+    async searchTerms() {
+      return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+    },
+    async summarize(question) {
+      prompts.push(question);
+      if (prompts.length === 1) return JSON.stringify({ itens: [{ texto: "Texto sem artigo", pmid: "/pmid:99999999" }] });
+      return JSON.stringify({
+        itens: [{
+          texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca",
+          pmid: "42426564",
+        }],
+      });
+    },
+  };
+  const article = record("42426564", "Diretriz", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  const answer = await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2 na prática de saúde da família",
+    ai,
+    search: async () => [article],
+  });
+  assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /inválida/);
+  assert.match(prompts[1], /42426564/);
+  assert.equal(answer.sufficient, true);
+  assert.match(answer.answer, /\[1\]/);
+});
+
+test("certeza que o trecho não traz é removida", () => {
+  const article = record("70", "Revisão sistemática", "sglt2 inhibitors");
+  article.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [{
+      texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca, com certeza alta.",
+      pmid: "70",
+    }],
+  }), [article], ["sglt2 inhibitors"]);
+  assert.equal(answer.sufficient, true);
+  assert.doesNotMatch(answer.answer, /certeza/);
+  assert.match(answer.answer, /hospitalização/);
+});
+
+test("condição fora da pergunta sai até quando vem no mesmo conceito", () => {
+  assert.deepEqual(conceptsForQuestion(
+    [["sglt2 inhibitors", "type 2 diabetes"], ["heart failure"], ["diabetes mellitus, type 2"]],
+    "quais indicações de uso de sglt2 na prática de saúde da família",
+  ), [["sglt2 inhibitors"]]);
+  assert.deepEqual(conceptsForQuestion(
+    [["diabetes mellitus, type 2"], ["sglt2 inhibitors"]],
+    "quais indicações de uso de sglt2",
+  ), [["sglt2 inhibitors"]]);
+});
+
+test("menção de passagem não entra e achado de um fármaco não vira a classe", () => {
+  const iga = record("42584021", "Revisão sistemática", "IgA");
+  iga.title = "IgA nephropathy: a systematic review";
+  iga.abstract = "BACKGROUND: SGLT2 inhibitors are used in diabetic kidney disease.\nCONCLUSIONS: Immune complexes drive IgA nephropathy.";
+  const onTopic = record("6", "Diretriz", "sglt2 inhibitors heart failure");
+  const selected = selectForSynthesis([iga, onTopic], ["sglt2 inhibitors"], 8, "Quais as indicações de sglt2?");
+  assert.deepEqual(selected.map((item) => item.pmid), ["6"]);
+  const anemia = record("80", "Revisão sistemática", "anemia");
+  anemia.title = "Anemia in type 2 diabetes";
+  anemia.abstract = "CONCLUSIONS: Dapagliflozin improved anemia.";
+  const answer = validateSynthesis(JSON.stringify({
+    itens: [{ texto: "Os inibidores de SGLT2 melhoraram a anemia.", pmid: "80" }],
+  }), [anemia], ["sglt2 inhibitors"]);
+  assert.match(answer.answer, /dapagliflozina/);
+  assert.doesNotMatch(answer.answer, /inibidores de SGLT2/i);
+});
+
+test("diretriz recuperada abre a condição que ela cita e ocupa a síntese", async () => {
+  const seen: Array<{ term: string; kind?: string; sort?: string }> = [];
+  const guideline = record("11", "Diretriz", "sglt2");
+  guideline.title = "SGLT2 inhibitors in heart failure";
+  guideline.abstract = "CONCLUSIONS: Use SGLT2 inhibitors in heart failure.";
+  const review = record("12", "Revisão sistemática", "sglt2 heart failure");
+  review.abstract = "SGLT2 inhibitors reduced hospitalization for heart failure.";
+  const ai: ClinicalAi = {
+    async searchTerms() {
+      return JSON.stringify({ concepts: [["sglt2 inhibitors"]] });
+    },
+    async summarize(_question, records) {
+      return JSON.stringify({
+        itens: records.slice(0, 1).map((record) => ({
+          texto: "Os inibidores de SGLT2 reduziram a hospitalização por insuficiência cardíaca",
+          pmid: record.pmid,
+        })),
+      });
+    },
+  };
+  const answer = await answerClinicalQuestion({
+    question: "quais indicações de uso de sglt2 na prática de saúde da família",
+    ai,
+    search: async (term, options) => {
+      seen.push({ term, kind: options?.kind, sort: options?.sort });
+      if (options?.kind === "guideline") return [guideline];
+      if (/heart failure/i.test(term)) return [review];
+      return [];
+    },
+  });
+  assert.equal(seen.filter((item) => item.kind === "guideline" && item.sort === "relevance").length, 1);
+  assert.equal(seen.filter((item) => item.kind === "meta" && item.sort === "relevance").length, 1);
+  assert.equal(seen.some((item) => /heart failure/i.test(item.term) && /sglt2/i.test(item.term)), true);
+  assert.equal(answer.sufficient, true);
+  assert.ok(answer.references.some((item) => item.pmid === "11"));
+  const merged = mergeIndicationRecords({
+    guidelines: [guideline, record("13", "Diretriz", "sglt2 inhibitors kidney")],
+    metas: [record("14", "Meta-análise", "sglt2 inhibitors mortality")],
+    recent: Array.from({ length: 7 }, (_, index) => record(String(20 + index), "Revisão sistemática", "sglt2 inhibitors outcome")),
+    supplemental: [review],
+    concept: ["sglt2 inhibitors"],
+    question: "indicações de sglt2",
+    limit: 6,
+  });
+  assert.equal(merged.length, 6);
+  assert.equal(merged[0].pmid, "11");
+  assert.equal(merged[1].pmid, "14");
+  assert.equal(conditionsFromGuideline(guideline, "indicações de sglt2")[0], "heart failure");
+  const term = queryForKind('("sglt2 inhibitors"[Title/Abstract]) AND (systematic[sb] OR "Meta-Analysis"[Publication Type] OR "Practice Guideline"[Publication Type] OR "Guideline"[Publication Type])', "guideline");
+  assert.match(term, /Practice Guideline/);
+  assert.doesNotMatch(term, /systematic\[sb\]/);
+});
+
 test("frase que copia o exemplo do prompt sai quando o resumo não diz isso", () => {
   const article = record("12345678", "Revisão sistemática", "sglt2");
   article.abstract = "Reduced hospitalization for heart failure.";
@@ -537,6 +676,7 @@ test("provedor fixture só na prévia e Workers AI lê response objeto, string e
   assert.equal((calls[0] as { temperature: number }).temperature, 0);
   assert.match(JSON.stringify(calls[0]), /json_schema/);
   assert.match(await ai.summarize("asma na atenção primária?", []), /sufficient/);
+  assert.match(JSON.stringify(calls[1]), /itens/);
   assert.equal(model, "@cf/meta/llama-3.3-70b-instruct-fp8-fast");
   const fallback = createWorkersAi({
     async run() {

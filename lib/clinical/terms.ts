@@ -1,4 +1,5 @@
 import { HIGH_LEVEL_EVIDENCE_FILTER } from "../evidence-filter";
+import { conclusionText } from "../pubmed-xml";
 
 const STOP = new Set([
   "para", "como", "qual", "quais", "sobre", "entre", "essa", "esse", "esta", "este", "uma", "com",
@@ -212,33 +213,93 @@ export function searchAttempts(concepts: SearchConcept[], today: string) {
   return attempts;
 }
 
+const NOT_A_CONDITION = new Set([
+  "metformin", "empagliflozin", "dapagliflozin", "semaglutide", "atorvastatin", "losartan",
+  "amoxicillin", "ibuprofen", "omeprazole", "sertraline", "anticoagulation", "statin", "aspirin",
+  "vaccine", "antibiotic", "sglt2 inhibitors", "gliflozin", "family practice", "primary health care",
+]);
+
+const CONDITION_ENGLISH = PT_EN
+  .map(([, english]) => fold(english))
+  .filter((english) => !NOT_A_CONDITION.has(english))
+  .sort((left, right) => right.length - left.length);
+
+export function isIndicationQuestion(question: string) {
+  return /indica/.test(fold(question));
+}
+
+export function isConditionTerm(term: string) {
+  const folded = fold(term);
+  return CONDITION_ENGLISH.some((english) => folded === english || folded.includes(english));
+}
+
 /**
- * A condition counts only when the question names it.
- * Indication questions that name no disease therefore search the class alone,
- * with the review and guideline filter already inside evidenceQuery.
+ * A condition counts only when the question names it, in Portuguese or English.
+ * Indication questions that name no disease therefore search the class alone.
  */
 export function questionNamesConcept(question: string, concept: SearchConcept) {
   const asked = fold(question);
+  if (isContextConcept(concept)) {
+    const family = /saude da familia|family practice|family medicine|medicina da familia/.test(asked);
+    const primary = /atencao primaria|primary care|primary health/.test(asked);
+    const term = concept.join(" ");
+    if (family && /family practice|family medicine|general practice/.test(term)) return true;
+    if (primary && /primary/.test(term)) return true;
+    return false;
+  }
   if (concept.some((term) => asked.includes(fold(term)))) return true;
   for (const [source, target] of PT_EN) {
+    if (!asked.includes(fold(source))) continue;
     const english = fold(target);
     const matches = concept.some((term) => {
       const folded = fold(term);
-      return folded.includes(english) || english.includes(folded);
+      return folded === english || folded.includes(english) || english.split(/\s+/).includes(folded);
     });
-    if (matches && asked.includes(fold(source))) return true;
+    if (matches) return true;
   }
-  if (/sglt/.test(concept.join(" ").toLowerCase()) && /sglt-?2|isglt2/.test(asked)) return true;
+  if (/sglt/.test(concept.join(" ").toLowerCase()) && /sglt-?2|isglt2|gliflozin/.test(asked)) return true;
   return false;
 }
 
 export function conceptsForQuestion(concepts: SearchConcept[], question: string) {
   if (!question.trim()) return concepts;
-  const clinical = concepts.filter((concept) => !isContextConcept(concept));
-  const context = concepts.filter((concept) => isContextConcept(concept));
-  if (!clinical.length) return concepts;
-  const named = clinical.slice(1).filter((concept) => questionNamesConcept(question, concept));
-  return [clinical[0], ...named, ...context];
+  const stripped = concepts
+    .map((concept) => concept.filter((term) => !isConditionTerm(term) || questionNamesConcept(question, [term])))
+    .filter((concept) => concept.length);
+  const kept = stripped.filter((concept) => questionNamesConcept(question, concept));
+  if (kept.length) return kept;
+  const anchor = stripped.find((concept) => concept.some((term) => !isConditionTerm(term)));
+  return anchor ? [anchor] : [];
+}
+
+/** Conditions named in a retrieved guideline, not conditions invented by the model. */
+export function conditionsFromGuideline(record: { title: string; abstract: string }, question: string) {
+  const text = fold(`${record.title} ${conclusionText(record.abstract || "")}`);
+  const asked = fold(question);
+  const found: string[] = [];
+  const pairs = PT_EN
+    .filter(([, english]) => !NOT_A_CONDITION.has(fold(english)))
+    .sort((left, right) => fold(right[1]).length - fold(left[1]).length);
+  for (const [source, target] of pairs) {
+    const english = fold(target);
+    const portuguese = fold(source);
+    if (!text.includes(english) && !text.includes(portuguese)) continue;
+    if (asked.includes(portuguese) || asked.includes(english)) continue;
+    if (found.some((item) => item.includes(english) || english.includes(item))) continue;
+    found.push(target.toLowerCase());
+    if (found.length === 3) break;
+  }
+  return found;
+}
+
+export function queryForKind(term: string, kind: "high-level" | "guideline" | "meta" = "high-level") {
+  if (kind === "high-level") return term;
+  const filter = kind === "guideline"
+    ? '("Practice Guideline"[Publication Type] OR "Guideline"[Publication Type])'
+    : '"Meta-Analysis"[Publication Type]';
+  return term.includes(HIGH_LEVEL_EVIDENCE_FILTER)
+    ? term.replace(HIGH_LEVEL_EVIDENCE_FILTER, filter)
+    : `${term} AND ${filter}`;
 }
 
 /** Drug or class plus each other named clinical condition, then the anchor alone. */

@@ -74,6 +74,15 @@ export function focusAbstract(text: string, max = 1800) {
   return clean.slice(clean.length - max).trim();
 }
 
+/** Conclusion section, or the last sentences when the abstract has no label. */
+export function conclusionText(text: string) {
+  const sections = labeledSections(text || "");
+  const conclusions = sections.filter((section) => CONCLUSION_LABEL.test(section.label));
+  if (conclusions.length) return conclusions.map((section) => section.text).join(" ");
+  const sentences = (text || "").split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+  return sentences.slice(-2).join(" ");
+}
+
 export function publicationTypesFromArticle(xml: string) {
   return [...xml.matchAll(/<PublicationType\b[^>]*>([^<]*)<\/PublicationType>/gi)]
     .map((match) => decodeXml(match[1]))
