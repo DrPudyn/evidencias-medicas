@@ -37,10 +37,10 @@ export function ExploreSection({
 }) {
   const { t, locale } = useLocale();
   return (
-    <section id="explorar" className="explore container">
+    <section className="explore container">
       <div className="section-top">
         <div>
-          <div className="eyebrow">{t("SUA PRÓXIMA LEITURA COMEÇA AQUI")}</div>
+          <div id="explorar" className="eyebrow">{t("SUA PRÓXIMA LEITURA COMEÇA AQUI")}</div>
           <h2>{t("Explore a evidência.")}</h2>
           <p>{t("Uma busca mais focada. Uma biblioteca com o seu ritmo.")}</p>
         </div>

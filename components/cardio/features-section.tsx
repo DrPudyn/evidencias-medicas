@@ -14,11 +14,11 @@ const features: [LucideIcon, string, string, string][] = [
   [Bell, "04", t("Acesse com simplicidade"), t("Entre com e-mail e senha. Sem nome, CRM ou telefone nesta etapa.")],
 ];
   return (
-    <section id="recursos" className="features">
+    <section className="features">
       <div className="container">
         <div className="section-top">
           <div>
-            <div className="eyebrow">{t("FEITO PARA A SUA ROTINA")}</div>
+            <div id="recursos" className="eyebrow">{t("FEITO PARA A SUA ROTINA")}</div>
             <h2>{" " + t("Menos dispersão.")}<br />{t("Mais conhecimento.") + " "}</h2>
           </div>
           <p className="features-intro">{t("Do primeiro contato com um tema à leitura aprofundada, um espaço para organizar sua atualização.")}</p>

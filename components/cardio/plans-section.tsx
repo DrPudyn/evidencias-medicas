@@ -13,11 +13,11 @@ export function PlansSection({ lang }: { lang: "pt" | "en" }) {
   const guide = en ? "/en/guide" : "/pt/guia";
   const weekly = en ? "/en/article" : "/pt/artigo-da-semana";
   return (
-    <section id="planos" className="plans">
+    <section className="plans">
       <div className="container">
         <div className="section-top">
           <div>
-            <p className="eyebrow">{en ? "PLANS" : "PLANOS"}</p>
+            <p id="planos" className="eyebrow">{en ? "PLANS" : "PLANOS"}</p>
             <h2>{en ? "Two limits. The same sources." : "Dois limites. As mesmas fontes."}</h2>
           </div>
           <p className="features-intro">{en
