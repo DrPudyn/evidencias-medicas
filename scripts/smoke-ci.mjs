@@ -61,7 +61,7 @@ try {
   const database=await worker.getD1Database('DB');
   const stored=await database.prepare('SELECT password_hash,email_verified_at FROM users WHERE id=?').bind(identity.user.id).first();
   assert.equal(stored.email_verified_at,null,'Do not claim an unverified email was verified');
-  assert.match(stored.password_hash,/^scrypt-v1\$/);
+  assert.match(stored.password_hash,/^pbkdf2-sha256\$/);
   await worker.setOptions({ ...options, bindings: { LOCAL_PREVIEW_ENABLED: 'true' } });
   origin = (await worker.ready).origin;
   const code = await new Promise((resolve, reject) => {
