@@ -1,7 +1,8 @@
 import { isHighLevelPublication } from "./evidence-filter";
 
 export type AbstractSection = { label: string; text: string };
-export type PubmedArticleDetails = { abstract: string; language?: string; publicationTypes: string[] };
+export type StructuredAbstract = { label: string; nlmCategory: string; text: string };
+export type PubmedArticleDetails = { abstract: string; language?: string; publicationTypes: string[]; sections: StructuredAbstract[] };
 
 export function decodeXml(value: string) {
   return value
@@ -15,6 +16,15 @@ export function decodeXml(value: string) {
     .replace(/&amp;/g, "&")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Label and NlmCategory from each AbstractText, without flattening them into one string. */
+export function structuredSections(xml: string): StructuredAbstract[] {
+  return Array.from(xml.matchAll(/<AbstractText\b([^>]*)>([\s\S]*?)<\/AbstractText>/gi), (match) => ({
+    label: decodeXml(match[1].match(/\bLabel="([^"]*)"/i)?.[1] || ""),
+    nlmCategory: (match[1].match(/\bNlmCategory="([^"]*)"/i)?.[1] || "").toUpperCase(),
+    text: decodeXml(match[2]),
+  })).filter((section) => section.text.length > 0);
 }
 
 export function extractSections(xml: string): AbstractSection[] {
@@ -115,6 +125,7 @@ export function abstractsByPmid(xml: string): Record<string, PubmedArticleDetail
       abstract: abstractPlainText(match[1]),
       language: extractLanguage(match[1]),
       publicationTypes: publicationTypesFromArticle(match[1]),
+      sections: structuredSections(match[1]),
     };
   }
   return result;

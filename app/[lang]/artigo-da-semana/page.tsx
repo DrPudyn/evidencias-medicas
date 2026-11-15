@@ -5,7 +5,7 @@ import { PageShell } from "@/components/page-shell";
 import { medicalSpecialties } from "@/lib/catalog";
 import { HIGH_LEVEL_EVIDENCE_FILTER, queryPubmed } from "@/lib/pubmed";
 import { currentUser, settings } from "@/lib/server";
-import { pickWeeklyArticle, sameNumberList, summaryFromAbstract, weekKey, weeklySpecialtyQuery, WEEKLY_WINDOWS, type WeeklyPick } from "@/lib/weekly-article";
+import { acceptSectionTranslation, pickWeeklyArticle, renderWeeklySummary, sectionsToTranslate, weekKey, weeklyParts, weeklySpecialtyQuery, WEEKLY_SECTION_PROMPT, WEEKLY_WINDOWS, type WeeklyPick, type WeeklyTranslation } from "@/lib/weekly-article";
 import { readAiText } from "@/lib/clinical/provider";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ async function isSubscriber(userId: string) {
 }
 
 async function loadWeek(specialty: string): Promise<WeeklyPick | null> {
-  const key = `${specialty}|${weekKey()}`;
+  const key = `w3|${specialty}|${weekKey()}`;
   const db = settings().DB;
   try {
     const cached = await db.prepare("SELECT payload FROM weekly_article WHERE cache_key=?").bind(key).first<{ payload: string }>();
@@ -36,25 +36,31 @@ async function loadWeek(specialty: string): Promise<WeeklyPick | null> {
     if (picked?.abstract) break;
   }
   if (!picked?.abstract) return null;
-  let summary = summaryFromAbstract(picked.abstract);
+  const parts = weeklyParts(picked.sections?.length
+    ? picked.sections
+    : [{ label: "", nlmCategory: "", text: picked.abstract.replace(/^Resumo:\s*/i, "") }]);
+  const translated: WeeklyTranslation = {};
   const ai = settings().AI;
   if (ai?.run) {
-    try {
-      const model = settings().WORKERS_AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
-      const response = await ai.run(model, {
-        messages: [
-          { role: "system", content: "Traduza cada trecho para português sem acrescentar, omitir ou alterar números, percentuais ou intervalos. Mantenha os rótulos Objetivo, Método, Principais resultados, Conclusão e Aplicação prática. Se o trecho original estiver vazio, escreva: Não consta no resumo." },
-          { role: "user", content: summary },
-        ],
-        max_tokens: 900,
-        temperature: 0,
-      });
-      const text = readAiText(response);
-      if (text.includes("Objetivo") && sameNumberList(text, summary)) summary = text;
-    } catch {
-      // Keep the sentences taken from the abstract.
+    const model = settings().WORKERS_AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+    for (const section of sectionsToTranslate(parts)) {
+      try {
+        const response = await ai.run(model, {
+          messages: [
+            { role: "system", content: WEEKLY_SECTION_PROMPT },
+            { role: "user", content: section.text },
+          ],
+          max_tokens: 700,
+          temperature: 0,
+        });
+        const text = readAiText(response);
+        if (acceptSectionTranslation(section.text, text)) translated[section.key] = text;
+      } catch {
+        // This section stays in the original wording.
+      }
     }
   }
+  const summary = renderWeeklySummary(parts, translated);
   const payload: WeeklyPick = {
     pmid: picked.id,
     title: picked.title,

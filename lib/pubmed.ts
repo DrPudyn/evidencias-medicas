@@ -1,7 +1,7 @@
 import type { Article } from "@/lib/catalog";
 import { settings } from "@/lib/server";
 import { HIGH_LEVEL_EVIDENCE_FILTER, displayPublicationType, isHighLevelPublication } from "@/lib/evidence-filter";
-import { abstractsByPmid } from "@/lib/pubmed-xml";
+import { abstractsByPmid, type StructuredAbstract } from "@/lib/pubmed-xml";
 
 export { HIGH_LEVEL_EVIDENCE_FILTER };
 
@@ -16,7 +16,7 @@ type ESummaryItem = {
 };
 type ESummaryResponse = { error?: string; result?: Record<string, ESummaryItem> };
 
-export type PubmedHit = Article & { abstract?: string; publicationTypes?: string[] };
+export type PubmedHit = Article & { abstract?: string; publicationTypes?: string[]; sections?: StructuredAbstract[] };
 
 export type PubmedSearchInput = {
   term: string;
@@ -121,7 +121,7 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
       const summaryPromise = ncbi("esummary", { id: ids.join(",") }) as Promise<ESummaryResponse>;
       const detailPromise = eutils("efetch", { id: ids.join(","), retmode: "xml" })
         .then(async (response) => abstractsByPmid(await response.text()))
-        .catch(() => ({} as Record<string, { abstract: string; language?: string; publicationTypes: string[] }>));
+        .catch(() => ({} as Record<string, { abstract: string; language?: string; publicationTypes: string[]; sections: StructuredAbstract[] }>));
       const [summary, details] = await Promise.all([summaryPromise, detailPromise]);
       if (summary.error || !summary.result) throw new Error("Resposta inválida do PubMed");
       const summaryItems = summary.result;
@@ -147,7 +147,10 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
           language: details[id]?.language,
           source: "PubMed" as const,
         };
-        if (input.abstracts) hit.abstract = details[id]?.abstract || "";
+        if (input.abstracts) {
+          hit.abstract = details[id]?.abstract || "";
+          hit.sections = details[id]?.sections || [];
+        }
         return hit;
       }).filter((item): item is PubmedHit => Boolean(item));
     }
