@@ -1,5 +1,5 @@
 :root { --site-header-offset: 128px; }
-html { scroll-padding-top: 0; }
+html { scroll-padding-top: 0; scroll-behavior: auto; }
 
 body {
   font-family: var(--font-sans), Manrope, "Segoe UI", sans-serif;
@@ -235,6 +235,7 @@ body:has(.admin-shell)::before { display: none; }
 .auth-page h1, .guide-page h1 { font-family: var(--font-display), Fraunces, Georgia, serif; font-size: clamp(2.2rem, 4vw, 3.4rem); letter-spacing: -0.04em; margin: 12px 0; }
 .auth-fields, .guide-page section { display: grid; gap: 12px; margin-top: 22px; }
 .auth-fields label { display: grid; gap: 6px; }
+.society-list { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; line-height: 1.4; }
 .auth-fields input, .guide-page select, .guide-page input {
   width: 100%;
   max-width: 420px;

@@ -33,7 +33,10 @@ export async function POST(req: Request) {
     headers.append("Set-Cookie", sessionCookie(token, req));
     if (email === ADMIN_EMAIL) headers.append("Set-Cookie", await createAdminSession(user!.id, tokenDigest, req));
     return json({ user: accountIdentity(user!.id,email) }, 200, headers);
-  } catch {
-    return json({ error: "Não foi possível concluir o acesso. Tente novamente." }, 500);
+  } catch (error) {
+    const message = error instanceof Error && (error.message.startsWith("Não foi possível") || error.message.startsWith("Use uma senha"))
+      ? error.message.slice(0, 240)
+      : "Não foi possível concluir o acesso. Tente novamente.";
+    return json({ error: message }, 500);
   }
 }

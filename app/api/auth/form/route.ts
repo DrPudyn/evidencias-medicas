@@ -10,6 +10,13 @@ function redirectTo(location: string, cookie?: string) {
   return new Response(null, { status: 303, headers });
 }
 
+function accessError(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  if (message.startsWith("Use uma senha") || message.startsWith("Não foi possível")) return message.slice(0, 240);
+  if (/no such column|no such table/i.test(message)) return "Não foi possível gravar a conta. A base não tem um campo esperado.";
+  return "Não foi possível concluir o acesso. Tente novamente.";
+}
+
 function back(mode: string, lang: string, next: string, message: string) {
   const path = lang === "en" ? (mode === "register" ? "/en/register" : "/en/entrar") : (mode === "register" ? "/pt/cadastro" : "/pt/entrar");
   const url = new URL(path, "https://local");
@@ -28,10 +35,10 @@ export async function POST(req: Request) {
   const password = String(form.get("password") ?? "");
   const confirmation = String(form.get("confirmation") ?? "");
   if (!validEmail(email) || password.length > 128) return back(mode, lang, next, "Informe um e-mail e uma senha válidos.");
-  if (!await rateLimit(req, "password-ip", 60) || !await rateLimit(new Request(req.url, { headers: { "cf-connecting-ip": email } }), "password-account", 20)) {
-    return back(mode, lang, next, "Limite de tentativas atingido. Tente novamente mais tarde.");
-  }
   try {
+    if (!await rateLimit(req, "password-ip", 60) || !await rateLimit(new Request(req.url, { headers: { "cf-connecting-ip": email } }), "password-account", 20)) {
+      return back(mode, lang, next, "Limite de tentativas atingido. Tente novamente mais tarde.");
+    }
     const db = settings().DB;
     let user = await db.prepare("SELECT id,email,password_hash,email_verified_at FROM users WHERE email=?").bind(email).first<{ id: string; email: string; password_hash: string | null; email_verified_at: number | null }>();
     if (mode === "register") {
@@ -57,7 +64,7 @@ export async function POST(req: Request) {
     headers.append("Set-Cookie", sessionCookie(token, req));
     if (email === ADMIN_EMAIL) headers.append("Set-Cookie", await createAdminSession(user!.id, tokenDigest, req));
     return new Response(null, { status: 303, headers });
-  } catch {
-    return back(mode, lang, next, "Não foi possível concluir o acesso. Tente novamente.");
+  } catch (error) {
+    return back(mode, lang, next, accessError(error));
   }
 }

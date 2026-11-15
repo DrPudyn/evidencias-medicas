@@ -5,6 +5,7 @@ import { useLocale } from "@/components/locale-provider";
 
 import { ArrowRight, BookOpen, SlidersHorizontal } from "lucide-react";
 import { guidelinesForSpecialty } from "@/data/catalogo";
+import { societiesForSpecialty } from "@/data/catalogo/societies";
 import { medicalSpecialties } from "@/lib/catalog";
 import type { BrowseModel } from "@/components/cardio/catalog-query";
 import type { BrowseState } from "@/hooks/use-browse";
@@ -12,6 +13,7 @@ import type { BrowseState } from "@/hooks/use-browse";
 export function FilterSidebar({ browse, model }: { browse: BrowseState; model: BrowseModel }) {
   const { t, locale } = useLocale();
   const home = locale === "en" ? "/en" : "/pt";
+  const societies = societiesForSpecialty(browse.specialty);
   return (
     <aside className={browse.mobileFilters ? "filters filters-open" : "filters"}>
       <form id="browse-form" method="get" action={`${home}#explorar`} onSubmit={(event) => { event.preventDefault(); browse.search(); }}>
@@ -54,6 +56,16 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
           ))}
         </select>
       </div>
+      {societies.length > 0 && (
+        <div className="filter-group">
+          <span className="filter-label">{societies.length > 1 ? (locale === "en" ? "SOCIETIES" : "SOCIEDADES") : (locale === "en" ? "SOCIETY" : "SOCIEDADE")}</span>
+          <ul className="society-list">
+            {societies.map((society) => (
+              <li key={society.id}><strong>{society.abbreviation}</strong> {society.name}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {browse.specialty !== "" && (
         <fieldset className="filter-group">
           <legend className="filter-label">{t("TEMA CLÍNICO")}</legend>

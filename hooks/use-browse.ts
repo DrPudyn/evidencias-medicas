@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Article } from "@/lib/catalog";
 import { trackClinicalEvent } from "@/lib/analytics-client";
 import { api } from "@/components/cardio/api";
 import { guidelineSourceFor } from "@/components/cardio/catalog-query";
-import { scrollToExplore } from "@/components/cardio/scroll";
 import { BROWSE_STORAGE_KEY, browseFromLink, defaultBrowse, sanitizeBrowse, searchLink, type BrowseSnapshot } from "@/lib/browse-state";
 import type { AppModal } from "@/components/cardio/types";
 
@@ -29,6 +28,8 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initial?.error || "");
   const [refresh, setRefresh] = useState(0);
+  const [searched, setSearched] = useState(Boolean(initial?.query || initial?.articles?.length));
+  const skipServerResults = useRef(Boolean(initial?.articles?.length));
   const [modal, setModal] = useState<AppModal>(null);
   const [selected, setSelected] = useState<Article | null>(null);
 
@@ -63,7 +64,11 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
   }, [ready, q, query, specialty, topic, type, period, guidelineYear, free, sort, page, tab]);
 
   useEffect(() => {
-    if (!ready || tab !== "live") return;
+    if (!ready || tab !== "live" || !searched) return;
+    if (skipServerResults.current) {
+      skipServerResults.current = false;
+      return;
+    }
     const controller = new AbortController();
     let active = true;
     queueMicrotask(() => {
@@ -101,7 +106,7 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
       active = false;
       controller.abort();
     };
-  }, [ready, query, topic, type, period, free, sort, page, tab, refresh, specialty]);
+  }, [ready, searched, query, topic, type, period, free, sort, page, tab, refresh, specialty]);
 
   function reset() {
     setQ("");
@@ -119,13 +124,10 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
     trackClinicalEvent("search", topic, tab === "sbc" ? guidelineSourceFor(specialty) : "PubMed");
     setQuery(q);
     setPage(1);
-    if (tab === "sbc") {
-      scrollToExplore();
-      return;
-    }
+    if (tab === "sbc") return;
     setTab("live");
+    setSearched(true);
     setRefresh((value) => value + 1);
-    scrollToExplore();
   }
 
   function chooseTopic(value: string) {
