@@ -18,7 +18,7 @@ export function BookmarkButton({
   onClick: () => void;
 }) {
   return (
-    <button className={className} disabled={pending} onClick={onClick} aria-label={label} title={title}>
+    <button className={className} type="submit" disabled={pending} onClick={onClick} aria-label={label} title={title}>
       {pending ? <LoaderCircle size={18} className="spin" /> : <Bookmark size={18} fill={saved ? "currentColor" : "none"} />}
     </button>
   );

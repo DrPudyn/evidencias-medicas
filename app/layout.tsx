@@ -44,7 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale === "en" ? "en" : "pt-BR"} className={`${sans.variable} ${display.variable}`}>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js')" }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(navigator.serviceWorker){navigator.serviceWorker.getRegistrations().then(function(list){list.forEach(function(item){item.unregister();});});}if(window.caches){caches.keys().then(function(keys){keys.forEach(function(key){caches.delete(key);});});}}catch(e){}var key="em-chunk-reload";function once(){try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,"1");}catch(e){return;}var url=new URL(location.href);url.searchParams.set("cb",String(Date.now()));location.replace(url.toString());}window.addEventListener("error",function(event){var target=event.target;var message=String(event.message||"");var src=target&&target.src?String(target.src):"";if(message.indexOf("ChunkLoadError")>=0||message.indexOf("Loading chunk")>=0||(target&&target.tagName==="SCRIPT"&&/\\/(assets|_next)\\//.test(src)))once();},true);window.addEventListener("unhandledrejection",function(event){var reason=event.reason||"";var message=String(reason&&reason.message?reason.name+" "+reason.message:reason);if(message.indexOf("ChunkLoadError")>=0||message.indexOf("Loading chunk")>=0)once();});})();` }} />
         <LocaleProvider initialLocale={locale}>{children}<InstallApp /></LocaleProvider>
       </body>
     </html>

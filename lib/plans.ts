@@ -14,7 +14,7 @@ export const PLAN_LIMITS = {
 
 export type PlanId = keyof typeof PLAN_LIMITS;
 export const PLAN_PRICE_PERIOD = "/mês";
-export const PLAN_PRICE_PROVISIONAL = true;
+export const PLAN_PRICE_PROVISIONAL = false;
 
 export function readPlanPriceLabel(raw?: string | null): string {
   const value = (raw || "").trim();

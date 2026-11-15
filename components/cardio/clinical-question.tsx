@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import { ArrowRight, Search } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useLocale } from "@/components/locale-provider";
 import type { ClinicalAnswer } from "@/lib/clinical/types";
 
@@ -39,15 +39,7 @@ function AnswerText({ text }: { text: string }) {
   return <>{blocks}</>;
 }
 
-export function ClinicalQuestion({
-  q,
-  onQueryChange,
-  onSearch,
-}: {
-  q: string;
-  onQueryChange: (value: string) => void;
-  onSearch: (event?: FormEvent) => void;
-}) {
+export function ClinicalQuestion() {
   const { t } = useLocale();
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState(false);
@@ -146,18 +138,6 @@ export function ClinicalQuestion({
           </div>
         </form>
         <p className="disclaimer">{t("A resposta não substitui o julgamento clínico. Se a busca vier vazia ou a evidência não bastar, isso é dito com clareza.")}</p>
-        <form className="hero-search pubmed-search" onSubmit={onSearch}>
-          <Search size={18} />
-          <input
-            aria-label={t("Buscar artigos no PubMed por título, resumo e descritores")}
-            placeholder={t("Ou busque direto no PubMed")}
-            value={q}
-            onChange={(event) => onQueryChange(event.target.value)}
-            maxLength={200}
-          />
-          <button className="button secondary" type="submit">{t("Buscar")}</button>
-        </form>
-        <p className="search-hint">{t("A busca direta considera título, resumo e MeSH. A pergunta clínica, acima, restringe a revisões sistemáticas, metanálises e diretrizes.")}</p>
         <p className="hero-trust">
           <a href="#planos">{t("Ver planos")}</a>
           <span>{t("Fontes científicas identificadas")}</span>

@@ -20,7 +20,6 @@ export default function InstallApp() {
     window.addEventListener('online', network);
     window.addEventListener('offline', network);
     media.addEventListener('change', sync);
-    if ('serviceWorker' in navigator && window.isSecureContext && process.env.NODE_ENV === 'production') navigator.serviceWorker.register('/sw.js', {updateViaCache:'none'}).catch(() => {});
     return () => { window.removeEventListener('beforeinstallprompt', capture); window.removeEventListener('appinstalled', done); window.removeEventListener('online', network); window.removeEventListener('offline', network); media.removeEventListener('change', sync); };
   }, []);
   async function install() {

@@ -21,6 +21,7 @@ export function ExploreSection({
   onToggleSaved,
   onShowInitialCollection,
   onClearResults,
+  signedIn,
 }: {
   workspace?: ReactNode;
   browse: BrowseState;
@@ -32,8 +33,9 @@ export function ExploreSection({
   onToggleSaved: (article: Article) => void;
   onShowInitialCollection: () => void;
   onClearResults: () => void;
+  signedIn: boolean;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   return (
     <section id="explorar" className="explore container">
       <div className="section-top">
@@ -42,9 +44,9 @@ export function ExploreSection({
           <h2>{t("Explore a evidência.")}</h2>
           <p>{t("Uma busca mais focada. Uma biblioteca com o seu ritmo.")}</p>
         </div>
-        <button className="guide-link" onClick={() => browse.setModal("guide")}>
+        <a className="guide-link" href={locale === "en" ? "/en/guide" : "/pt/guia"}>
           <Compass size={18} />{" " + t("Como fazer uma boa busca") + " "}<ArrowUpRight size={16} />
-        </button>
+        </a>
       </div>
       <div className={browse.tab === "saved" ? "browse-layout library-layout" : "browse-layout"}>
         {browse.tab !== "saved" && <FilterSidebar browse={browse} model={model} />}
@@ -59,6 +61,7 @@ export function ExploreSection({
           onToggleSaved={onToggleSaved}
           onShowInitialCollection={onShowInitialCollection}
           onClearResults={onClearResults}
+          signedIn={signedIn}
         />
       </div>
     </section>

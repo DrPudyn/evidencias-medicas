@@ -1,3 +1,6 @@
+:root { --site-header-offset: 128px; }
+html { scroll-padding-top: var(--site-header-offset); }
+
 body {
   font-family: var(--font-sans), Manrope, "Segoe UI", sans-serif;
   background:
@@ -36,8 +39,8 @@ body::before {
   box-shadow: 0 10px 30px rgba(42, 33, 28, 0.04);
 }
 
-main#inicio { padding-top: 108px; }
-#explorar, #planos, #recursos { scroll-margin-top: 120px; }
+main#inicio { padding-top: var(--site-header-offset); }
+#explorar, #planos, #recursos, #guia { scroll-margin-top: var(--site-header-offset); }
 
 .nav { height: auto; min-height: 84px; padding-top: 14px; padding-bottom: 14px; }
 .nav nav, .text-button, .nav-actions .text-button { font-size: 15px; }
@@ -133,7 +136,7 @@ main#inicio { padding-top: 108px; }
 .hero-trust { font-size: 14px; }
 .hero-trust a { text-decoration: underline; text-underline-offset: 3px; }
 
-.clinical-stage { position: sticky; top: 112px; }
+.clinical-stage { position: sticky; top: var(--site-header-offset); }
 .glass-card {
   background: rgba(255, 252, 247, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.75);
@@ -227,6 +230,11 @@ body:has(.admin-shell)::before { display: none; }
 .filter-label { font-size: 12px; letter-spacing: 0.08em; }
 .radio-label { font-size: 14px; }
 .footer { padding-top: 28px; }
+.auth-page, .guide-page { padding-top: calc(var(--site-header-offset) + 28px); padding-bottom: 72px; }
+.auth-page h1, .guide-page h1 { font-family: var(--font-display), Fraunces, Georgia, serif; font-size: clamp(2.2rem, 4vw, 3.4rem); letter-spacing: -0.04em; margin: 12px 0; }
+.auth-fields, .guide-page section { display: grid; gap: 12px; margin-top: 22px; }
+.auth-fields label { display: grid; gap: 6px; }
+.guide-page li { margin: 6px 0; }
 .install-app { border-radius: 24px; background: rgba(255, 252, 247, 0.8); color: var(--ink); border-color: rgba(42, 33, 28, 0.08); }
 .install-app button { border-radius: 999px; background: #2a211c; }
 .analytics-consent {
@@ -240,10 +248,12 @@ body:has(.admin-shell)::before { display: none; }
 }
 .analytics-consent p { max-height: 2.8em; overflow: hidden; }
 
-.js .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.7s ease, transform 0.7s ease; }
-.js .reveal.is-visible { opacity: 1; transform: none; }
+.reveal { opacity: 1; transform: none; }
+.reveal.will-animate.is-visible { animation: reveal-rise 0.7s ease; }
+@keyframes reveal-rise { from { transform: translateY(18px); } to { transform: none; } }
 
 @media (max-width: 900px) {
+  :root { --site-header-offset: 148px; }
   .hero-grid, .plan-grid, .feature-grid { grid-template-columns: 1fr; }
   .clinical-stage { position: static; }
   .hero-art { display: none; }
@@ -264,7 +274,7 @@ body:has(.admin-shell)::before { display: none; }
 }
 
 @media (max-width: 600px) {
-  main#inicio { padding-top: 156px; }
+  :root { --site-header-offset: 176px; }
   .clinical-form { padding: 16px; }
   .clinical-form textarea { font-size: 16px; min-height: 132px; }
   .hero h1, .headline { font-size: 2.6rem; }
@@ -274,6 +284,6 @@ body:has(.admin-shell)::before { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .js .reveal { opacity: 1; transform: none; transition: none; }
+  .reveal.will-animate.is-visible { animation: none; }
   .headline { animation: none; }
 }

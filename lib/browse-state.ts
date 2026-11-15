@@ -44,3 +44,11 @@ export function searchLink(origin: string, locale: string, value: BrowseSnapshot
   url.hash = "explorar";
   return url.toString();
 }
+
+/** Path, query and hash for a filter link. Works while the page is rendered on the server. */
+export function browsePath(locale: string, value: Partial<BrowseSnapshot>) {
+  const state = sanitizeBrowse({ ...defaultBrowse, ...value, draft: value.draft ?? value.query ?? "" });
+  const link = searchLink("https://local", locale, state);
+  const url = new URL(link);
+  return `${url.pathname}${url.search}${url.hash}`;
+}

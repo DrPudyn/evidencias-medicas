@@ -109,6 +109,8 @@ export const english:Record<string,string> = {
   "Buscar artigos no PubMed por título, resumo e descritores": "Search PubMed articles by title, abstract and subject headings",
   "Ex.: diabetes tipo 2, asma ou câncer de mama": "E.g. type 2 diabetes, asthma or breast cancer",
   "Buscar": "Search",
+  "Sair": "Sign out",
+  "Aplicar filtros": "Apply filters",
   "A busca considera título, resumo e MeSH. Termos separados usam AND; use OR para alternativas.": "Search covers titles, abstracts and MeSH. Separate terms use AND; use OR for alternatives.",
   "Gratuito nesta fase": "Free during this phase",
   "Fontes científicas identificadas": "Clearly identified scientific sources",

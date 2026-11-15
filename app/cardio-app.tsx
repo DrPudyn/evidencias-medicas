@@ -11,7 +11,7 @@ import { ExploreSection } from "@/components/cardio/explore-section";
 import { FeaturesSection } from "@/components/cardio/features-section";
 import { HeroSection } from "@/components/cardio/hero-section";
 import { JoinBanner } from "@/components/cardio/join-banner";
-import { PlansSection } from "@/components/cardio/plans-section";
+import type { ReactNode } from "react";
 import { PrivacyNotice } from "@/components/cardio/privacy-notice";
 import { scrollToExplore } from "@/components/cardio/scroll";
 import { SearchGuide } from "@/components/cardio/search-guide";
@@ -19,14 +19,26 @@ import { SiteFooter } from "@/components/cardio/site-footer";
 import { SiteHeader } from "@/components/cardio/site-header";
 import { Toast } from "@/components/cardio/toast";
 import type { Article } from "@/lib/catalog";
+import type { Profile } from "@/components/cardio/types";
 import { trackClinicalEvent } from "@/lib/analytics-client";
 import { useAccount } from "@/hooks/use-account";
 import { useArticleDetail } from "@/hooks/use-article-detail";
 import { useBrowse } from "@/hooks/use-browse";
+import type { BrowseSnapshot } from "@/lib/browse-state";
 import { useToast } from "@/hooks/use-toast";
 
-export default function CardioApp() {
-  const browse = useBrowse();
+export default function CardioApp({
+  initial,
+  user,
+  saved,
+  plans,
+}: {
+  initial?: BrowseSnapshot & { articles?: Article[]; count?: number; error?: string };
+  user?: Profile | null;
+  saved?: Article[];
+  plans?: ReactNode;
+}) {
+  const browse = useBrowse(initial);
   const { toast, setToast } = useToast();
   const account = useAccount({
     tab: browse.tab,
@@ -34,6 +46,8 @@ export default function CardioApp() {
     setTab: browse.setTab,
     setModal: browse.setModal,
     setToast,
+    initialUser: user,
+    initialSaved: saved,
   });
   const detail = useArticleDetail(browse.modal, browse.selected?.id);
   const model = browseModel({
@@ -108,7 +122,6 @@ export default function CardioApp() {
     <EditorialProvider>
       <SiteHeader
         user={account.user}
-        onGuide={() => browse.setModal("guide")}
         onLibrary={() => {
           browse.setTab("saved");
           scrollToExplore();
@@ -118,7 +131,7 @@ export default function CardioApp() {
         onRegister={() => account.openAuth()}
       />
       <main id="inicio">
-        <HeroSection q={browse.q} onQueryChange={browse.setQ} onSearch={browse.search} />
+        <HeroSection />
         <ExploreSection
           workspace={account.user ? <ReadingWorkspace key={account.user.id || account.user.email} account={account} browse={browse} onOpenArticle={openArticle} /> : null}
           browse={browse}
@@ -130,12 +143,13 @@ export default function CardioApp() {
           onToggleSaved={account.toggleSaved}
           onShowInitialCollection={showInitialCollection}
           onClearResults={clearResults}
+          signedIn={Boolean(account.user)}
         />
         <FeaturesSection />
-        <PlansSection signedIn={Boolean(account.user)} onAccount={() => (account.user ? account.openProfile() : account.openAuth())} />
+        {plans}
         <JoinBanner signedIn={Boolean(account.user)} onAccount={() => (account.user ? account.openProfile() : account.openAuth())} />
       </main>
-      <SiteFooter onGuide={() => browse.setModal("guide")} onPrivacy={() => browse.setModal("privacy")} />
+      <SiteFooter onPrivacy={() => browse.setModal("privacy")} />
       <AnalyticsConsent />
       {account.undoRemoval
         ? <Toast message={account.undoError || "Artigo removido da biblioteca."} onUndo={() => void account.restoreRemoved()} pending={account.undoBusy} onClose={account.dismissUndo} />

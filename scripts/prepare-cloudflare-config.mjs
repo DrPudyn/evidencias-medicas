@@ -11,7 +11,7 @@ const databaseId = process.env.CLOUDFLARE_D1_ID || "REPLACE_WITH_D1_DATABASE_ID"
 const vars = {
   ...(base.vars || {}),
   SITE_ORIGIN: process.env.SITE_ORIGIN || "https://evidencias-medicas.edsoncarvalho9.workers.dev",
-  PLAN_PRICE_LABEL: process.env.PLAN_PRICE_LABEL || "R$ 29–49",
+  PLAN_PRICE_LABEL: process.env.PLAN_PRICE_LABEL || "R$ 20",
   WORKERS_AI_MODEL: process.env.WORKERS_AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
   CLINICAL_AI_PROVIDER: "workers-ai",
 };

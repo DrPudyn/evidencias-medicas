@@ -7,13 +7,13 @@ import { trackClinicalEvent } from "@/lib/analytics-client";
 import type { AppModal, Profile } from "@/components/cardio/types";
 import type { Reading } from "@/lib/reading";
 
-type AccountEnv = { tab:string; specialty:string; setTab:(tab:string)=>void; setModal:(modal:AppModal)=>void; setToast:(message:string)=>void };
-export function useAccount({ tab, specialty, setTab, setModal, setToast }: AccountEnv) {
+type AccountEnv = { tab:string; specialty:string; setTab:(tab:string)=>void; setModal:(modal:AppModal)=>void; setToast:(message:string)=>void; initialUser?: Profile | null; initialSaved?: Article[] };
+export function useAccount({ tab, specialty, setTab, setModal, setToast, initialUser = null, initialSaved = [] }: AccountEnv) {
   const { t, locale } = useLocale();
   const activeUser = useRef<string | null>(null), restoring = useRef(false);
   const [undoRemoval,setUndoRemoval] = useState<{article:Article;index:number;ownerId:string}|null>(null);
   const [undoBusy,setUndoBusy] = useState(false), [undoError,setUndoError] = useState("");
-  const [user,setUser]=useState<Profile|null>(null), [saved,setSaved]=useState<Article[]>([]), [saving,setSaving]=useState("");
+  const [user,setUser]=useState<Profile|null>(initialUser), [saved,setSaved]=useState<Article[]>(initialSaved), [saving,setSaving]=useState("");
   const [mode,setMode]=useState("login"), [email,setEmail]=useState(""), [password,setPassword]=useState(""), [resetToken,setResetToken]=useState("");
   const [verifyToken,setVerifyToken]=useState(""),[adminReturn,setAdminReturn]=useState(false);
   const [busy,setBusy]=useState(false), [formError,setFormError]=useState(""), [notice,setNotice]=useState(""), [previewResetUrl,setPreviewResetUrl]=useState("");

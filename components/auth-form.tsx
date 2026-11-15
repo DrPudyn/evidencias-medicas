@@ -1,0 +1,46 @@
+import { safeNext } from "@/lib/safe-next";
+
+export function AuthForm({
+  lang,
+  mode,
+  error,
+  next,
+}: {
+  lang: "pt" | "en";
+  mode: "login" | "register";
+  error: string;
+  next: string;
+}) {
+  const en = lang === "en";
+  const back = safeNext(next, en ? "/en" : "/pt");
+  return (
+    <main className="auth-page container">
+      <h1>{mode === "register" ? (en ? "Create your account" : "Crie sua conta") : (en ? "Sign in" : "Entre na sua conta")}</h1>
+      <p>{en ? "Email and password only. No confirmation message is sent." : "Apenas e-mail e senha. Não enviamos confirmação por e-mail."}</p>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <form className="auth-fields" method="post" action="/api/auth/form">
+        <input type="hidden" name="lang" value={lang} />
+        <input type="hidden" name="mode" value={mode} />
+        <input type="hidden" name="next" value={back} />
+        <label>{en ? "Email" : "E-mail"}
+          <input type="email" name="email" autoComplete="email" required maxLength={254} />
+        </label>
+        <label>{en ? "Password" : "Senha"}
+          <input type="password" name="password" autoComplete={mode === "register" ? "new-password" : "current-password"} required minLength={mode === "register" ? 12 : 1} maxLength={128} />
+        </label>
+        {mode === "register" ? (
+          <label>{en ? "Confirm password" : "Confirme a senha"}
+            <input type="password" name="confirmation" autoComplete="new-password" required minLength={12} maxLength={128} />
+          </label>
+        ) : null}
+        <p className="muted small-text">{en ? "Use 12 to 128 characters." : "Use de 12 a 128 caracteres."}</p>
+        <button className="button" type="submit">{mode === "register" ? (en ? "Create account" : "Criar conta") : (en ? "Sign in" : "Entrar")}</button>
+      </form>
+      <p className="auth-switch">
+        {mode === "register"
+          ? <a href={en ? `/en/entrar?next=${encodeURIComponent(back)}` : `/pt/entrar?next=${encodeURIComponent(back)}`}>{en ? "I already have an account" : "Já tenho uma conta"}</a>
+          : <a href={en ? `/en/register?next=${encodeURIComponent(back)}` : `/pt/cadastro?next=${encodeURIComponent(back)}`}>{en ? "Create an account" : "Criar conta"}</a>}
+      </p>
+    </main>
+  );
+}

@@ -5,8 +5,8 @@ import { useLocale } from "@/components/locale-provider";
 import { ExternalLink } from "lucide-react";
 import { Logo } from "@/components/cardio/logo";
 
-export function SiteFooter({ onGuide, onPrivacy }: { onGuide: () => void; onPrivacy: () => void }) {
-  const { t } = useLocale();
+export function SiteFooter({ onPrivacy }: { onPrivacy: () => void }) {
+  const { t, locale } = useLocale();
   return (
     <footer className="container footer">
       <div>
@@ -14,7 +14,7 @@ export function SiteFooter({ onGuide, onPrivacy }: { onGuide: () => void; onPriv
         <p>{t("Um lugar calmo para a pergunta clínica.")}</p>
       </div>
       <div className="footer-links">
-        <button onClick={onGuide}>{t("Guia de busca")}</button>
+        <a href={locale === "en" ? "/en/guide" : "/pt/guia"}>{t("Guia de busca")}</a>
         <button onClick={onPrivacy}>{t("Privacidade")}</button>
         <button onClick={() => window.dispatchEvent(new Event("em:manage-analytics"))}>{t("Gerenciar métricas de uso")}</button>
         <a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noreferrer">{" " + t("Conheça o PubMed") + " "}<ExternalLink size={12} />
