@@ -236,6 +236,11 @@ body:has(.admin-shell)::before { display: none; }
 .auth-fields, .guide-page section { display: grid; gap: 12px; margin-top: 22px; }
 .auth-fields label { display: grid; gap: 6px; }
 .society-list { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; line-height: 1.4; }
+.bookmark-button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: #7a3f28; background: #f3ebe1; }
+.bookmark-button svg { fill: none; stroke: currentColor; }
+.bookmark-button.selected,
+.bookmark-button.selected svg { color: #7a3f28; fill: #7a3f28; stroke: #7a3f28; }
+.search-submit { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
 .auth-fields input, .guide-page select, .guide-page input {
   width: 100%;
   max-width: 420px;

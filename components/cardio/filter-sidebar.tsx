@@ -21,6 +21,7 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
         <input type="hidden" name="tab" value={browse.tab === "saved" ? "live" : browse.tab} />
         <input type="hidden" name="sort" value={browse.sort} />
         <input type="hidden" name="page" value="1" />
+        <button className="search-submit" type="submit">{t("Buscar")}</button>
       <div className="filter-header">
         <h3>
           <SlidersHorizontal size={17} />{" " + t("Filtrar artigos") + " "}</h3>

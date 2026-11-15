@@ -3,6 +3,37 @@ import { queryPubmed, type PubmedSearchInput } from "@/lib/pubmed";
 import { digest, rateLimit } from "@/lib/server";
 
 const cache = new Map<string, { time: number; data: { articles: Article[]; count: number; page: number } }>();
+const SEARCH_CACHE_SECONDS = 4 * 60 * 60;
+
+function searchCacheRequest(key: string) {
+  return new Request(`https://search-cache.local/pubmed/${key}`);
+}
+
+function edgeCache() {
+  return (caches as unknown as { default?: Cache }).default;
+}
+
+async function readEdgeCache(key: string) {
+  try {
+    const hit = await edgeCache()?.match(searchCacheRequest(key));
+    if (!hit) return null;
+    return await hit.json() as { articles: Article[]; count: number; page: number };
+  } catch {
+    return null;
+  }
+}
+
+async function writeEdgeCache(key: string, data: { articles: Article[]; count: number; page: number }) {
+  try {
+    const cacheStore = edgeCache();
+    if (!cacheStore) return;
+    await cacheStore.put(searchCacheRequest(key), new Response(JSON.stringify(data), {
+      headers: { "Cache-Control": `public, max-age=${SEARCH_CACHE_SECONDS}` },
+    }));
+  } catch {
+    // The in-memory cache still covers this isolate.
+  }
+}
 const types: Record<string, string> = {
   trial: '"Clinical Trial"[Publication Type]',
   rct: '"Randomized Controlled Trial"[Publication Type]',
@@ -32,7 +63,12 @@ export async function searchArticles(search: URLSearchParams, req: Request) {
   const params: PubmedSearchInput = { term: terms.join(" AND "), sort, page, retmax: 12, ...(days ? { reldate: days } : {}) };
   const key = await digest(JSON.stringify(params));
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.time < 300000) return { ...hit.data, error: "" };
+  if (hit && Date.now() - hit.time < SEARCH_CACHE_SECONDS * 1000) return { ...hit.data, error: "" };
+  const edge = await readEdgeCache(key);
+  if (edge) {
+    cache.set(key, { time: Date.now(), data: edge });
+    return { ...edge, error: "" };
+  }
   if (!await rateLimit(req, "pubmed-search", 120)) {
     return { articles: [] as Article[], count: 0, page, error: "Muitas buscas em pouco tempo. Aguarde antes de consultar novamente." };
   }
@@ -47,6 +83,7 @@ export async function searchArticles(search: URLSearchParams, req: Request) {
     const data = { articles, count: result.count, page };
     if (cache.size >= 100) cache.delete(cache.keys().next().value!);
     cache.set(key, { time: Date.now(), data });
+    await writeEdgeCache(key, data);
     return { ...data, error: "" };
   } catch {
     return { articles: [] as Article[], count: 0, page, error: "Não foi possível consultar o PubMed agora. Tente novamente ou explore a coleção inicial de estudos." };

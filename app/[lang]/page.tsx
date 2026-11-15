@@ -61,7 +61,7 @@ export default async function LocalizedHome({ params, searchParams }: { params: 
   }
   const user = await currentUser(req);
   let saved: Article[] = [];
-  if (user && snapshot.tab === "saved") {
+  if (user) {
     const rows = await settings().DB.prepare("SELECT article,reading FROM bookmarks WHERE user_id=? ORDER BY created_at DESC").bind(user.id).all<{ article: string; reading: string }>();
     saved = rows.results.map((row) => ({ ...JSON.parse(row.article), reading: JSON.parse(row.reading) }));
   }

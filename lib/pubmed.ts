@@ -119,9 +119,12 @@ export async function queryPubmed(input: PubmedSearchInput): Promise<{ articles:
     let articles: PubmedHit[] = [];
     if (ids.length) {
       const summaryPromise = ncbi("esummary", { id: ids.join(",") }) as Promise<ESummaryResponse>;
-      const detailPromise = eutils("efetch", { id: ids.join(","), retmode: "xml" })
-        .then(async (response) => abstractsByPmid(await response.text()))
-        .catch(() => ({} as Record<string, { abstract: string; language?: string; publicationTypes: string[]; sections: StructuredAbstract[] }>));
+      const needDetails = Boolean(input.abstracts || input.highLevelOnly);
+      const detailPromise = needDetails
+        ? eutils("efetch", { id: ids.join(","), retmode: "xml" })
+          .then(async (response) => abstractsByPmid(await response.text()))
+          .catch(() => ({} as Record<string, { abstract: string; language?: string; publicationTypes: string[]; sections: StructuredAbstract[] }>))
+        : Promise.resolve({} as Record<string, { abstract: string; language?: string; publicationTypes: string[]; sections: StructuredAbstract[] }>);
       const [summary, details] = await Promise.all([summaryPromise, detailPromise]);
       if (summary.error || !summary.result) throw new Error("Resposta inválida do PubMed");
       const summaryItems = summary.result;

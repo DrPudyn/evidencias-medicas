@@ -61,22 +61,28 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast, initial
     }catch(error){setFormError((error as Error).message);}finally{setBusy(false);}
   }
   async function toggleSaved(article:Article){
-    if(!user){openAuth("login");return;}const ownerId=user.id||user.email;setSaving(article.id);
+    if(!user){openAuth("login");return;}
+    const ownerId=user.id||user.email;
+    const already=saved.some(item=>item.id===article.id);
+    const previous=saved;
+    setSaving(article.id);
+    setSaved(already?items=>items.filter(item=>item.id!==article.id):items=>[{...article},...items.filter(item=>item.id!==article.id)]);
     try{
-      if(saved.some(item=>item.id===article.id)){
+      if(already){
         const removed=await api<{article:Article|null}>(`/api/bookmarks?id=${encodeURIComponent(article.id)}`,{method:"DELETE"});
         if(activeUser.current!==ownerId)return;
-        const index=saved.findIndex(item=>item.id===article.id);
-        setSaved(items=>items.filter(item=>item.id!==article.id));
+        const index=previous.findIndex(item=>item.id===article.id);
         if(removed.article){setUndoError("");setUndoRemoval({article:removed.article,index,ownerId});}
         setToast("Artigo removido da biblioteca.");
       }else{
         const result=await api<{article:Article}>("/api/bookmarks",{method:"POST",body:JSON.stringify(article)});
         if(activeUser.current!==ownerId)return;
         setUndoRemoval(current=>current?.article.id===article.id?null:current);
-        trackClinicalEvent("bookmark",article.topic,article.source||"PubMed");setSaved(items=>[result.article,...items.filter(item=>item.id!==article.id)]);setToast("Artigo salvo na sua biblioteca.");
+        trackClinicalEvent("bookmark",article.topic,article.source||"PubMed");
+        if(result.article)setSaved(items=>[result.article,...items.filter(item=>item.id!==article.id)]);
+        setToast("Artigo salvo na sua biblioteca.");
       }
-    }catch(error){setToast((error as Error).message);}finally{setSaving("");}
+    }catch(error){setSaved(previous);setToast((error as Error).message);}finally{setSaving("");}
   }
   async function restoreRemoved(){
     const pending=undoRemoval;

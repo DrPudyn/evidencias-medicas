@@ -30,6 +30,7 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
   const [refresh, setRefresh] = useState(0);
   const [searched, setSearched] = useState(Boolean(initial?.query || initial?.articles?.length));
   const skipServerResults = useRef(Boolean(initial?.articles?.length));
+  const userEdited = useRef(false);
   const [modal, setModal] = useState<AppModal>(null);
   const [selected, setSelected] = useState<Article | null>(null);
 
@@ -43,6 +44,7 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
         try { restored = sanitizeBrowse(JSON.parse(sessionStorage.getItem(BROWSE_STORAGE_KEY) || "null")); }
         catch { restored = sanitizeBrowse(null); }
       }
+      if (userEdited.current) { setReady(true); return; }
       setQ(restored.draft); setQuery(restored.query); setSpecialty(restored.specialty);
       setTopic(restored.topic); setType(restored.type); setPeriod(restored.period);
       setGuidelineYear(restored.guidelineYear); setFree(restored.free); setSort(restored.sort);
@@ -135,6 +137,10 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
     setTopic(value);
     if (!specialty) setSpecialty("cardiology");
     setPage(1);
+    if (tab === "sbc") return;
+    setTab("live");
+    setSearched(true);
+    setRefresh((current) => current + 1);
   }
 
   function trackFilter(eventName: string) {
@@ -149,7 +155,7 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
     query,
     setQuery,
     specialty,
-    setSpecialty,
+    setSpecialty: (value: string) => { userEdited.current = true; setSpecialty(value); },
     topic,
     setTopic,
     type,

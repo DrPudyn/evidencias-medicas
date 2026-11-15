@@ -86,9 +86,7 @@ export function ResultsPanel({
           onChange={(event) => browse.setQ(event.target.value)}
           maxLength={200}
         />
-        <button form="browse-form" type="submit" aria-label={browse.tab === "sbc" ? `${locale === "en" ? "Search guidelines" : "Buscar nas diretrizes"} ${model.societyLabel}` : t("Pesquisar no PubMed")}>
-          <ArrowRight size={19} />
-        </button>
+        <button className="search-submit" form="browse-form" type="submit">{t("Pesquisar no PubMed")}</button>
       </div>
       <SearchContext browse={browse} model={model} />
       {browse.tab === "live" && workspace}
