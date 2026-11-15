@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { pickWeeklyArticle, summaryFromAbstract, summaryKeepsSourceNumbers, weekKey } from "./weekly-article";
+import { pickWeeklyArticle, summaryFromAbstract, summaryKeepsSourceNumbers, weekKey, weeklySpecialtyQuery } from "./weekly-article";
 
 function hit(partial: { id: string; title: string; journal?: string; date?: string; type?: string; abstract?: string }) {
   return {
@@ -26,6 +26,25 @@ test("escolhe diretriz com resumo e ignora artigo sem abstract", () => {
     hit({ id: "10", title: "Guideline", type: "Diretriz", journal: "Circulation" }),
   ]);
   assert.equal(chosen?.id, "10");
+});
+
+test("rótulos de método, resultado e conclusão entram na seção certa", () => {
+  const summary = summaryFromAbstract("BACKGROUND: Adults with diabetes. SEARCH METHODS: We searched MEDLINE. MAIN RESULTS: Death was 8%. AUTHORS' CONCLUSIONS: Treatment helped.");
+  assert.match(summary, /Objetivo: Adults with diabetes/);
+  assert.match(summary, /Método: We searched MEDLINE/);
+  assert.match(summary, /Principais resultados: Death was 8%/);
+  assert.match(summary, /Conclusão: Treatment helped/);
+});
+
+test("abstract sem seções usa as últimas frases como conclusão", () => {
+  const summary = summaryFromAbstract("This review assessed treatment in primary care. Mortality fell from 12% to 8%. The evidence supports offering the treatment.");
+  assert.match(summary, /Conclusão: Mortality fell from 12% to 8%. The evidence supports offering the treatment/);
+  assert.doesNotMatch(summary, /Conclusão: Não consta/);
+});
+
+test("medicina de família usa descritores mais amplos", () => {
+  assert.match(weeklySpecialtyQuery("family-medicine", "family medicine;primary health care"), /Family Practice/);
+  assert.match(weeklySpecialtyQuery("family-medicine", "family medicine;primary health care"), /Primary Health Care/);
 });
 
 test("o resumo não cria número que o abstract não tem", () => {

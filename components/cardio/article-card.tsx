@@ -64,8 +64,8 @@ export function ArticleCard({
             <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">{" " + t("Abrir diretriz") + " "}<ArrowUpRight size={15} />
             </a>
           ) : (
-            <button onClick={() => onOpen(article)}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
-            </button>
+            <a className="article-action-link" href={article.url || `https://pubmed.ncbi.nlm.nih.gov/${article.id}/`} onClick={(event) => { event.preventDefault(); onOpen(article); }}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
+            </a>
           )}
         </div>
       </div>

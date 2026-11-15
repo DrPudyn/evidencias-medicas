@@ -75,18 +75,10 @@ export function ResultsPanel({
         ))}
       </div>
       {browse.tab === "saved" && workspace ? workspace : <>
-      <form className="results-search" method="get" action={`${locale === "en" ? "/en" : "/pt"}#explorar`} onSubmit={browse.search}>
-        <input type="hidden" name="search" value="1" />
-        <input type="hidden" name="specialty" value={browse.specialty} />
-        <input type="hidden" name="type" value={browse.type} />
-        <input type="hidden" name="period" value={browse.period} />
-        <input type="hidden" name="topic" value={browse.topic} />
-        <input type="hidden" name="sort" value={browse.sort} />
-        <input type="hidden" name="tab" value={browse.tab === "saved" ? "live" : browse.tab} />
-        <input type="hidden" name="page" value="1" />
-        {browse.free ? <input type="hidden" name="free" value="true" /> : null}
+      <div className="results-search">
         <Search size={18} />
         <input
+          form="browse-form"
           name="q"
           aria-label={browse.tab === "sbc" ? `${locale === "en" ? "Search guidelines from" : "Buscar nas diretrizes da"} ${model.societyLabel}` : t("Refinar busca de artigos")}
           placeholder={browse.tab === "sbc" ? t("Buscar diretriz, tema ou especialidade...") : t("Doença, medicamento, autor ou PMID...")}
@@ -94,10 +86,10 @@ export function ResultsPanel({
           onChange={(event) => browse.setQ(event.target.value)}
           maxLength={200}
         />
-        <button aria-label={browse.tab === "sbc" ? `${locale === "en" ? "Search guidelines" : "Buscar nas diretrizes"} ${model.societyLabel}` : t("Pesquisar no PubMed")}>
+        <button form="browse-form" type="submit" aria-label={browse.tab === "sbc" ? `${locale === "en" ? "Search guidelines" : "Buscar nas diretrizes"} ${model.societyLabel}` : t("Pesquisar no PubMed")}>
           <ArrowRight size={19} />
         </button>
-      </form>
+      </div>
       <SearchContext browse={browse} model={model} />
       {browse.tab === "live" && workspace}
       <div className="results-toolbar">

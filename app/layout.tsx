@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   title: BRAND_TITLE_PT,
   description: BRAND_DESCRIPTION_PT,
   applicationName: BRAND_NAME,
-  referrer: "no-referrer",
+  referrer: "same-origin",
   icons: { icon: "/favicon.svg", apple: "/icons/apple-touch-icon.png" },
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: BRAND_NAME, statusBarStyle: "default" },

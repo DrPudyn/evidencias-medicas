@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { PageShell } from "@/components/page-shell";
 import { medicalSpecialties } from "@/lib/catalog";
 import { HIGH_LEVEL_EVIDENCE_FILTER, queryPubmed } from "@/lib/pubmed";
 import { currentUser, settings } from "@/lib/server";
-import { pickWeeklyArticle, summaryFromAbstract, summaryKeepsSourceNumbers, weekKey, type WeeklyPick } from "@/lib/weekly-article";
+import { pickWeeklyArticle, sameNumberList, summaryFromAbstract, weekKey, weeklySpecialtyQuery, WEEKLY_WINDOWS, type WeeklyPick } from "@/lib/weekly-article";
+import { readAiText } from "@/lib/clinical/provider";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Artigo da semana · Busca Evidência", robots: { index: false, follow: false } };
@@ -25,14 +27,14 @@ async function loadWeek(specialty: string): Promise<WeeklyPick | null> {
   }
   const specialtyRow = medicalSpecialties.find(([id]) => id === specialty);
   if (!specialtyRow) return null;
-  const mesh = specialty === "cardiology"
-    ? '"Cardiovascular Diseases"[MeSH Terms]'
-    : specialty === "endocrinology"
-      ? '"Endocrine System Diseases"[MeSH Terms]'
-      : `("${specialtyRow[2].split(";")[0]}"[Title/Abstract])`;
+  const mesh = weeklySpecialtyQuery(specialty, specialtyRow[2]);
   const term = `${mesh} AND (${HIGH_LEVEL_EVIDENCE_FILTER} OR "Randomized Controlled Trial"[Publication Type]) NOT (animals[mh] NOT humans[mh])`;
-  const result = await queryPubmed({ term, sort: "pub_date", page: 1, retmax: 20, reldate: 28, abstracts: true });
-  const picked = pickWeeklyArticle(result.articles);
+  let picked: ReturnType<typeof pickWeeklyArticle> | null = null;
+  for (const reldate of WEEKLY_WINDOWS) {
+    const result = await queryPubmed({ term, sort: "pub_date", page: 1, retmax: 40, reldate, abstracts: true });
+    picked = pickWeeklyArticle(result.articles);
+    if (picked?.abstract) break;
+  }
   if (!picked?.abstract) return null;
   let summary = summaryFromAbstract(picked.abstract);
   const ai = settings().AI;
@@ -41,16 +43,14 @@ async function loadWeek(specialty: string): Promise<WeeklyPick | null> {
       const model = settings().WORKERS_AI_MODEL || "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
       const response = await ai.run(model, {
         messages: [
-          { role: "system", content: "Reescreva o abstract em português, só com o que ele diz. Use as seções Objetivo, Método, Principais resultados, Conclusão e Aplicação prática. Copie os números exatamente. Se a seção não existir, escreva: Não consta no resumo. Não invente." },
-          { role: "user", content: picked.abstract.slice(0, 6000) },
+          { role: "system", content: "Traduza cada trecho para português sem acrescentar, omitir ou alterar números, percentuais ou intervalos. Mantenha os rótulos Objetivo, Método, Principais resultados, Conclusão e Aplicação prática. Se o trecho original estiver vazio, escreva: Não consta no resumo." },
+          { role: "user", content: summary },
         ],
-        max_tokens: 700,
+        max_tokens: 900,
         temperature: 0,
       });
-      const text = typeof response === "string" ? response : JSON.stringify(response);
-      const match = text.match(/Objetivo[\s\S]{20,4000}/);
-      const candidate = match?.[0] || "";
-      if (candidate && summaryKeepsSourceNumbers(candidate, picked.abstract)) summary = candidate;
+      const text = readAiText(response);
+      if (text.includes("Objetivo") && sameNumberList(text, summary)) summary = text;
     } catch {
       // Keep the sentences taken from the abstract.
     }
@@ -75,7 +75,7 @@ export async function WeeklyScreen({ lang, specialty, signedIn, subscribed }: { 
   const plans = en ? "/en#planos" : "/pt#planos";
   const article = subscribed ? await loadWeek(specialty) : null;
   return (
-    <main className="guide-page container">
+    <PageShell><main className="guide-page container">
       <p className="eyebrow">{en ? "PREMIUM" : "PREMIUM"}</p>
       <h1>{en ? "Article of the week" : "Artigo da semana"}</h1>
       <p>{en
@@ -109,7 +109,7 @@ export async function WeeklyScreen({ lang, specialty, signedIn, subscribed }: { 
       ) : (
         <p>{en ? "No article with an abstract was found for this specialty in the last few weeks." : "Não achamos, nas últimas semanas, um artigo com resumo para esta especialidade."}</p>
       )}
-    </main>
+    </main></PageShell>
   );
 }
 

@@ -46,32 +46,70 @@ export function pickWeeklyArticle(articles: Candidate[]) {
   return usable[0] || null;
 }
 
-function section(abstract: string, labels: RegExp) {
-  const match = abstract.split(/\n+/).find((line) => labels.test(line.trim()));
-  if (!match) return "";
-  return match.replace(/^[^:]{2,40}:\s*/, "").trim();
+const SECTION_LABEL = /(authors'\s+conclusions|search\s+methods|materials\s+and\s+methods|main\s+results|main\s+outcomes?|data\s+sources|study\s+selection|objectives?|aims?|purpose|background|introduction|methods?|design|materials|results?|findings|conclusions?|interpretation)\s*:/gi;
+
+function bucket(label: string) {
+  const name = label.toLowerCase().replace(/\s+/g, " ").trim();
+  if (/result|finding/.test(name)) return "results";
+  if (/conclusion|interpretation/.test(name)) return "conclusion";
+  if (/method|design|material|data source|study selection/.test(name)) return "method";
+  if (/objective|aim|purpose|background|introduction/.test(name)) return "objective";
+  return "";
 }
 
-function sentencesWithNumbers(text: string) {
-  return text.split(/(?<=[.!?])\s+/).filter((sentence) => /\d/.test(sentence)).join(" ");
+export function abstractSections(abstract: string) {
+  const text = abstract.replace(/\s+/g, " ").trim();
+  const marks = [...text.matchAll(SECTION_LABEL)];
+  const parts = { objective: "", method: "", results: "", conclusion: "" };
+  if (!marks.length) {
+    const sentences = text.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
+    if (!sentences.length) return parts;
+    parts.conclusion = sentences.slice(-2).join(" ");
+    parts.objective = sentences[0] === parts.conclusion ? "" : sentences[0];
+    parts.results = sentences.slice(1, Math.max(1, sentences.length - 2)).join(" ");
+    return parts;
+  }
+  marks.forEach((mark, index) => {
+    const key = bucket(mark[1]);
+    if (!key) return;
+    const start = (mark.index ?? 0) + mark[0].length;
+    const end = index + 1 < marks.length ? marks[index + 1].index ?? text.length : text.length;
+    const value = text.slice(start, end).trim();
+    parts[key] = parts[key] ? `${parts[key]} ${value}` : value;
+  });
+  return parts;
 }
 
 /** Portuguese headings filled only with sentences from the abstract. Missing parts stay explicit. */
 export function summaryFromAbstract(abstract: string) {
-  const text = abstract.trim();
-  const objective = section(text, /^(objective|objectives|aim|aims|purpose|background)\b/i);
-  const method = section(text, /^(methods?|design|materials)\b/i);
-  const results = section(text, /^(results?|findings|main outcomes?)\b/i);
-  const conclusion = section(text, /^(conclusions?|interpretation|summary)\b/i);
-  const numbered = sentencesWithNumbers(results || text);
+  const parts = abstractSections(abstract);
   const line = (label: string, value: string) => `${label}: ${value || "Não consta no resumo."}`;
   return [
-    line("Objetivo", objective),
-    line("Método", method),
-    line("Principais resultados", numbered || results),
-    line("Conclusão", conclusion),
+    line("Objetivo", parts.objective),
+    line("Método", parts.method),
+    line("Principais resultados", parts.results),
+    line("Conclusão", parts.conclusion),
     "Aplicação prática: Não consta no resumo como recomendação separada. Use só o que a conclusão acima diz.",
   ].join("\n");
+}
+
+export function weeklySpecialtyQuery(specialty: string, terms: string) {
+  if (specialty === "family-medicine") {
+    return '"Family Practice"[MeSH Terms] OR "Primary Health Care"[MeSH Terms] OR "family medicine"[Title/Abstract] OR "general practice"[Title/Abstract] OR "primary care"[Title/Abstract]';
+  }
+  if (specialty === "cardiology") return '"Cardiovascular Diseases"[MeSH Terms] OR cardiology[Title/Abstract]';
+  if (specialty === "endocrinology") return '"Endocrine System Diseases"[MeSH Terms] OR endocrinology[Title/Abstract]';
+  const pieces = terms.split(";").map((term) => `"${term.trim()}"[Title/Abstract]`).filter((term) => term !== "\"\"[Title/Abstract]");
+  return pieces.join(" OR ") || `"${specialty}"[Title/Abstract]`;
+}
+
+export const WEEKLY_WINDOWS = [28, 90, 180];
+
+export function sameNumberList(left: string, right: string) {
+  const pull = (text: string) => [...text.matchAll(/\d+(?:[.,]\d+)?%?/g)].map((match) => match[0].replace(",", ".")).sort();
+  const a = pull(left);
+  const b = pull(right);
+  return a.length === b.length && a.every((item, index) => item === b[index]);
 }
 
 export function summaryKeepsSourceNumbers(summary: string, abstract: string) {

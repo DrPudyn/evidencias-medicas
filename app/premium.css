@@ -1,5 +1,5 @@
 :root { --site-header-offset: 128px; }
-html { scroll-padding-top: var(--site-header-offset); }
+html { scroll-padding-top: 0; }
 
 body {
   font-family: var(--font-sans), Manrope, "Segoe UI", sans-serif;
@@ -234,6 +234,19 @@ body:has(.admin-shell)::before { display: none; }
 .auth-page h1, .guide-page h1 { font-family: var(--font-display), Fraunces, Georgia, serif; font-size: clamp(2.2rem, 4vw, 3.4rem); letter-spacing: -0.04em; margin: 12px 0; }
 .auth-fields, .guide-page section { display: grid; gap: 12px; margin-top: 22px; }
 .auth-fields label { display: grid; gap: 6px; }
+.auth-fields input, .guide-page select, .guide-page input {
+  width: 100%;
+  max-width: 420px;
+  border: 1px solid rgba(42, 33, 28, 0.22);
+  background: #fffdf9;
+  color: var(--ink);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.auth-fields input:focus, .guide-page select:focus, .guide-page input:focus {
+  outline: 2px solid #7a3f28;
+  outline-offset: 2px;
+}
 .guide-page li { margin: 6px 0; }
 .install-app { border-radius: 24px; background: rgba(255, 252, 247, 0.8); color: var(--ink); border-color: rgba(42, 33, 28, 0.08); }
 .install-app button { border-radius: 999px; background: #2a211c; }

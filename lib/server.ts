@@ -24,7 +24,11 @@ export function json(data:unknown,status=200,headers:HeadersInit={}) { const val
 export const digest = async (value:string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value)))).map(x=>x.toString(16).padStart(2,"0")).join("");
 export const randomToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.toString(16).padStart(2,"0")).join("");
 export function localPreview(req:Request) { return ["127.0.0.1","localhost","[::1]"].includes(new URL(req.url).hostname) && (process.env.NODE_ENV === "development" || settings().LOCAL_PREVIEW_ENABLED === "true"); }
-export function sameOrigin(req:Request) { return req.headers.get("origin") === new URL(req.url).origin; }
+export function sameOrigin(req:Request) {
+  const expected = new URL(req.url).origin;
+  if (req.headers.get("origin") === expected) return true;
+  return req.headers.get("sec-fetch-site") === "same-origin";
+}
 export async function body(req:Request,maxLength=16000) { const raw=await req.text(); if(raw.length>maxLength) throw new Error("Solicitação muito grande."); return JSON.parse(raw); }
 export async function rateLimit(req:Request,action:string,max:number) {
  const db=settings().DB; const key=await digest(action+":"+(req.headers.get("cf-connecting-ip")||"local")); const now=Date.now();

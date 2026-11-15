@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import { PageShell } from "@/components/page-shell";
 import type { Article } from "@/lib/catalog";
 import { currentUser, settings } from "@/lib/server";
 
@@ -24,7 +25,7 @@ export async function LibraryList({ lang }: { lang: "pt" | "en" }) {
   const articles = rows.results.map((row) => JSON.parse(row.article) as Article);
   const home = en ? "/en#explorar" : "/pt#explorar";
   return (
-    <main className="guide-page container">
+    <PageShell><main className="guide-page container">
       <p className="eyebrow">{en ? "LIBRARY" : "BIBLIOTECA"}</p>
       <h1>{en ? "My library" : "Minha biblioteca"}</h1>
       <p>{en ? "Articles you saved. Each title opens the PubMed record." : "Artigos que você salvou. Cada título abre o registro no PubMed."}</p>
@@ -47,6 +48,6 @@ export async function LibraryList({ lang }: { lang: "pt" | "en" }) {
           ))}
         </ul>
       )}
-    </main>
+    </main></PageShell>
   );
 }

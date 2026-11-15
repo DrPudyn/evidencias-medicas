@@ -14,10 +14,9 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
   const home = locale === "en" ? "/en" : "/pt";
   return (
     <aside className={browse.mobileFilters ? "filters filters-open" : "filters"}>
-      <form method="get" action={`${home}#explorar`}>
+      <form id="browse-form" method="get" action={`${home}#explorar`} onSubmit={(event) => { event.preventDefault(); browse.search(); }}>
         <input type="hidden" name="search" value="1" />
         <input type="hidden" name="tab" value={browse.tab === "saved" ? "live" : browse.tab} />
-        <input type="hidden" name="q" value={browse.query} />
         <input type="hidden" name="sort" value={browse.sort} />
         <input type="hidden" name="page" value="1" />
       <div className="filter-header">
@@ -154,7 +153,6 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
           <small>{t("Disponibilidade informada pelo PubMed.")}</small>
         </div>
       )}
-        <button className="button secondary" type="submit">{t("Aplicar filtros")}</button>
       </form>
       <FilterHelp />
       <div className="sidebar-note">

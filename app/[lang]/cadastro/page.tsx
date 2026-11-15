@@ -8,6 +8,7 @@ export default async function RegisterPt({ params, searchParams }: { params: Pro
   if (lang === "en") redirect(`/en/register?next=${encodeURIComponent(next)}&erro=${encodeURIComponent(error)}`);
   if (lang !== "pt") notFound();
   const { AuthForm } = await import("@/components/auth-form");
+  const { PageShell } = await import("@/components/page-shell");
   const { safeNext } = await import("@/lib/safe-next");
-  return <AuthForm lang="pt" mode="register" error={error} next={safeNext(next, "/pt")} />;
+  return <PageShell><AuthForm lang="pt" mode="register" error={error} next={safeNext(next, "/pt")} /></PageShell>;
 }

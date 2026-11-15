@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AuthForm } from "@/components/auth-form";
+import { PageShell } from "@/components/page-shell";
 import { safeNext } from "@/lib/safe-next";
 
 export const metadata: Metadata = { title: "Entrar · Busca Evidência", robots: { index: false, follow: false } };
@@ -11,5 +12,5 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
   const query = await searchParams;
   const error = typeof query.erro === "string" ? query.erro : "";
   const next = safeNext(query.next, `/${lang}`);
-  return <AuthForm lang={lang} mode="login" error={error} next={next} />;
+  return <PageShell><AuthForm lang={lang} mode="login" error={error} next={next} /></PageShell>;
 }
