@@ -7,9 +7,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!/^\d{1,9}$/.test(id)) return Response.json({ error: "PMID inválido." }, { status: 400 });
 
   const hit = cache.get(id);
-  if (hit && Date.now() - hit.time < 30 * 60 * 1000) {
+  if (hit && Date.now() - hit.time < 4 * 60 * 60 * 1000) {
     return Response.json({ sections: hit.sections, language: hit.language, source: "PubMed" });
   }
+  try {
+    const cached = await (caches as unknown as { default?: Cache }).default?.match(new Request(`https://search-cache.local/abstract/${id}`));
+    if (cached) {
+      const stored = await cached.json() as { sections: AbstractSection[]; language?: string };
+      cache.set(id, { time: Date.now(), sections: stored.sections, language: stored.language });
+      return Response.json({ ...stored, source: "PubMed" });
+    }
+  } catch { /* Memory cache still applies. */ }
 
   try {
     const url = new URL("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi");
@@ -21,6 +29,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const sections = extractSections(xml);
     const language = extractLanguage(xml);
     cache.set(id, { time: Date.now(), sections, language });
+    try {
+      await (caches as unknown as { default?: Cache }).default?.put(new Request(`https://search-cache.local/abstract/${id}`), new Response(JSON.stringify({ sections, language }), { headers: { "Cache-Control": "public, max-age=14400" } }));
+    } catch { /* Ignore cache write failures. */ }
     if (cache.size > 200) cache.delete(cache.keys().next().value!);
     return Response.json({ sections, language, source: "PubMed" });
   } catch {

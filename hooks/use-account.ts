@@ -112,6 +112,6 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast, initial
     try{await api("/api/account/delete",{method:"DELETE",body:JSON.stringify({confirmation:"EXCLUIR MINHA CONTA"})});activeUser.current=null;setUndoRemoval(null);setUser(null);setSaved([]);setModal(null);setToast("Sua conta e seus favoritos foram excluídos.");}
     catch(error){setFormError((error as Error).message);}finally{setBusy(false);}
   }
-  return {undoRemoval,undoBusy,undoError,restoreRemoved,dismissUndo,user,saved,saving,mode,setMode,email,setEmail,password,setPassword,busy,formError,setFormError,notice,setNotice,previewResetUrl,openAuth,openProfile,submit,toggleSaved,updateReading,logout,deleteAccount};
+  return {undoRemoval,undoBusy,undoError,restoreRemoved,dismissUndo,user,setUser,saved,saving,mode,setMode,email,setEmail,password,setPassword,busy,formError,setFormError,notice,setNotice,previewResetUrl,openAuth,openProfile,submit,toggleSaved,updateReading,logout,deleteAccount};
 }
 export type AccountController=ReturnType<typeof useAccount>;

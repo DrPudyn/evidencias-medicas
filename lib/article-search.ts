@@ -54,7 +54,6 @@ export async function searchArticles(search: URLSearchParams, req: Request) {
   if (!clinicalTerm) return { articles: [] as Article[], count: 0, page, error: "" };
   const terms = [clinicalTerm];
   if (types[search.get("type") || ""]) terms.push(types[search.get("type")!]);
-  if (search.get("free") === "true") terms.push("free full text[sb]");
   const periods: Record<string, number> = { "30": 30, "365": 365, "1825": 1825 };
   const days = periods[search.get("period") || ""];
   const sort = search.get("sort") === "relevance" ? "relevance" : "pub_date";

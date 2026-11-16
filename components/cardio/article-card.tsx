@@ -49,9 +49,9 @@ export function ArticleCard({
             {article.title}
           </a>
         ) : (
-          <a className="article-title" href={article.url || `https://pubmed.ncbi.nlm.nih.gov/${article.id}/`} onClick={(event) => { event.preventDefault(); onOpen(article); }}>
+          <button className="article-title" type="button" onClick={() => onOpen(article)}>
             {article.title}
-          </a>
+          </button>
         )}
         <SupersededNotice articleId={article.id}/>
         <EditorialNote articleId={article.id}/>
@@ -64,8 +64,8 @@ export function ArticleCard({
             <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">{" " + t("Abrir diretriz") + " "}<ArrowUpRight size={15} />
             </a>
           ) : (
-            <a className="article-action-link" href={article.url || `https://pubmed.ncbi.nlm.nih.gov/${article.id}/`} onClick={(event) => { event.preventDefault(); onOpen(article); }}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
-            </a>
+            <button className="article-action-link" type="button" onClick={() => onOpen(article)}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
+            </button>
           )}
         </div>
       </div>

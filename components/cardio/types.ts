@@ -9,6 +9,7 @@ export type Profile = {
   emailNotifications: boolean;
   whatsappNotifications: boolean;
   id?: string;
+  theme?: "light" | "dark";
 };
 
 export const blankProfile: Profile = {

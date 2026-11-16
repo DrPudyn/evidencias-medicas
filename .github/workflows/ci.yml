@@ -47,7 +47,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Bilingual interface tests
-        run: node --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/reading-journey-test.mjs
+        run: node --import ./scripts/register-ts-test.mjs --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/reading-journey-test.mjs scripts/account-access-test.mjs
 
       - name: Clinical question, quota and billing tests
         run: npm run test:clinical
@@ -67,7 +67,8 @@ jobs:
             drizzle/0005_plans_and_quota.sql \
             drizzle/0006_term_cache.sql \
             drizzle/0007_result_cache.sql \
-            drizzle/0008_weekly_article.sql
+            drizzle/0008_weekly_article.sql \
+            drizzle/0009_account_access.sql
           do
             node --import ./scripts/sites-env.mjs \
               ./node_modules/wrangler/bin/wrangler.js d1 execute DB \

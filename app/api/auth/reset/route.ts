@@ -1,15 +1,27 @@
 import { body, digest, json, randomToken, rateLimit, sameOrigin, settings } from "@/lib/server";
+import { RESET_NOTICE, resetExpiry } from "@/lib/account-access";
 import { ADMIN_EMAIL, normalizeEmail, validEmail } from "@/lib/auth-identity";
 import { mailReady, sendAccountLink } from "@/lib/mail";
 import { hashPassword, validPassword } from "@/lib/password";
 
-const NOTICE = "Se o endereço puder receber acesso, enviaremos um link para definir sua senha.";
+const NOTICE = RESET_NOTICE;
+
+async function readInput(req: Request) {
+  const type = req.headers.get("content-type") || "";
+  if (type.includes("application/x-www-form-urlencoded") || type.includes("multipart/form-data")) {
+    const form = await req.formData();
+    return { intent: String(form.get("intent") || ""), email: form.get("email"), token: form.get("token"), password: form.get("password"), lang: form.get("lang"), form: true };
+  }
+  const input = await body(req);
+  return { ...input, form: false };
+}
+
 export async function POST(req: Request) {
   if (!sameOrigin(req)) return json({ error: "Origem não autorizada." }, 403);
   try {
     if (!await rateLimit(req, "password-reset", 10)) return json({ error: "Limite de tentativas atingido. Tente novamente mais tarde." }, 429);
-    const input = await body(req), db = settings().DB, now = Date.now();
-    if (input.token !== undefined) {
+    const input = await readInput(req), db = settings().DB, now = Date.now();
+    if (typeof input.token === "string" && input.token) {
       if (typeof input.token !== "string" || !/^[a-f0-9]{64}$/.test(input.token) || !validPassword(input.password))
         return json({ error: "Link inválido ou senha fora do limite de 12 a 128 caracteres." }, 400);
       const tokenDigest = await digest(input.token);
@@ -30,19 +42,22 @@ export async function POST(req: Request) {
       );
       const results = await db.batch(statements);
       if (!results[reset.email === ADMIN_EMAIL ? 1 : 0].meta.changes) return json({ error: "Link inválido ou expirado. Solicite outro." }, 400);
+      if (input.form) return Response.redirect(new URL("/pt/entrar?aviso="+encodeURIComponent("Senha atualizada. Entre com o e-mail e a nova senha."), req.url), 303);
       return json({ok:true,email:reset.email});
     }
     const email = normalizeEmail(input.email);
     if (!validEmail(email)) return json({ error: "Informe um e-mail válido." }, 400);
     
-    if (!mailReady(req)) return json({ error: "Recuperação por e-mail temporariamente indisponível." }, 503);
     const user = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
-    if (!user && email !== ADMIN_EMAIL) return json({message:NOTICE});
+    if (!mailReady(req) || (!user && email !== ADMIN_EMAIL)) {
+      if (input.form) return Response.redirect(new URL("/pt/entrar?aviso="+encodeURIComponent(NOTICE), req.url), 303);
+      return json({message:NOTICE});
+    }
     const token = randomToken(), tokenDigest = await digest(token);
     const lang = input.lang === "en" ? "en" : "pt";
-    await db.batch([
+      await db.batch([
       db.prepare("DELETE FROM password_resets WHERE email=? OR expires<?").bind(email,now),
-      db.prepare("INSERT INTO password_resets(digest,email,expires) VALUES(?,?,?)").bind(tokenDigest,email,now+1800000)
+      db.prepare("INSERT INTO password_resets(digest,email,expires) VALUES(?,?,?)").bind(tokenDigest,email,resetExpiry(now))
     ]);
     try{
       const sent=await sendAccountLink(req,email,lang,"reset",token,email===ADMIN_EMAIL);

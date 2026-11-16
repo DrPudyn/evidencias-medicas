@@ -16,6 +16,7 @@ export const settings = () => env as unknown as {
   PLAN_PRICE_LABEL?: string;
   WORKERS_AI_MODEL?: string;
   CLINICAL_AI_PROVIDER?: string;
+  EMAIL?: { send: (message: { to: string; from: string; subject: string; text: string }) => Promise<void> };
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
@@ -37,10 +38,16 @@ export async function rateLimit(req:Request,action:string,max:number) {
 }
 export async function currentUser(req:Request) {
  const token=req.headers.get("cookie")?.match(/(?:^|;\s*)em_session=([a-f0-9]{64})(?:;|$)/)?.[1];if(!token)return null;
- const row=await settings().DB.prepare("SELECT users.id,users.email,users.profile FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.auth_method='password' AND sessions.digest=? AND sessions.expires>?").bind(await digest(token),Date.now()).first<{id:string;email:string;profile:string}>();return row?accountIdentity(row.id,row.email):null;
+ const row=await settings().DB.prepare("SELECT users.id,users.email,users.profile FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.auth_method IN ('password','passkey') AND sessions.digest=? AND sessions.expires>?").bind(await digest(token),Date.now()).first<{id:string;email:string;profile:string}>();
+ if(!row)return null;
+ let extra:{name?:string;theme?:string}={};
+ try{extra=JSON.parse(row.profile||"{}");}catch{extra={};}
+ const identity=accountIdentity(row.id,row.email);
+ const name=typeof extra.name==="string"&&extra.name.trim()?extra.name.trim().slice(0,80):identity.name;
+ return {...identity,name,theme:extra.theme==="dark"?"dark":"light"};
 }
 export async function currentSession(req:Request) {
  const token=req.headers.get("cookie")?.match(/(?:^|;\s*)em_session=([a-f0-9]{64})(?:;|$)/)?.[1];if(!token)return null;
- const sessionDigest=await digest(token);const row=await settings().DB.prepare("SELECT user_id,expires FROM sessions WHERE auth_method='password' AND digest=? AND expires>?").bind(sessionDigest,Date.now()).first<{user_id:string;expires:number}>();return row?{digest:sessionDigest,userId:row.user_id,expires:row.expires}:null;
+ const sessionDigest=await digest(token);const row=await settings().DB.prepare("SELECT user_id,expires FROM sessions WHERE auth_method IN ('password','passkey') AND digest=? AND expires>?").bind(sessionDigest,Date.now()).first<{user_id:string;expires:number}>();return row?{digest:sessionDigest,userId:row.user_id,expires:row.expires}:null;
 }
 export function sessionCookie(token:string,req:Request,clear=false) { return `em_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${clear?0:604800}${new URL(req.url).protocol==="https:"?"; Secure":""}`; }

@@ -67,18 +67,6 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
           </ul>
         </div>
       )}
-      {browse.specialty !== "" && (
-        <fieldset className="filter-group">
-          <legend className="filter-label">{t("TEMA CLÍNICO")}</legend>
-          {model.sbcVisibleTopics.map(([value, label]) => (
-            <label className="radio-label" key={value}>
-              <input type="radio" name="topic" checked={browse.topic === value} onChange={() => browse.chooseTopic(value)} />
-              <span className="topic-label">{label}</span>
-              {browse.tab === "sbc" && <span className="topic-count">{model.sbcTopicCounts[value] || 0}</span>}
-            </label>
-          ))}
-        </fieldset>
-      )}
       <label className="filter-group">
         <span className="filter-label">{browse.tab === "sbc" ? t("TIPO DE DOCUMENTO") : t("TIPO DE ESTUDO")}</span>
         <select
@@ -145,26 +133,6 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
             <option value="1825">{t("Últimos 5 anos")}</option>
           </select>
         </label>
-      )}
-      {browse.tab !== "sbc" && (
-        <div className="filter-group">
-          <label className="check-label">
-            <input
-              type="checkbox"
-              name="free"
-              value="true"
-              checked={browse.free}
-              onChange={(event) => {
-                browse.trackFilter("filter_free");
-                browse.setFree(event.target.checked);
-                browse.setTab("live");
-                browse.setPage(1);
-              }}
-            />
-            <span>{t("Texto completo gratuito")}</span>
-          </label>
-          <small>{t("Disponibilidade informada pelo PubMed.")}</small>
-        </div>
       )}
       </form>
       <FilterHelp />

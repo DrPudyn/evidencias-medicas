@@ -1,4 +1,5 @@
 import { safeNext } from "@/lib/safe-next";
+import { PasskeyLogin, PasskeyRegister } from "@/components/passkey-actions";
 
 export function AuthForm({
   lang,
@@ -36,6 +37,18 @@ export function AuthForm({
         <p className="muted small-text">{en ? "Use 12 to 128 characters." : "Use de 12 a 128 caracteres."}</p>
         <button className="button" type="submit">{mode === "register" ? (en ? "Create account" : "Criar conta") : (en ? "Sign in" : "Entrar")}</button>
       </form>
+      {mode === "login" ? (
+        <form className="auth-fields" method="post" action="/api/auth/reset">
+          <input type="hidden" name="intent" value="request" />
+          <input type="hidden" name="lang" value={lang} />
+          <label>{en ? "Forgot your password" : "Esqueci minha senha"}
+            <input type="email" name="email" autoComplete="email" required maxLength={254} />
+          </label>
+          <button className="button secondary" type="submit">{en ? "Send reset link" : "Enviar link"}</button>
+        </form>
+      ) : null}
+      <PasskeyLogin />
+      {mode === "register" ? <PasskeyRegister /> : null}
       <p className="auth-switch">
         {mode === "register"
           ? <a href={en ? `/en/entrar?next=${encodeURIComponent(back)}` : `/pt/entrar?next=${encodeURIComponent(back)}`}>{en ? "I already have an account" : "Já tenho uma conta"}</a>
