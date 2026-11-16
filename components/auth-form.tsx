@@ -5,11 +5,13 @@ export function AuthForm({
   lang,
   mode,
   error,
+  notice = "",
   next,
 }: {
   lang: "pt" | "en";
   mode: "login" | "register";
   error: string;
+  notice?: string;
   next: string;
 }) {
   const en = lang === "en";
@@ -19,6 +21,7 @@ export function AuthForm({
       <h1>{mode === "register" ? (en ? "Create your account" : "Crie sua conta") : (en ? "Sign in" : "Entre na sua conta")}</h1>
       <p>{en ? "Email and password only. No confirmation message is sent." : "Apenas e-mail e senha. Não enviamos confirmação por e-mail."}</p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {notice ? <p role="status">{notice}</p> : null}
       <form className="auth-fields" method="post" action="/api/auth/form">
         <input type="hidden" name="lang" value={lang} />
         <input type="hidden" name="mode" value={mode} />
