@@ -48,8 +48,13 @@ export async function POST(req: Request) {
     const email = normalizeEmail(input.email);
     if (!validEmail(email)) return json({ error: "Informe um e-mail válido." }, 400);
     
+    if (!mailReady(req)) {
+      const message = "Recuperação por e-mail temporariamente indisponível. O envio exige um domínio verificado no Cloudflare Email Sending ou RESEND_API_KEY.";
+      if (input.form) return Response.redirect(new URL("/pt/entrar?erro="+encodeURIComponent(message), req.url), 303);
+      return json({ error: message }, 503);
+    }
     const user = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
-    if (!mailReady(req) || (!user && email !== ADMIN_EMAIL)) {
+    if (!user && email !== ADMIN_EMAIL) {
       if (input.form) return Response.redirect(new URL("/pt/entrar?aviso="+encodeURIComponent(NOTICE), req.url), 303);
       return json({message:NOTICE});
     }
