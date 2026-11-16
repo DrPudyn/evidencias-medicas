@@ -21,6 +21,6 @@ export function SearchContext({browse,model}:{browse:BrowseState;model:BrowseMod
   if(browse.topic!=="all")items.push(t(model.sbcVisibleTopics.find(([id])=>id===browse.topic)?.[1]||browse.topic));
   if(browse.type!=="all")items.push(t(browse.tab==="sbc"?browse.type:studyLabels[browse.type]||browse.type));
   if(browse.tab==="sbc"){if(browse.guidelineYear!=="all")items.push(browse.guidelineYear);}
-  else {const periods:Record<string,string>={"30":"Últimos 30 dias","365":"Últimos 12 meses","1825":"Últimos 5 anos"};if(periods[browse.period])items.push(t(periods[browse.period]));if(browse.free)items.push(t("Texto completo gratuito"));}
+  else {const periods:Record<string,string>={"30":"Últimos 30 dias","365":"Últimos 12 meses","1825":"Últimos 5 anos"};if(periods[browse.period])items.push(t(periods[browse.period]));}
   return <p className="search-context" aria-label={t("Resumo da busca")}>{items.join(" · ")}</p>;
 }

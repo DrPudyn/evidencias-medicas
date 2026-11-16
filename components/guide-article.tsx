@@ -46,7 +46,6 @@ export function GuideArticle({ lang }: { lang: "pt" | "en" }) {
           <li>{en ? "Specialty narrows the topic, for example cardiology or endocrinology." : "Especialidade estreita o tema, por exemplo cardiologia ou endocrinologia."}</li>
           <li>{en ? "Study type: clinical trial, randomized trial, review, systematic review, meta-analysis or guideline." : "Tipo de estudo: ensaio clínico, ensaio randomizado, revisão, revisão sistemática, metanálise ou diretriz."}</li>
           <li>{en ? "Period: any date, 30 days, 12 months or 5 years." : "Período: qualquer data, 30 dias, 12 meses ou 5 anos."}</li>
-          <li>{en ? "Free full text only shows records PubMed marks as free. It does not guarantee the PDF will open." : "Texto completo gratuito só mostra o que o PubMed marca como livre. Não garante que o PDF abra."}</li>
         </ul>
         <p><a href={explore}>{en ? "Open the article search" : "Abrir a busca de artigos"}</a></p>
       </section>

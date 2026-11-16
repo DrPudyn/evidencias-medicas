@@ -6,12 +6,14 @@ export function AuthForm({
   mode,
   error,
   notice = "",
+  preview = "",
   next,
 }: {
   lang: "pt" | "en";
   mode: "login" | "register";
   error: string;
   notice?: string;
+  preview?: string;
   next: string;
 }) {
   const en = lang === "en";
@@ -19,9 +21,12 @@ export function AuthForm({
   return (
     <main className="auth-page container">
       <h1>{mode === "register" ? (en ? "Create your account" : "Crie sua conta") : (en ? "Sign in" : "Entre na sua conta")}</h1>
-      <p>{en ? "Email and password only. No confirmation message is sent." : "Apenas e-mail e senha. Não enviamos confirmação por e-mail."}</p>
+      <p>{mode === "register"
+        ? (en ? "Create the account with email and password, or with a passkey on this device. No confirmation email is sent." : "Crie a conta com e-mail e senha, ou só com uma chave de acesso neste aparelho. Não enviamos confirmação por e-mail.")
+        : (en ? "Sign in with email and password, or with a passkey on this device. No confirmation email is sent." : "Entre com e-mail e senha, ou com uma chave de acesso neste aparelho. Não enviamos confirmação por e-mail.")}</p>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
+      {preview ? <p className="preview-code"><a href={preview}>{en ? "Local preview: open the reset link" : "Prévia local: abrir o link de redefinição"}</a></p> : null}
       <form className="auth-fields" method="post" action="/api/auth/form">
         <input type="hidden" name="lang" value={lang} />
         <input type="hidden" name="mode" value={mode} />

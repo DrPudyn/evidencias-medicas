@@ -48,14 +48,15 @@ export async function POST(req: Request) {
     const email = normalizeEmail(input.email);
     if (!validEmail(email)) return json({ error: "Informe um e-mail válido." }, 400);
     
+    const loginPath = input.lang === "en" ? "/en/entrar" : "/pt/entrar";
     if (!mailReady(req)) {
       const message = "Recuperação por e-mail temporariamente indisponível. O envio exige um domínio verificado no Cloudflare Email Sending ou RESEND_API_KEY.";
-      if (input.form) return Response.redirect(new URL("/pt/entrar?erro="+encodeURIComponent(message), req.url), 303);
+      if (input.form) return Response.redirect(new URL(loginPath+"?erro="+encodeURIComponent(message), req.url), 303);
       return json({ error: message }, 503);
     }
     const user = await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first();
     if (!user && email !== ADMIN_EMAIL) {
-      if (input.form) return Response.redirect(new URL("/pt/entrar?aviso="+encodeURIComponent(NOTICE), req.url), 303);
+      if (input.form) return Response.redirect(new URL(loginPath+"?aviso="+encodeURIComponent(NOTICE), req.url), 303);
       return json({message:NOTICE});
     }
     const token = randomToken(), tokenDigest = await digest(token);
@@ -64,12 +65,24 @@ export async function POST(req: Request) {
       db.prepare("DELETE FROM password_resets WHERE email=? OR expires<?").bind(email,now),
       db.prepare("INSERT INTO password_resets(digest,email,expires) VALUES(?,?,?)").bind(tokenDigest,email,resetExpiry(now))
     ]);
+    const back = new URL(loginPath, req.url);
     try{
       const sent=await sendAccountLink(req,email,lang,"reset",token,email===ADMIN_EMAIL);
-      if(sent.previewUrl)return json({message:NOTICE,previewResetUrl:sent.previewUrl});
+      if(sent.previewUrl){
+        if (input.form) {
+          back.searchParams.set("aviso", NOTICE);
+          back.searchParams.set("preview", sent.previewUrl);
+          return Response.redirect(back, 303);
+        }
+        return json({message:NOTICE,previewResetUrl:sent.previewUrl});
+      }
     }catch{
       await db.prepare("DELETE FROM password_resets WHERE digest=?").bind(tokenDigest).run();
       return json({error:"Não foi possível enviar o e-mail. Tente novamente."},502);
+    }
+    if (input.form) {
+      back.searchParams.set("aviso", NOTICE);
+      return Response.redirect(back, 303);
     }
     return json({message:NOTICE});
   } catch {
