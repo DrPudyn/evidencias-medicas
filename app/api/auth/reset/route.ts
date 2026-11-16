@@ -1,5 +1,5 @@
 import { body, digest, json, randomToken, rateLimit, sameOrigin, settings } from "@/lib/server";
-import { RESET_NOTICE, resetExpiry } from "@/lib/account-access";
+import { RECOVERY_UNAVAILABLE, RESET_NOTICE, resetExpiry } from "@/lib/account-access";
 import { ADMIN_EMAIL, normalizeEmail, validEmail } from "@/lib/auth-identity";
 import { mailReady, sendAccountLink } from "@/lib/mail";
 import { hashPassword, validPassword } from "@/lib/password";
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
     
     const loginPath = input.lang === "en" ? "/en/entrar" : "/pt/entrar";
     if (!mailReady(req)) {
-      const message = "Recuperação por e-mail temporariamente indisponível. O envio exige um domínio verificado no Cloudflare Email Sending ou RESEND_API_KEY.";
+      const message = RECOVERY_UNAVAILABLE;
       if (input.form) return Response.redirect(new URL(loginPath+"?erro="+encodeURIComponent(message), req.url), 303);
       return json({ error: message }, 503);
     }

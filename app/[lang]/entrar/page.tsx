@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { AuthForm } from "@/components/auth-form";
 import { PageShell } from "@/components/page-shell";
+import { normalizeEmail, validEmail } from "@/lib/auth-identity";
+import { mailReady } from "@/lib/mail";
 import { safeNext } from "@/lib/safe-next";
 
 function safeResetPreview(value: string) {
@@ -23,7 +26,13 @@ export default async function LoginPage({ params, searchParams }: { params: Prom
   const query = await searchParams;
   const error = typeof query.erro === "string" ? query.erro : "";
   const notice = typeof query.aviso === "string" ? query.aviso : "";
+  const emailValue = normalizeEmail(query.email);
+  const email = validEmail(emailValue) ? emailValue : "";
   const preview = safeResetPreview(typeof query.preview === "string" ? query.preview : "");
   const next = safeNext(query.next, `/${lang}`);
-  return <PageShell><AuthForm lang={lang} mode="login" error={error} notice={notice} preview={preview} next={next} /></PageShell>;
+  const headerList = await headers();
+  const host = headerList.get("x-forwarded-host") || headerList.get("host") || "localhost";
+  const proto = headerList.get("x-forwarded-proto") || (host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https");
+  const recovery = mailReady(new Request(`${proto}://${host}/entrar`));
+  return <PageShell><AuthForm lang={lang} mode="login" error={error} email={email} notice={notice} preview={preview} recovery={recovery} next={next} /></PageShell>;
 }

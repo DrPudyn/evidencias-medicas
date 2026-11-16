@@ -1,4 +1,6 @@
+import { existingAccountMessage } from "@/lib/account-access";
 import { ADMIN_EMAIL, normalizeEmail, validEmail } from "@/lib/auth-identity";
+import { mailReady } from "@/lib/mail";
 import { hashPassword, validPassword, verifyPassword } from "@/lib/password";
 import { safeNext } from "@/lib/safe-next";
 import { digest, randomToken, rateLimit, sameOrigin, sessionCookie, settings } from "@/lib/server";
@@ -17,11 +19,12 @@ function accessError(error: unknown) {
   return "Não foi possível concluir o acesso. Tente novamente.";
 }
 
-function back(mode: string, lang: string, next: string, message: string) {
+function back(mode: string, lang: string, next: string, message: string, email = "") {
   const path = lang === "en" ? (mode === "register" ? "/en/register" : "/en/entrar") : (mode === "register" ? "/pt/cadastro" : "/pt/entrar");
   const url = new URL(path, "https://local");
   url.searchParams.set("erro", message);
   url.searchParams.set("next", next);
+  if (email) url.searchParams.set("email", email);
   return redirectTo(`${url.pathname}${url.search}`);
 }
 
@@ -44,13 +47,13 @@ export async function POST(req: Request) {
     if (mode === "register") {
       if (!validPassword(password)) return back(mode, lang, next, "Use uma senha de 12 a 128 caracteres.");
       if (password !== confirmation) return back(mode, lang, next, "A confirmação da senha não confere.");
-      if (email === ADMIN_EMAIL || user) return back(mode, lang, next, "Não foi possível criar a conta. Entre ou use a recuperação de senha.");
+      if (email === ADMIN_EMAIL || user) return back(mode, lang, next, existingAccountMessage(mailReady(req)), email);
       const encoded = await hashPassword(password);
       const id = crypto.randomUUID();
       const now = Date.now();
       const created = await db.prepare("INSERT OR IGNORE INTO users(id,email,profile,created_at,password_hash,email_verified_at) VALUES(?,?,?,?,?,?)")
         .bind(id, email, JSON.stringify({ role: "member" }), now, encoded, now).run();
-      if (!created.meta.changes) return back(mode, lang, next, "Não foi possível criar a conta. Entre ou use a recuperação de senha.");
+      if (!created.meta.changes) return back(mode, lang, next, existingAccountMessage(mailReady(req)), email);
       user = { id, email, password_hash: encoded, email_verified_at: now };
     } else if (!await verifyPassword(password, user?.password_hash ?? null) || !user) {
       return back(mode, lang, next, "E-mail ou senha incorretos.");
