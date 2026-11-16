@@ -76,7 +76,9 @@ export function ResultsPanel({
       </div>
       {browse.tab === "saved" && workspace ? workspace : <>
       <div className="results-search">
-        <Search size={18} />
+        <button className="search-icon-button" form="browse-form" type="submit" aria-label={locale === "en" ? "Search" : "Pesquisar"}>
+          <Search size={18} />
+        </button>
         <input
           form="browse-form"
           name="q"
@@ -86,7 +88,6 @@ export function ResultsPanel({
           onChange={(event) => browse.setQ(event.target.value)}
           maxLength={200}
         />
-        <button className="search-submit" form="browse-form" type="submit">{t("Pesquisar no PubMed")}</button>
       </div>
       <SearchContext browse={browse} model={model} />
       {browse.tab === "live" && workspace}

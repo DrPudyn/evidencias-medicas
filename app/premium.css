@@ -241,6 +241,9 @@ body:has(.admin-shell)::before { display: none; }
 .bookmark-button.selected,
 .bookmark-button.selected svg { color: #7a3f28; fill: #7a3f28; stroke: #7a3f28; }
 .search-submit { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+.results-search .search-icon-button { display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 8px; color: #7a3f28; background: transparent; cursor: pointer; }
+.results-search .search-icon-button:hover,
+.results-search .search-icon-button:focus-visible { color: #5c301d; background: #f3e6d4; outline: 2px solid #7a3f28; outline-offset: 2px; }
 .auth-fields input, .guide-page select, .guide-page input {
   width: 100%;
   max-width: 420px;
