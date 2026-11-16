@@ -23,7 +23,8 @@ export async function PATCH(req:Request){
   if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);
   const user=await currentUser(req);
   if(!user?.id)return json({error:"Entre para continuar."},401);
-  const input=await req.json() as { name?: string; theme?: string; currentPassword?: string; newPassword?: string };
+  const input=await req.json() as { name?: string; theme?: string; currentPassword?: string; newPassword?: string; role?: unknown };
+  if ("role" in input) return json({ error: "Este campo não pode ser alterado por aqui." }, 405);
   const db=settings().DB;
   const row=await db.prepare("SELECT profile,password_hash FROM users WHERE id=?").bind(user.id).first<{profile:string;password_hash:string|null}>();
   let profile: { name?: string; theme?: string; role?: string } = {};
