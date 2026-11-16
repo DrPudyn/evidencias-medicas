@@ -89,7 +89,7 @@ for (const society of ['SBA', 'SBP-pediatrics', 'SBGM', 'FEBRASGO']) {
 assert.equal((await call('/api/bookmarks', 'POST', { id: 'soc-inventado', source: 'SBA', title: 'Inválido' }, login.cookie)).status, 400);
 // Reset links are single-use and invalidate existing sessions.
 const reset=await call('/api/auth/reset','POST',{email:p.email});assert.equal(reset.status,200);
-const token=new URL(reset.data.previewResetUrl).searchParams.get('reset');
+const token=new URL(reset.data.previewResetUrl).searchParams.get('token');
 assert.equal((await call('/api/auth/reset','POST',{token,password:'A new strong password 2026'})).status,200);
 assert.equal((await call('/api/auth/reset','POST',{token,password:'A new strong password 2026'})).status,400);
 assert.equal((await call('/api/account','GET',undefined,login.cookie)).data.user,null);
@@ -99,7 +99,7 @@ login.cookie=afterReset.cookie;
 const adminEmail='evidenciasmedicas@outlook.com';
 assert.equal((await call('/api/auth/password','POST',{...p,email:adminEmail})).status,409);
 const adminReset=await call('/api/auth/reset','POST',{email:adminEmail});
-const adminToken=new URL(adminReset.data.previewResetUrl).searchParams.get('reset');
+const adminToken=new URL(adminReset.data.previewResetUrl).searchParams.get('token');
 assert.equal((await call('/api/auth/reset','POST',{token:adminToken,password:'Admin test password 2026 only'})).status,200);
 const adminLogin=await call('/api/auth/password','POST',{email:adminEmail,password:'Admin test password 2026 only',mode:'login'});
 assert.equal(adminLogin.status,200);assert.equal(adminLogin.data.user.role,'admin');assert.match(adminLogin.cookie,/admin_session=/);
