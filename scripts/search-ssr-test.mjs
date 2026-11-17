@@ -35,6 +35,7 @@ try {
   assert.doesNotMatch(html, /Não foi possível consultar o PubMed/, html.slice(0, 500));
   assert.match(html, /article-title/, "Results are in the HTML without JavaScript");
   assert.match(html, /heart failure|Heart Failure|SGLT2|empagliflozin/i, "The search term is reflected in the rendered results");
+  assert.match(html, /src="\/_next\/static\/chunks\/[^"]+\.js"/, "The page references the client bundle");
 
   const api = await fetch(`${origin}/api/articles?q=${encodeURIComponent(query)}&specialty=cardiology`, { signal: AbortSignal.timeout(90000) });
   const body = await api.json();
