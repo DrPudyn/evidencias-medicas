@@ -51,9 +51,10 @@ export function useArticleDetail(article: Article | null) {
   }, [article, ready.length]);
 
   const fromSearch = ready.length > 0;
+  const fetchedForArticle = fetched && article && fetched.id === article.id ? fetched : null;
   return {
-    abstract: fromSearch ? ready : (fetched?.id === article?.id ? fetched.sections : []),
-    abstractLanguage: fromSearch ? article?.language : fetched?.language || article?.language,
+    abstract: fromSearch ? ready : (fetchedForArticle?.sections || []),
+    abstractLanguage: fromSearch ? article?.language : fetchedForArticle?.language || article?.language,
     abstractLoading: fromSearch ? false : abstractLoading,
     abstractError: fromSearch ? "" : abstractError,
   };
