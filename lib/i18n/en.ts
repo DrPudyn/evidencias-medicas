@@ -561,6 +561,8 @@ export const english:Record<string,string> = {
   "Conta temporariamente indisponível.": "Account temporarily unavailable.",
   "PMID inválido.": "Invalid PMID.",
   "Não foi possível carregar o resumo do PubMed agora.": "Unable to load the PubMed abstract right now.",
+  "O resumo demorou demais. Abra o registro no PubMed.": "The abstract took too long. Open the PubMed record.",
+  "O acesso foi interrompido antes dos dados. Entre de novo e tente outra vez.": "Access was interrupted before the data arrived. Sign in again and retry.",
   "PubMed está ocupado; tente novamente em instantes.": "PubMed is busy; please try again shortly.",
   "PubMed indisponível": "PubMed unavailable",
   "Muitas buscas em pouco tempo. Aguarde antes de consultar novamente.": "Too many searches in a short time. Please wait before searching again.",

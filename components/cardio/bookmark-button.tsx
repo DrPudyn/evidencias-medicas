@@ -19,7 +19,7 @@ export function BookmarkButton({
 }) {
   return (
     <button className={className} type="submit" disabled={pending} onClick={onClick} aria-busy={pending} aria-label={label} title={title}>
-      <Bookmark size={18} fill={saved ? "#7a3f28" : "none"} stroke="#7a3f28" />
+      <Bookmark size={18} fill={saved ? "currentColor" : "none"} stroke="currentColor" />
     </button>
   );
 }

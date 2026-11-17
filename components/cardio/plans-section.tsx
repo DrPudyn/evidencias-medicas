@@ -46,7 +46,7 @@ export function PlansSection({ lang }: { lang: "pt" | "en" }) {
               <li>{en ? "Everything in the free plan." : "Tudo do plano grátis."}</li>
               <li><a href={weekly}>{en ? "A detailed weekly summary of one current, relevant article in your specialty." : "Resumo semanal detalhado de um artigo relevante e atual da sua especialidade."}</a></li>
             </ul>
-            <button className="button" type="button" disabled>{en ? "Coming soon" : "Em breve"}</button>
+            <span className="plan-status">{en ? "Coming soon" : "Em breve"}</span>
           </article>
         </div>
       </div>

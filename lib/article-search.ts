@@ -59,7 +59,7 @@ export async function searchArticles(search: URLSearchParams, req: Request) {
   const sort = search.get("sort") === "relevance" ? "relevance" : "pub_date";
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()).replaceAll("-", "/");
   terms.push(`("1900/01/01"[Date - Publication] : "${today}"[Date - Publication])`);
-  const params: PubmedSearchInput = { term: terms.join(" AND "), sort, page, retmax: 12, ...(days ? { reldate: days } : {}) };
+  const params: PubmedSearchInput = { term: terms.join(" AND "), sort, page, retmax: 12, abstracts: true, ...(days ? { reldate: days } : {}) };
   const key = await digest(JSON.stringify(params));
   const hit = cache.get(key);
   if (hit && Date.now() - hit.time < SEARCH_CACHE_SECONDS * 1000) return { ...hit.data, error: "" };
@@ -74,9 +74,12 @@ export async function searchArticles(search: URLSearchParams, req: Request) {
   try {
     const result = await queryPubmed(params);
     const articles = result.articles.map((article) => {
-      const published = { ...article, topic: topic?.[0] || "all" };
+      const published = {
+        ...article,
+        topic: topic?.[0] || "all",
+        sections: (article.sections || []).map((section) => ({ label: section.label || "Resumo", text: section.text })),
+      };
       delete published.publicationTypes;
-      delete published.abstract;
       return published;
     });
     const data = { articles, count: result.count, page };

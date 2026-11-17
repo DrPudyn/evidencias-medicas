@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import { Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { headers } from "next/headers";
 import "./globals.css";
 import "./premium.css";
@@ -13,11 +14,12 @@ const sans = Manrope({
   variable: "--font-sans",
   weight: ["400", "500", "600", "700"],
 });
-const display = Fraunces({
-  subsets: ["latin"],
+const display = localFont({
+  src: "./fonts/fraunces-latin.woff2",
+  weight: "500 700",
   display: "swap",
   variable: "--font-display",
-  weight: ["500", "600", "700"],
+  fallback: ["Georgia", "Times New Roman", "serif"],
 });
 
 export const metadata: Metadata = {
@@ -37,7 +39,7 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
-export const viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#f7f3ec" };
+export const viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#fafbf8" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = (await headers()).get("x-site-locale") === "en" ? "en" : "pt";
@@ -45,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale === "en" ? "en" : "pt-BR"} className={`${sans.variable} ${display.variable}`}>
       <body>
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(localStorage.getItem("em-theme")==="dark")document.documentElement.classList.add("theme-dark");}catch(e){}})();` }} />
-        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(navigator.serviceWorker){navigator.serviceWorker.getRegistrations().then(function(list){list.forEach(function(item){item.unregister();});});}if(window.caches){caches.keys().then(function(keys){keys.forEach(function(key){caches.delete(key);});});}}catch(e){}var key="em-chunk-reload";function once(){try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,"1");}catch(e){return;}var url=new URL(location.href);url.searchParams.set("cb",String(Date.now()));location.replace(url.toString());}window.addEventListener("error",function(event){var target=event.target;var message=String(event.message||"");var src=target&&target.src?String(target.src):"";if(message.indexOf("ChunkLoadError")>=0||message.indexOf("Loading chunk")>=0||(target&&target.tagName==="SCRIPT"&&/\\/(assets|_next)\\//.test(src)))once();},true);window.addEventListener("unhandledrejection",function(event){var reason=event.reason||"";var message=String(reason&&reason.message?reason.name+" "+reason.message:reason);if(message.indexOf("ChunkLoadError")>=0||message.indexOf("Loading chunk")>=0)once();});})();` }} />
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{if(navigator.serviceWorker){navigator.serviceWorker.getRegistrations().then(function(list){list.forEach(function(item){item.unregister();});});}if(window.caches){caches.keys().then(function(keys){keys.forEach(function(key){caches.delete(key);});});}}catch(e){}var key="em-chunk-reload";function once(){try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,"1");}catch(e){return;}location.reload();}function chunk(message,src){return message.indexOf("ChunkLoadError")>=0||message.indexOf("Loading chunk")>=0||/\\/_next\\/static\\//.test(src||"");}window.addEventListener("error",function(event){var target=event.target;var src=target&&target.src?String(target.src):"";var message=String(event.message||"");if(target&&target.tagName==="SCRIPT"&&chunk("",src))once();else if(chunk(message,""))once();},true);window.addEventListener("unhandledrejection",function(event){var reason=event.reason||"";var message=String(reason&&reason.message?reason.name+" "+reason.message:reason);if(chunk(message,""))once();});})();` }} />
         <LocaleProvider initialLocale={locale}>{children}<InstallApp /></LocaleProvider>
       </body>
     </html>

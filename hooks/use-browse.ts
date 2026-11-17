@@ -8,9 +8,10 @@ import { guidelineSourceFor } from "@/components/cardio/catalog-query";
 import { BROWSE_STORAGE_KEY, browseFromLink, defaultBrowse, sanitizeBrowse, searchLink, type BrowseSnapshot } from "@/lib/browse-state";
 import type { AppModal } from "@/components/cardio/types";
 
-export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; count?: number; error?: string }) {
+export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; count?: number; error?: string; liveSearch?: boolean }) {
   const start = initial ?? defaultBrowse;
-  const [ready, setReady] = useState(Boolean(initial?.query || initial?.specialty || initial?.tab === "saved"));
+  const liveSearch = Boolean(initial?.liveSearch);
+  const [ready, setReady] = useState(Boolean(initial?.query || initial?.specialty || initial?.tab === "saved" || liveSearch));
   const [q, setQ] = useState(start.draft || start.query);
   const [query, setQuery] = useState(start.query);
   const [specialty, setSpecialty] = useState(start.specialty);
@@ -25,10 +26,10 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
   const [mobileFilters, setMobileFilters] = useState(false);
   const [articles, setArticles] = useState<Article[]>(initial?.articles || []);
   const [count, setCount] = useState(initial?.count || 0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(liveSearch);
   const [error, setError] = useState(initial?.error || "");
   const [refresh, setRefresh] = useState(0);
-  const [searched, setSearched] = useState(Boolean(initial?.query || initial?.articles?.length));
+  const [searched, setSearched] = useState(liveSearch || Boolean(initial?.query || initial?.articles?.length));
   const skipServerResults = useRef(Boolean(initial?.articles?.length));
   const userEdited = useRef(false);
   const [modal, setModal] = useState<AppModal>(null);

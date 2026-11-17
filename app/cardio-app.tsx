@@ -33,7 +33,7 @@ export default function CardioApp({
   saved,
   plans,
 }: {
-  initial?: BrowseSnapshot & { articles?: Article[]; count?: number; error?: string };
+  initial?: BrowseSnapshot & { articles?: Article[]; count?: number; error?: string; liveSearch?: boolean };
   user?: Profile | null;
   saved?: Article[];
   plans?: ReactNode;
@@ -49,7 +49,7 @@ export default function CardioApp({
     initialUser: user,
     initialSaved: saved,
   });
-  const detail = useArticleDetail(browse.modal, browse.selected?.id);
+  const detail = useArticleDetail(browse.modal === "detail" ? browse.selected : null);
   const model = browseModel({
     specialty: browse.specialty,
     tab: browse.tab,
@@ -67,7 +67,6 @@ export default function CardioApp({
   function openArticle(article: Article) {
     trackClinicalEvent("article_open", article.topic || "all", article.source || "PubMed");
     browse.setSelected(article);
-    detail.prepareDetail();
     browse.setModal("detail");
   }
 

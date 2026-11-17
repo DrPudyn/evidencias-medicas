@@ -1,7 +1,7 @@
 import type { Article } from "@/lib/catalog";
 import { settings } from "@/lib/server";
 import { HIGH_LEVEL_EVIDENCE_FILTER, displayPublicationType, isHighLevelPublication } from "@/lib/evidence-filter";
-import { abstractsByPmid, type StructuredAbstract } from "@/lib/pubmed-xml";
+import { abstractsByPmid, extractLanguage, extractSections, type StructuredAbstract } from "@/lib/pubmed-xml";
 
 export { HIGH_LEVEL_EVIDENCE_FILTER };
 
@@ -95,6 +95,21 @@ async function recordPubmedMetric(ok: boolean, duration: number) {
     ).bind(day, ok ? 1 : 0, ok ? 0 : 1, duration).run();
   } catch {
     // Metrics storage must not turn a successful PubMed response into a failed search.
+  }
+}
+
+export async function fetchPubmedAbstract(id: string) {
+  const started = Date.now();
+  try {
+    const response = await eutils("efetch", { id, retmode: "xml" });
+    const xml = await response.text();
+    const sections = extractSections(xml);
+    const language = extractLanguage(xml);
+    await recordPubmedMetric(true, Date.now() - started);
+    return { sections, language };
+  } catch (error) {
+    await recordPubmedMetric(false, Date.now() - started);
+    throw error;
   }
 }
 
