@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import CardioApp from "../cardio-app";
 import { PlansSection } from "@/components/cardio/plans-section";
+import { searchArticles } from "@/lib/article-search";
 import { BRAND_DESCRIPTION_EN, BRAND_DESCRIPTION_PT, BRAND_NAME, BRAND_TITLE_EN, BRAND_TITLE_PT } from "@/lib/brand";
 import { browseFromLink, defaultBrowse } from "@/lib/browse-state";
 import type { Article } from "@/lib/catalog";
@@ -50,6 +51,15 @@ export default async function LocalizedHome({ params, searchParams }: { params: 
   const headerList = await headers();
   const req = new Request(url, { headers: { cookie: headerList.get("cookie") || "", "cf-connecting-ip": headerList.get("cf-connecting-ip") || "" } });
   const liveSearch = url.searchParams.get("search") === "1" && snapshot.tab === "live";
+  let articles: Article[] = [];
+  let count = 0;
+  let error = "";
+  if (liveSearch) {
+    const found = await searchArticles(url.searchParams, req);
+    articles = found.articles;
+    count = found.count;
+    error = found.error;
+  }
   const user = await currentUser(req);
   let saved: Article[] = [];
   if (user) {
@@ -58,7 +68,7 @@ export default async function LocalizedHome({ params, searchParams }: { params: 
   }
   return (
     <CardioApp
-      initial={{ ...snapshot, liveSearch }}
+      initial={{ ...snapshot, articles, count, error, liveSearch }}
       user={user as Profile | null}
       saved={saved}
       plans={<PlansSection lang={lang === "en" ? "en" : "pt"} />}

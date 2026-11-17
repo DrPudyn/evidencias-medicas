@@ -82,3 +82,8 @@ jobs:
       # Unexpected outbound calls fail even when application code catches errors.
       - name: Smoke test (local preview)
         run: node scripts/smoke-ci.mjs
+
+      # Production bundle, real PubMed. SSR HTML must list articles even with JS off,
+      # and the client API must return the same search.
+      - name: Search results with and without JavaScript
+        run: SMOKE_DB_DIR="$(pwd)/.sites-runtime/ci-d1/v3/d1" node scripts/search-ssr-test.mjs

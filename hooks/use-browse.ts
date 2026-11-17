@@ -26,7 +26,7 @@ export function useBrowse(initial?: BrowseSnapshot & { articles?: Article[]; cou
   const [mobileFilters, setMobileFilters] = useState(false);
   const [articles, setArticles] = useState<Article[]>(initial?.articles || []);
   const [count, setCount] = useState(initial?.count || 0);
-  const [loading, setLoading] = useState(liveSearch);
+  const [loading, setLoading] = useState(liveSearch && !(initial?.articles?.length));
   const [error, setError] = useState(initial?.error || "");
   const [refresh, setRefresh] = useState(0);
   const [searched, setSearched] = useState(liveSearch || Boolean(initial?.query || initial?.articles?.length));
