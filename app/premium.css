@@ -352,7 +352,7 @@ button.article-title, button.article-action-link { font: inherit; text-align: le
   .headline { animation: none; }
 }
 
-.library-page, .guide-page { padding: 28px 0 64px; }
+.library-page, .guide-page { padding: calc(var(--site-header-offset) + 28px) 0 64px; }
 .library-heading, .library-count { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .library-count { color: var(--green); font-weight: 650; }
 .library-lead { max-width: 62ch; color: var(--muted); margin: 8px 0 22px; }
