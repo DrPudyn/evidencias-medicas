@@ -4,6 +4,7 @@ import { EditorialNote, SupersededNotice } from "./editorial";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight } from "lucide-react";
+import { articlePath } from "@/lib/article-path";
 import type { Article } from "@/lib/catalog";
 import { trackClinicalEvent } from "@/lib/analytics-client";
 import { BookmarkButton } from "@/components/cardio/bookmark-button";
@@ -16,6 +17,7 @@ export function ArticleCard({
   pending,
   onOpen,
   onToggle,
+  returnTo = "/pt",
 }: {
   article: Article;
   number: string;
@@ -23,6 +25,7 @@ export function ArticleCard({
   pending: boolean;
   onOpen: (article: Article) => void;
   onToggle: (article: Article) => void;
+  returnTo?: string;
 }) {
   const { t, locale } = useLocale();
   const society = Boolean(article.source && article.source !== "PubMed" && article.source !== "local");
@@ -47,9 +50,9 @@ export function ArticleCard({
             {article.title}
           </a>
         ) : (
-          <button className="article-title" onClick={() => onOpen(article)}>
+          <a className="article-title" href={articlePath(locale, article.id)} onClick={(event) => { event.preventDefault(); onOpen(article); }}>
             {article.title}
-          </button>
+          </a>
         )}
         <SupersededNotice articleId={article.id}/>
         <EditorialNote articleId={article.id}/>
@@ -62,19 +65,31 @@ export function ArticleCard({
             <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">{" " + t("Abrir diretriz") + " "}<ArrowUpRight size={15} />
             </a>
           ) : (
-            <button onClick={() => onOpen(article)}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
-            </button>
+            <a className="article-action-link" href={articlePath(locale, article.id)} onClick={(event) => { event.preventDefault(); onOpen(article); }}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
+            </a>
           )}
         </div>
       </div>
-      <BookmarkButton
-        saved={saved}
-        pending={pending}
-        className={saved ? "bookmark-button selected" : "bookmark-button"}
-        label={saved ? `${t("Remover da biblioteca:")} ${article.title}` : `${t("Salvar artigo:")} ${article.title}`}
-        title={t("Salvar na biblioteca")}
-        onClick={() => onToggle(article)}
-      />
+      <form method="post" action="/api/bookmarks" onSubmit={(event) => { event.preventDefault(); onToggle(article); }}>
+        <input type="hidden" name="action" value={saved ? "remove" : "save"} />
+        <input type="hidden" name="id" value={article.id} />
+        <input type="hidden" name="title" value={article.title} />
+        <input type="hidden" name="journal" value={article.journal} />
+        <input type="hidden" name="authors" value={article.authors} />
+        <input type="hidden" name="date" value={article.date} />
+        <input type="hidden" name="type" value={article.type} />
+        <input type="hidden" name="topic" value={article.topic || "all"} />
+        <input type="hidden" name="source" value={article.source || "PubMed"} />
+        <input type="hidden" name="next" value={returnTo} />
+        <BookmarkButton
+          saved={saved}
+          pending={pending}
+          className={saved ? "bookmark-button selected" : "bookmark-button"}
+          label={saved ? `${t("Remover da biblioteca:")} ${article.title}` : `${t("Salvar artigo:")} ${article.title}`}
+          title={t("Salvar na biblioteca")}
+          onClick={() => undefined}
+        />
+      </form>
     </article>
   );
 }

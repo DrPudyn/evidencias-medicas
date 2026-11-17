@@ -5,23 +5,33 @@ import { useLocale } from "@/components/locale-provider";
 
 import { ArrowRight, BookOpen, SlidersHorizontal } from "lucide-react";
 import { guidelinesForSpecialty } from "@/data/catalogo";
+import { societiesForSpecialty } from "@/data/catalogo/societies";
 import { medicalSpecialties } from "@/lib/catalog";
 import type { BrowseModel } from "@/components/cardio/catalog-query";
 import type { BrowseState } from "@/hooks/use-browse";
 
 export function FilterSidebar({ browse, model }: { browse: BrowseState; model: BrowseModel }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const home = locale === "en" ? "/en" : "/pt";
+  const societies = societiesForSpecialty(browse.specialty);
   return (
     <aside className={browse.mobileFilters ? "filters filters-open" : "filters"}>
+      <form id="browse-form" method="get" action={`${home}#explorar`} onSubmit={(event) => { event.preventDefault(); browse.search(); }}>
+        <input type="hidden" name="search" value="1" />
+        <input type="hidden" name="tab" value={browse.tab === "saved" ? "live" : browse.tab} />
+        <input type="hidden" name="sort" value={browse.sort} />
+        <input type="hidden" name="page" value="1" />
+        <button className="search-submit" type="submit">{t("Buscar")}</button>
       <div className="filter-header">
         <h3>
           <SlidersHorizontal size={17} />{" " + t("Filtrar artigos") + " "}</h3>
-        <button onClick={browse.reset}>{t("Limpar")}</button>
+        <button type="button" onClick={browse.reset}>{t("Limpar")}</button>
       </div>
       <div className="filter-group">
         <label className="filter-label" htmlFor="specialty-select">{t("ESPECIALIDADE")}</label>
         <select
           id="specialty-select"
+          name="specialty"
           value={browse.specialty}
           onChange={(event) => {
             const next = event.target.value;
@@ -47,21 +57,20 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
           ))}
         </select>
       </div>
-      {browse.specialty !== "" && (
-        <fieldset className="filter-group">
-          <legend className="filter-label">{t("TEMA CLÍNICO")}</legend>
-          {model.sbcVisibleTopics.map(([value, label]) => (
-            <label className="radio-label" key={value}>
-              <input type="radio" name="topic" checked={browse.topic === value} onChange={() => browse.chooseTopic(value)} />
-              <span className="topic-label">{label}</span>
-              {browse.tab === "sbc" && <span className="topic-count">{model.sbcTopicCounts[value] || 0}</span>}
-            </label>
-          ))}
-        </fieldset>
+      {societies.length > 0 && (
+        <div className="filter-group">
+          <span className="filter-label">{societies.length > 1 ? (locale === "en" ? "SOCIETIES" : "SOCIEDADES") : (locale === "en" ? "SOCIETY" : "SOCIEDADE")}</span>
+          <ul className="society-list">
+            {societies.map((society) => (
+              <li key={society.id}><strong>{society.abbreviation}</strong> {society.name}</li>
+            ))}
+          </ul>
+        </div>
       )}
       <label className="filter-group">
         <span className="filter-label">{browse.tab === "sbc" ? t("TIPO DE DOCUMENTO") : t("TIPO DE ESTUDO")}</span>
         <select
+          name="type"
           value={browse.type}
           onChange={(event) => {
             browse.trackFilter("filter_type");
@@ -93,6 +102,7 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
         <label className="filter-group">
           <span className="filter-label">{t("ANO DO DOCUMENTO")}</span>
           <select
+            name="year"
             value={browse.guidelineYear}
             onChange={(event) => {
               browse.setGuidelineYear(event.target.value);
@@ -109,6 +119,7 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
         <label className="filter-group">
           <span className="filter-label">{t("PUBLICAÇÃO")}</span>
           <select
+            name="period"
             value={browse.period}
             onChange={(event) => {
               browse.trackFilter("filter_period");
@@ -123,31 +134,14 @@ export function FilterSidebar({ browse, model }: { browse: BrowseState; model: B
           </select>
         </label>
       )}
-      {browse.tab !== "sbc" && (
-        <div className="filter-group">
-          <label className="check-label">
-            <input
-              type="checkbox"
-              checked={browse.free}
-              onChange={(event) => {
-                browse.trackFilter("filter_free");
-                browse.setFree(event.target.checked);
-                browse.setTab("live");
-                browse.setPage(1);
-              }}
-            />
-            <span>{t("Texto completo gratuito")}</span>
-          </label>
-          <small>{t("Disponibilidade informada pelo PubMed.")}</small>
-        </div>
-      )}
+      </form>
       <FilterHelp />
       <div className="sidebar-note">
         <BookOpen size={22} />
         <h4>{t("Leia além do título.")}</h4>
         <p>{t("Confira a população estudada, os resultados e as limitações na fonte original.")}</p>
-        <button onClick={() => browse.setModal("guide")}>{" " + t("Abrir guia") + " "}<ArrowRight size={14} />
-        </button>
+        <a href={locale === "en" ? "/en/guide" : "/pt/guia"}>{" " + t("Abrir guia") + " "}<ArrowRight size={14} />
+        </a>
       </div>
     </aside>
   );

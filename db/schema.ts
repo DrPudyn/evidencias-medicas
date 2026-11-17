@@ -151,3 +151,43 @@ export const editorialVersions = sqliteTable("editorial_versions", {
  id: text("id").primaryKey(), articleId: text("article_id").notNull(), actorUserId: text("actor_user_id").notNull().references(()=>users.id),
  content: text("content").notNull(), status: text("status").notNull(), createdAt: integer("created_at").notNull(),
 }, t => [index("editorial_article").on(t.articleId,t.createdAt)]);
+
+export const subscriptions = sqliteTable("subscriptions", {
+  userId: text("user_id").primaryKey().references(() => users.id),
+  plan: text("plan").notNull().default("free"),
+  status: text("status").notNull().default("inactive"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  currentPeriodEnd: integer("current_period_end"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const clinicalQuota = sqliteTable("clinical_quota", {
+  subjectKey: text("subject_key").notNull(),
+  day: text("day").notNull(),
+  count: integer("count").notNull(),
+}, (t) => [primaryKey({ columns: [t.subjectKey, t.day] })]);
+
+export const clinicalTermCache = sqliteTable("clinical_term_cache", {
+  questionKey: text("question_key").primaryKey(),
+  concepts: text("concepts").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const weeklyArticle = sqliteTable("weekly_article", {
+  cacheKey: text("cache_key").primaryKey(),
+  payload: text("payload").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const clinicalResultCache = sqliteTable("clinical_result_cache", {
+  queryKey: text("query_key").primaryKey(),
+  pmids: text("pmids").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const stripeEvents = sqliteTable("stripe_events", {
+  id: text("id").primaryKey(),
+  type: text("type").notNull(),
+  receivedAt: integer("received_at").notNull(),
+});

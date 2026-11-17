@@ -69,7 +69,7 @@ export function ArticleDetail({
         {abstractLoading ? (
           <p className="muted">{t("Carregando resumo…")}</p>
         ) : abstractError ? (
-          <p className="muted">{t(abstractError)}</p>
+          <p className="muted">{t(abstractError)}{" "}<a href={article.url} target="_blank" rel="noreferrer">{t("Ler no PubMed")}</a></p>
         ) : abstract.length ? (
           abstract.map((section, index) => (
             <p className="abstract-paragraph" key={`${section.label}-${index}`}>

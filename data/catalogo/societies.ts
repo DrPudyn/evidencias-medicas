@@ -8,3 +8,6 @@ export function societyById(id: string) {
 export function societyForSpecialty(specialty: string) {
   return societies.find(society => society.specialties.includes(specialty));
 }
+export function societiesForSpecialty(specialty: string) {
+  return societies.filter(society => society.specialties.includes(specialty));
+}

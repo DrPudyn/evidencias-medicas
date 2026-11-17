@@ -11,6 +11,7 @@ import { ShareSearch } from "./share-search";
 import { ArticleCard } from "@/components/cardio/article-card";
 import { GuidelineEmpty, GuidelineList, GuidelineNotice } from "@/components/cardio/catalog-view";
 import type { BrowseState } from "@/hooks/use-browse";
+import { browsePath } from "@/lib/browse-state";
 
 const ENDOCRINOLOGY_CLASSICS =
   "Ensaios que marcaram a pesquisa em diabetes tipo 1, diabetes tipo 2 e prevenção. Leia métodos, resultados e limitações nos registros originais; estes estudos históricos não substituem recomendações atuais. Para publicações recentes, consulte o ";
@@ -35,6 +36,7 @@ export function ResultsPanel({
   onToggleSaved,
   onShowInitialCollection,
   onClearResults,
+  signedIn,
 }: {
   workspace?: ReactNode;
   browse: BrowseState;
@@ -46,6 +48,7 @@ export function ResultsPanel({
   onToggleSaved: (article: Article) => void;
   onShowInitialCollection: () => void;
   onClearResults: () => void;
+  signedIn: boolean;
 }) {
   const { t, locale } = useLocale();
   const tabs: [string, string][] = [
@@ -64,27 +67,28 @@ export function ResultsPanel({
     <div className="results">
       <div className="tabs" role="tablist" aria-label={t("Origem dos artigos")}>
         {tabs.map(([value, label]) => (
-          <button role="tab" aria-selected={browse.tab === value} className={browse.tab === value ? "active" : ""} key={value} onClick={() => onChooseTab(value)}>
+          <a role="tab" aria-selected={browse.tab === value} className={browse.tab === value ? "active" : ""} key={value} href={value === "saved" ? (signedIn ? (locale === "en" ? "/en/library" : "/pt/biblioteca") : (locale === "en" ? "/en/entrar?next=%2Fen%2Flibrary" : "/pt/entrar?next=%2Fpt%2Fbiblioteca")) : browsePath(locale, { ...browse.snapshot, tab: value })} onClick={(event) => { event.preventDefault(); onChooseTab(value); }}>
             {tabIcon(value)} {label}
             {value === "sbc" && <span className="count-badge">{model.activeGuidelines.length}</span>}
             {value === "saved" && saved.length > 0 && <span className="count-badge">{saved.length}</span>}
-          </button>
+          </a>
         ))}
       </div>
       {browse.tab === "saved" && workspace ? workspace : <>
-      <form className="results-search" onSubmit={browse.search}>
-        <Search size={18} />
+      <div className="results-search">
+        <button className="search-icon-button" form="browse-form" type="submit" aria-label={locale === "en" ? "Search" : "Pesquisar"}>
+          <Search size={18} />
+        </button>
         <input
+          form="browse-form"
+          name="q"
           aria-label={browse.tab === "sbc" ? `${locale === "en" ? "Search guidelines from" : "Buscar nas diretrizes da"} ${model.societyLabel}` : t("Refinar busca de artigos")}
           placeholder={browse.tab === "sbc" ? t("Buscar diretriz, tema ou especialidade...") : t("Doença, medicamento, autor ou PMID...")}
           value={browse.q}
           onChange={(event) => browse.setQ(event.target.value)}
           maxLength={200}
         />
-        <button aria-label={browse.tab === "sbc" ? `${locale === "en" ? "Search guidelines" : "Buscar nas diretrizes"} ${model.societyLabel}` : t("Pesquisar no PubMed")}>
-          <ArrowRight size={19} />
-        </button>
-      </form>
+      </div>
       <SearchContext browse={browse} model={model} />
       {browse.tab === "live" && workspace}
       <div className="results-toolbar">
@@ -196,6 +200,7 @@ export function ResultsPanel({
               pending={saving === article.id}
               onOpen={onOpenArticle}
               onToggle={onToggleSaved}
+              returnTo={browsePath(locale, browse.snapshot)}
             />
           ))}
         </div>

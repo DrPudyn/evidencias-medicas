@@ -1,5 +1,6 @@
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from "@simplewebauthn/server";
+import { BRAND_NAME } from "@/lib/brand";
 import { currentSession, digest, localPreview, randomToken, settings } from "@/lib/server";
 
 const ADMIN_EMAIL = "evidenciasmedicas@outlook.com";
@@ -51,7 +52,7 @@ export async function consumeChallenge(id: string, userId: string, sessionDigest
 export async function registrationOptions(req: Request, user: {id:string;email:string;session:{digest:string}}, bootstrap: boolean) {
   const {rpID}=webauthnContext(req),db=settings().DB;
   const existing=await db.prepare("SELECT credential_id,transports FROM admin_credentials WHERE user_id=?").bind(user.id).all<{credential_id:string;transports:string}>();
-  const options=await generateRegistrationOptions({rpName:"Evidências Médicas · Administração",rpID,userName:user.email,userDisplayName:"Administrador Evidências Médicas",userID:new TextEncoder().encode(user.id),attestationType:"none",authenticatorSelection:{authenticatorAttachment:"cross-platform",residentKey:"discouraged",userVerification:"discouraged"},excludeCredentials:existing.results.map(c=>({id:c.credential_id,transports:JSON.parse(c.transports)})),preferredAuthenticatorType:"securityKey"});
+  const options=await generateRegistrationOptions({rpName:`${BRAND_NAME} · Administração`,rpID,userName:user.email,userDisplayName:`Administrador ${BRAND_NAME}`,userID:new TextEncoder().encode(user.id),attestationType:"none",authenticatorSelection:{authenticatorAttachment:"cross-platform",residentKey:"discouraged",userVerification:"discouraged"},excludeCredentials:existing.results.map(c=>({id:c.credential_id,transports:JSON.parse(c.transports)})),preferredAuthenticatorType:"securityKey"});
   const id=await saveChallenge(user.id,user.session.digest,bootstrap?"bootstrap-register":"register",options.challenge);return {options,challengeId:id};
 }
 export async function finishRegistration(req: Request, user: {id:string;email:string;session:{digest:string}}, challengeId: string, response: RegistrationResponseJSON, bootstrap: boolean) {

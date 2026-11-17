@@ -14,7 +14,10 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "verify:local": "node scripts/verify-local.mjs",
-    "backup:local": "node scripts/backup-local.mjs"
+    "backup:local": "node scripts/backup-local.mjs",
+    "test:clinical": "node --import ./scripts/register-ts-test.mjs --test lib/clinical/clinical.test.ts lib/clinical/fixtures.test.ts lib/billing/stripe.test.ts lib/weekly-article.test.ts",
+    "cf:config": "node scripts/prepare-cloudflare-config.mjs",
+    "deploy:cf": "node scripts/deploy-cloudflare.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

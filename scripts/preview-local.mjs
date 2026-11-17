@@ -27,8 +27,9 @@ const args = [
   '--var', 'ADMIN_RP_ID:localhost', '--var', `ADMIN_ORIGIN:http://localhost:${publicPort}`,
 ];
 // Only these non-secret local settings enter command arguments. No external mail service is enabled.
-for (const key of ['ADMIN_EMAILS', 'ADMIN_BOOTSTRAP_ENABLED', 'NCBI_CONTACT_EMAIL']) {
-  if (local[key]) args.push('--var', `${key}:${local[key]}`);
+for (const key of ['ADMIN_EMAILS', 'ADMIN_BOOTSTRAP_ENABLED', 'NCBI_CONTACT_EMAIL', 'CLINICAL_AI_PROVIDER', 'PLAN_PRICE_LABEL', 'SITE_ORIGIN', 'WORKERS_AI_MODEL']) {
+  const value = process.env[key] || local[key];
+  if (value) args.push('--var', `${key}:${value}`);
 }
 const worker = spawn(process.execPath, args, { cwd: projectRoot, windowsHide: true, stdio: ['ignore', logFile, logFile] });
 closeSync(logFile);
@@ -50,7 +51,7 @@ const server = createServer((req, res) => {
     res.writeHead(reply.statusCode || 502, reply.headers);
     reply.pipe(res);
   });
-  upstream.setTimeout(30000, () => upstream.destroy());
+  upstream.setTimeout(70000, () => upstream.destroy());
   upstream.on('error', () => {
     if (res.headersSent) { res.destroy(); return; }
     res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -59,7 +60,7 @@ const server = createServer((req, res) => {
   req.on('aborted', () => upstream.destroy());
   req.pipe(upstream);
 });
-server.requestTimeout = 35000;
+server.requestTimeout = 75000;
 function stop() {
   if (stopping) return;
   stopping = true;

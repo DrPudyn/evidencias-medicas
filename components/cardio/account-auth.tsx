@@ -2,10 +2,13 @@
 import { LoaderCircle, LockKeyhole } from "lucide-react";
 import { Modal } from "@/components/cardio/modal";
 import { useLocale } from "@/components/locale-provider";
+import { signInLink } from "@/lib/account-access";
 import type { AccountController } from "@/hooks/use-account";
 
 export function AuthModal({account,onClose}:{account:AccountController;onClose:()=>void}){
-  const {t}=useLocale();
+  const {t, locale}=useLocale();
+  const taken = account.formError.startsWith("Esse e-mail já tem conta.");
+  const offerRecovery = account.formError.includes("recuperação");
   const recovering=account.mode==="forgot", resetting=account.mode==="reset", registering=account.mode==="register";
   const verifying=account.mode==="verify",pending=account.mode==="pending";
   const title=verifying||pending?"Confirme seu e-mail":resetting?"Defina sua senha":recovering?"Recuperar acesso":registering?"Crie sua conta":"Entre na sua conta";
@@ -17,7 +20,7 @@ export function AuthModal({account,onClose}:{account:AccountController;onClose:(
       {!recovering&&!verifying&&!pending&&<label>{t("Senha")}<input type="password" autoComplete={registering||resetting?"new-password":"current-password"} value={account.password} onChange={e=>account.setPassword(e.target.value)} required minLength={registering||resetting?12:1} maxLength={128}/></label>}
       {registering&&<p className="muted small-text">{t("Sua conta fica pronta na hora. Não enviamos código de confirmação.")}</p>}
       {(registering||resetting)&&<p className="muted small-text">{t("Use de 12 a 128 caracteres. Espaços são permitidos.")}</p>}
-      {account.formError&&<p className="form-error" role="alert">{t(account.formError)}</p>}
+      {taken ? <p className="form-error" role="alert">{locale === "en" ? "This email already has an account. Click " : "Esse e-mail já tem conta. Clique em "}<a href={signInLink(locale === "en" ? "en" : "pt", account.email)}>{locale === "en" ? "Sign in" : "Entrar"}</a>{offerRecovery ? (locale === "en" ? " or use password recovery" : " ou use a recuperação de senha") : ""}.</p> : account.formError ? <p className="form-error" role="alert">{t(account.formError)}</p> : null}
       {account.notice&&<p role="status">{t(account.notice)}</p>}
       {account.previewResetUrl&&<p className="preview-code"><a href={account.previewResetUrl}>{t("Prévia local: abrir link de acesso")}</a></p>}
       {!pending&&<button className="button full" disabled={account.busy}>{account.busy?<LoaderCircle className="spin" size={18}/>:<LockKeyhole size={18}/>} {t(account.busy?"Aguarde…":verifying?"Confirmar e-mail":resetting?"Salvar senha":recovering?"Enviar link":registering?"Criar conta":"Entrar")}</button>}

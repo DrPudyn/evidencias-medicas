@@ -10,6 +10,7 @@ test("salted hashes verify, reject incorrect passwords and malformed records",as
  const password="A long test pass phrase";
  const first=await hashPassword(password),second=await hashPassword(password);
  assert.notEqual(first,second);assert.ok(!first.includes(password));
+ assert.match(first,/^pbkdf2-sha256\$100000\$/);
  assert.equal(await verifyPassword(password,first),true);
  assert.equal(await verifyPassword(password+"!",first),false);
  assert.equal(await verifyPassword(password,null),false);

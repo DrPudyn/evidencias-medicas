@@ -1,5 +1,7 @@
+import { existingAccountMessage } from "@/lib/account-access";
 import { body, digest, json, randomToken, rateLimit, sameOrigin, sessionCookie, settings } from "@/lib/server";
 import { accountIdentity, ADMIN_EMAIL, normalizeEmail, validEmail } from "@/lib/auth-identity";
+import { mailReady } from "@/lib/mail";
 import { hashPassword, validPassword, verifyPassword } from "@/lib/password";
 import { createAdminSession } from "@/lib/admin";
 
@@ -15,11 +17,11 @@ export async function POST(req: Request) {
     let user = await db.prepare("SELECT id,email,password_hash,email_verified_at FROM users WHERE email=?").bind(email).first<{id:string;email:string;password_hash:string|null;email_verified_at:number|null}>();
     if (input.mode === "register") {
       if (!validPassword(input.password)) return json({ error: "Use uma senha de 12 a 128 caracteres." }, 400);
-      if (email === ADMIN_EMAIL || user) return json({ error: "Não foi possível criar a conta. Entre ou use a recuperação de senha." }, 409);
+      if (email === ADMIN_EMAIL || user) return json({ error: existingAccountMessage(mailReady(req)) }, 409);
       const encoded = await hashPassword(input.password), id = crypto.randomUUID(), now = Date.now();
       const created = await db.prepare("INSERT OR IGNORE INTO users(id,email,profile,created_at,password_hash,email_verified_at) VALUES(?,?,?,?,?,NULL)")
         .bind(id,email,JSON.stringify({role:"member"}),now,encoded).run();
-      if (!created.meta.changes) return json({ error: "Não foi possível criar a conta. Entre ou use a recuperação de senha." },409);
+      if (!created.meta.changes) return json({ error: existingAccountMessage(mailReady(req)) }, 409);
       // Invalidate old confirmation links so they cannot replace this account.
       await db.prepare("DELETE FROM email_verifications WHERE email=?").bind(email).run();
       user = {id,email,password_hash:encoded,email_verified_at:null};
@@ -33,7 +35,10 @@ export async function POST(req: Request) {
     headers.append("Set-Cookie", sessionCookie(token, req));
     if (email === ADMIN_EMAIL) headers.append("Set-Cookie", await createAdminSession(user!.id, tokenDigest, req));
     return json({ user: accountIdentity(user!.id,email) }, 200, headers);
-  } catch {
-    return json({ error: "Não foi possível concluir o acesso. Tente novamente." }, 500);
+  } catch (error) {
+    const message = error instanceof Error && (error.message.startsWith("Não foi possível") || error.message.startsWith("Use uma senha"))
+      ? error.message.slice(0, 240)
+      : "Não foi possível concluir o acesso. Tente novamente.";
+    return json({ error: message }, 500);
   }
 }

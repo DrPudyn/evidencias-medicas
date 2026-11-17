@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, LoaderCircle } from "lucide-react";
+import { Bookmark } from "lucide-react";
 
 export function BookmarkButton({
   saved,
@@ -18,8 +18,8 @@ export function BookmarkButton({
   onClick: () => void;
 }) {
   return (
-    <button className={className} disabled={pending} onClick={onClick} aria-label={label} title={title}>
-      {pending ? <LoaderCircle size={18} className="spin" /> : <Bookmark size={18} fill={saved ? "currentColor" : "none"} />}
+    <button className={className} type="submit" disabled={pending} onClick={onClick} aria-busy={pending} aria-label={label} title={title}>
+      <Bookmark size={18} fill={saved ? "currentColor" : "none"} stroke="currentColor" />
     </button>
   );
 }

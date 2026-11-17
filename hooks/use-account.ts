@@ -7,13 +7,13 @@ import { trackClinicalEvent } from "@/lib/analytics-client";
 import type { AppModal, Profile } from "@/components/cardio/types";
 import type { Reading } from "@/lib/reading";
 
-type AccountEnv = { tab:string; specialty:string; setTab:(tab:string)=>void; setModal:(modal:AppModal)=>void; setToast:(message:string)=>void };
-export function useAccount({ tab, specialty, setTab, setModal, setToast }: AccountEnv) {
+type AccountEnv = { tab:string; specialty:string; setTab:(tab:string)=>void; setModal:(modal:AppModal)=>void; setToast:(message:string)=>void; initialUser?: Profile | null; initialSaved?: Article[] };
+export function useAccount({ tab, specialty, setTab, setModal, setToast, initialUser = null, initialSaved = [] }: AccountEnv) {
   const { t, locale } = useLocale();
   const activeUser = useRef<string | null>(null), restoring = useRef(false);
   const [undoRemoval,setUndoRemoval] = useState<{article:Article;index:number;ownerId:string}|null>(null);
   const [undoBusy,setUndoBusy] = useState(false), [undoError,setUndoError] = useState("");
-  const [user,setUser]=useState<Profile|null>(null), [saved,setSaved]=useState<Article[]>([]), [saving,setSaving]=useState("");
+  const [user,setUser]=useState<Profile|null>(initialUser), [saved,setSaved]=useState<Article[]>(initialSaved), [saving,setSaving]=useState("");
   const [mode,setMode]=useState("login"), [email,setEmail]=useState(""), [password,setPassword]=useState(""), [resetToken,setResetToken]=useState("");
   const [verifyToken,setVerifyToken]=useState(""),[adminReturn,setAdminReturn]=useState(false);
   const [busy,setBusy]=useState(false), [formError,setFormError]=useState(""), [notice,setNotice]=useState(""), [previewResetUrl,setPreviewResetUrl]=useState("");
@@ -61,22 +61,28 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast }: Accou
     }catch(error){setFormError((error as Error).message);}finally{setBusy(false);}
   }
   async function toggleSaved(article:Article){
-    if(!user){openAuth("login");return;}const ownerId=user.id||user.email;setSaving(article.id);
+    if(!user){openAuth("login");return;}
+    const ownerId=user.id||user.email;
+    const already=saved.some(item=>item.id===article.id);
+    const previous=saved;
+    setSaving(article.id);
+    setSaved(already?items=>items.filter(item=>item.id!==article.id):items=>[{...article},...items.filter(item=>item.id!==article.id)]);
     try{
-      if(saved.some(item=>item.id===article.id)){
+      if(already){
         const removed=await api<{article:Article|null}>(`/api/bookmarks?id=${encodeURIComponent(article.id)}`,{method:"DELETE"});
         if(activeUser.current!==ownerId)return;
-        const index=saved.findIndex(item=>item.id===article.id);
-        setSaved(items=>items.filter(item=>item.id!==article.id));
+        const index=previous.findIndex(item=>item.id===article.id);
         if(removed.article){setUndoError("");setUndoRemoval({article:removed.article,index,ownerId});}
         setToast("Artigo removido da biblioteca.");
       }else{
         const result=await api<{article:Article}>("/api/bookmarks",{method:"POST",body:JSON.stringify(article)});
         if(activeUser.current!==ownerId)return;
         setUndoRemoval(current=>current?.article.id===article.id?null:current);
-        trackClinicalEvent("bookmark",article.topic,article.source||"PubMed");setSaved(items=>[result.article,...items.filter(item=>item.id!==article.id)]);setToast("Artigo salvo na sua biblioteca.");
+        trackClinicalEvent("bookmark",article.topic,article.source||"PubMed");
+        if(result.article)setSaved(items=>[result.article,...items.filter(item=>item.id!==article.id)]);
+        setToast("Artigo salvo na sua biblioteca.");
       }
-    }catch(error){setToast((error as Error).message);}finally{setSaving("");}
+    }catch(error){setSaved(previous);setToast((error as Error).message);}finally{setSaving("");}
   }
   async function restoreRemoved(){
     const pending=undoRemoval;
@@ -106,6 +112,6 @@ export function useAccount({ tab, specialty, setTab, setModal, setToast }: Accou
     try{await api("/api/account/delete",{method:"DELETE",body:JSON.stringify({confirmation:"EXCLUIR MINHA CONTA"})});activeUser.current=null;setUndoRemoval(null);setUser(null);setSaved([]);setModal(null);setToast("Sua conta e seus favoritos foram excluídos.");}
     catch(error){setFormError((error as Error).message);}finally{setBusy(false);}
   }
-  return {undoRemoval,undoBusy,undoError,restoreRemoved,dismissUndo,user,saved,saving,mode,setMode,email,setEmail,password,setPassword,busy,formError,setFormError,notice,setNotice,previewResetUrl,openAuth,openProfile,submit,toggleSaved,updateReading,logout,deleteAccount};
+  return {undoRemoval,undoBusy,undoError,restoreRemoved,dismissUndo,user,setUser,saved,saving,mode,setMode,email,setEmail,password,setPassword,busy,formError,setFormError,notice,setNotice,previewResetUrl,openAuth,openProfile,submit,toggleSaved,updateReading,logout,deleteAccount};
 }
 export type AccountController=ReturnType<typeof useAccount>;

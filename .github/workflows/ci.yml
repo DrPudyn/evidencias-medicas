@@ -47,7 +47,10 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Bilingual interface tests
-        run: node --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/reading-journey-test.mjs
+        run: node --import ./scripts/register-ts-test.mjs --test scripts/i18n-test.mjs scripts/password-test.mjs scripts/reading-journey-test.mjs scripts/account-access-test.mjs
+
+      - name: Clinical question, quota and billing tests
+        run: npm run test:clinical
 
       - name: Build
         run: npm run build
@@ -60,7 +63,12 @@ jobs:
             drizzle/0001_fearless_reaper.sql \
             drizzle/0002_global_integration_limits.sql \
             drizzle/0003_password_auth.sql \
-            drizzle/0004_reading_workspace.sql
+            drizzle/0004_reading_workspace.sql \
+            drizzle/0005_plans_and_quota.sql \
+            drizzle/0006_term_cache.sql \
+            drizzle/0007_result_cache.sql \
+            drizzle/0008_weekly_article.sql \
+            drizzle/0009_account_access.sql
           do
             node --import ./scripts/sites-env.mjs \
               ./node_modules/wrangler/bin/wrangler.js d1 execute DB \
@@ -74,3 +82,8 @@ jobs:
       # Unexpected outbound calls fail even when application code catches errors.
       - name: Smoke test (local preview)
         run: node scripts/smoke-ci.mjs
+
+      # Production bundle, real PubMed. SSR HTML must list articles even with JS off,
+      # and the client API must return the same search.
+      - name: Search results with and without JavaScript
+        run: SMOKE_DB_DIR="$(pwd)/.sites-runtime/ci-d1/v3/d1" node scripts/search-ssr-test.mjs

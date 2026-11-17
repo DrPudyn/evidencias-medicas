@@ -1,38 +1,61 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { AbstractSection } from "@/lib/catalog";
+import type { AbstractSection, Article } from "@/lib/catalog";
 import { api } from "@/components/cardio/api";
 
-export function useArticleDetail(modal: string | null, selectedId: string | undefined) {
-  const [abstract, setAbstract] = useState<AbstractSection[]>([]);
-  const [abstractLanguage, setAbstractLanguage] = useState<string | undefined>();
+const DETAIL_TIMEOUT_MS = 10_000;
+
+function seeded(article: Article): AbstractSection[] {
+  if (article.sections?.length) return article.sections;
+  if (article.abstract?.trim()) return [{ label: "Resumo", text: article.abstract.trim() }];
+  return [];
+}
+
+export function useArticleDetail(article: Article | null) {
+  const ready = article ? seeded(article) : [];
+  const [fetched, setFetched] = useState<{ id: string; sections: AbstractSection[]; language?: string } | null>(null);
   const [abstractLoading, setAbstractLoading] = useState(false);
   const [abstractError, setAbstractError] = useState("");
 
   useEffect(() => {
-    if (modal !== "detail" || selectedId === undefined) return;
+    if (!article || ready.length) return;
     const controller = new AbortController();
-    api<{ sections?: AbstractSection[]; language?: string }>(`/api/articles/${selectedId}`, { signal: controller.signal })
+    const timer = setTimeout(() => controller.abort(), DETAIL_TIMEOUT_MS);
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setAbstractError("");
+      setAbstractLoading(true);
+    });
+    api<{ sections?: AbstractSection[]; language?: string }>(`/api/articles/${article.id}`, { signal: controller.signal })
       .then((data) => {
-        setAbstract(data.sections || []);
-        setAbstractLanguage(data.language);
+        if (!active) return;
+        setFetched({ id: article.id, sections: data.sections || [], language: data.language });
       })
       .catch((failure: { name?: string; message?: string }) => {
-        if (failure.name !== "AbortError") setAbstractError(failure.message || "");
+        if (!active) return;
+        setAbstractError(failure.name === "AbortError"
+          ? "O resumo demorou demais. Abra o registro no PubMed."
+          : (failure.message || "Não foi possível carregar o resumo do PubMed agora."));
       })
       .finally(() => {
-        if (!controller.signal.aborted) setAbstractLoading(false);
+        clearTimeout(timer);
+        if (active) setAbstractLoading(false);
       });
-    return () => controller.abort();
-  }, [modal, selectedId]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [article, ready.length]);
 
-  function prepareDetail() {
-    setAbstract([]);
-    setAbstractLanguage(undefined);
-    setAbstractError("");
-    setAbstractLoading(true);
-  }
-
-  return { abstract, abstractLanguage, abstractLoading, abstractError, prepareDetail };
+  const fromSearch = ready.length > 0;
+  const fetchedForArticle = fetched && article && fetched.id === article.id ? fetched : null;
+  return {
+    abstract: fromSearch ? ready : (fetchedForArticle?.sections || []),
+    abstractLanguage: fromSearch ? article?.language : fetchedForArticle?.language || article?.language,
+    abstractLoading: fromSearch ? false : abstractLoading,
+    abstractError: fromSearch ? "" : abstractError,
+  };
 }

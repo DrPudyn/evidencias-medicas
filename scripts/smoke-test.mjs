@@ -33,6 +33,20 @@ const article={id:'37952131',title:'Semaglutide and Cardiovascular Outcomes in O
 assert.equal((await call('/api/bookmarks','POST',article,login.cookie)).status,200);
 assert.equal((await call('/api/bookmarks','POST',article,login.cookie)).status,200);
 assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).data.articles.length,1);
+const withAbstract={...article,id:'37952132',title:'Artigo com resumo salvo',abstract:'Resumo gravado no favorito.',sections:[{label:'Resumo',text:'Resumo gravado no favorito.'}]};
+assert.equal((await call('/api/bookmarks','POST',withAbstract,login.cookie)).status,200);
+assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).data.articles.find(item=>item.id==='37952132').abstract,'Resumo gravado no favorito.');
+const libraryPage=await fetch(origin+'/pt/biblioteca',{headers:{Cookie:login.cookie}});
+assert.equal(libraryPage.status,200);
+const libraryHtml=await libraryPage.text();
+assert.match(libraryHtml,/href="\/pt\/artigo\/37952131"/);
+assert.match(libraryHtml,/Ver detalhes/);
+const detailPage=await fetch(origin+'/pt/artigo/37952132',{headers:{Cookie:login.cookie}});
+assert.equal(detailPage.status,200);
+const detailHtml=await detailPage.text();
+assert.match(detailHtml,/Artigo com resumo salvo/);
+assert.match(detailHtml,/Resumo gravado no favorito/);
+assert.equal((await call('/api/bookmarks?id=37952132','DELETE',undefined,login.cookie)).status,200);
 const secondProfile={...p,email:`reader-isolation-${Date.now()}@example.test`};
 const secondLogin=await registerAndConfirm(secondProfile);assert.equal(secondLogin.status,200);
 assert.equal((await call('/api/bookmarks','GET',undefined,secondLogin.cookie)).data.articles.length,0);
@@ -89,7 +103,7 @@ for (const society of ['SBA', 'SBP-pediatrics', 'SBGM', 'FEBRASGO']) {
 assert.equal((await call('/api/bookmarks', 'POST', { id: 'soc-inventado', source: 'SBA', title: 'Inválido' }, login.cookie)).status, 400);
 // Reset links are single-use and invalidate existing sessions.
 const reset=await call('/api/auth/reset','POST',{email:p.email});assert.equal(reset.status,200);
-const token=new URL(reset.data.previewResetUrl).searchParams.get('reset');
+const token=new URL(reset.data.previewResetUrl).searchParams.get('token');
 assert.equal((await call('/api/auth/reset','POST',{token,password:'A new strong password 2026'})).status,200);
 assert.equal((await call('/api/auth/reset','POST',{token,password:'A new strong password 2026'})).status,400);
 assert.equal((await call('/api/account','GET',undefined,login.cookie)).data.user,null);
@@ -99,7 +113,7 @@ login.cookie=afterReset.cookie;
 const adminEmail='evidenciasmedicas@outlook.com';
 assert.equal((await call('/api/auth/password','POST',{...p,email:adminEmail})).status,409);
 const adminReset=await call('/api/auth/reset','POST',{email:adminEmail});
-const adminToken=new URL(adminReset.data.previewResetUrl).searchParams.get('reset');
+const adminToken=new URL(adminReset.data.previewResetUrl).searchParams.get('token');
 assert.equal((await call('/api/auth/reset','POST',{token:adminToken,password:'Admin test password 2026 only'})).status,200);
 const adminLogin=await call('/api/auth/password','POST',{email:adminEmail,password:'Admin test password 2026 only',mode:'login'});
 assert.equal(adminLogin.status,200);assert.equal(adminLogin.data.user.role,'admin');assert.match(adminLogin.cookie,/admin_session=/);
@@ -130,7 +144,7 @@ assert.equal((await call('/api/bookmarks','GET',undefined,login.cookie)).status,
 console.log('PASS: email/password signup, login, account isolation, origin, password reset/replay, session revocation, reserved administrator, panel access and canonical bookmarks.');
 
 
-for(const [lang,title,heading] of [["en","Medical Evidence","Science moves forward."],["pt","Evidências Médicas","A ciência avança."]]){
+for(const [lang,title,heading] of [["en","Busca Evidência","The clinical question"],["pt","Busca Evidência","A pergunta clínica"]]){
  const response=await fetch(origin+"/"+lang);assert.equal(response.status,200);
  const html=await response.text();assert.ok(html.includes(title));assert.ok(html.includes(heading),"localized SSR content");
  assert.ok(html.includes('rel="canonical"'));assert.ok(html.includes("/"+lang));
