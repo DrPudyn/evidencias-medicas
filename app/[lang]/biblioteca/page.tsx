@@ -23,6 +23,7 @@ export async function LibraryList({ lang }: { lang: "pt" | "en" }) {
     redirect(`${en ? "/en/entrar" : "/pt/entrar"}?next=${encodeURIComponent(next)}`);
   }
   const rows = await settings().DB.prepare("SELECT article, created_at FROM bookmarks WHERE user_id=? ORDER BY created_at DESC").bind(user.id).all<{ article: string; created_at: number }>();
-  const articles = rows.results.map((row) => ({ ...JSON.parse(row.article) as Article, savedAt: row.created_at }));
+  const savedOn = new Intl.DateTimeFormat(en ? "en-GB" : "pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
+  const articles = rows.results.map((row) => ({ ...JSON.parse(row.article) as Article, savedOn: savedOn.format(new Date(row.created_at)) }));
   return <PageShell><LibraryView lang={en ? "en" : "pt"} items={articles} /></PageShell>;
 }

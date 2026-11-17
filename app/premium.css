@@ -356,11 +356,26 @@ button.article-title, button.article-action-link { font: inherit; text-align: le
 .library-heading, .library-count { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .library-count { color: var(--green); font-weight: 650; }
 .library-lead { max-width: 62ch; color: var(--muted); margin: 8px 0 22px; }
+.article-card, .glass-card, .library-empty, .library-row, .guide-callout, .guide-filters, .pico-card, .guide-chips a {
+  border: 1px solid #c5d3ca;
+  box-shadow: 0 1px 2px rgba(22, 52, 47, 0.06);
+}
 .library-empty, .library-row, .guide-callout, .guide-filters, .pico-card, .guide-chips a {
   background: var(--paper);
-  border: 1px solid var(--line);
   border-radius: 16px;
 }
+.guide-callout { border-left: 4px solid #226d5d; background: #f7faf8; }
+.guide-callout.warn { border-left-color: #185345; background: #f5f7f0; }
+.guide-chips a:hover, .guide-chips a:focus-visible { border-color: #226d5d; background: #f5f7f0; box-shadow: 0 0 0 1px #226d5d; }
+html.theme-dark .article-card, html.theme-dark .glass-card, html.theme-dark .library-empty, html.theme-dark .library-row,
+html.theme-dark .guide-callout, html.theme-dark .guide-filters, html.theme-dark .pico-card, html.theme-dark .guide-chips a {
+  border-color: #4d6b62;
+  box-shadow: none;
+  background: var(--paper);
+}
+html.theme-dark .guide-callout { border-left-color: #8fcebb; background: #1a2e28; }
+html.theme-dark .guide-callout.warn { background: #16342f; }
+html.theme-dark .guide-chips a:hover, html.theme-dark .guide-chips a:focus-visible { border-color: #8fcebb; background: #1a2e28; box-shadow: 0 0 0 1px #8fcebb; }
 .library-empty { padding: 28px; display: grid; gap: 10px; max-width: 520px; }
 .library-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 .library-row { display: flex; justify-content: space-between; gap: 18px; padding: 18px 20px; align-items: center; }
@@ -393,7 +408,7 @@ button.article-title, button.article-action-link { font: inherit; text-align: le
 .guide-flow li + li::before { content: "→"; position: absolute; left: -18px; color: var(--green); }
 .guide-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .guide-chips a { display: grid; gap: 6px; padding: 16px; color: var(--ink); }
-.guide-chips a:hover { border-color: var(--green); background: #f5f7f0; }
+.guide-chips a:hover, .guide-chips a:focus-visible { border-color: #226d5d; background: #f5f7f0; }
 .guide-chips span { color: var(--muted); font-size: 13px; }
 .guide-callout, .guide-filters { padding: 18px 20px; margin-top: 16px; }
 .guide-callout.warn { background: #f5f7f0; }

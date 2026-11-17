@@ -4,6 +4,7 @@ import { EditorialNote, SupersededNotice } from "./editorial";
 import { useLocale } from "@/components/locale-provider";
 
 import { ArrowUpRight } from "lucide-react";
+import { articlePath } from "@/lib/article-path";
 import type { Article } from "@/lib/catalog";
 import { trackClinicalEvent } from "@/lib/analytics-client";
 import { BookmarkButton } from "@/components/cardio/bookmark-button";
@@ -49,9 +50,9 @@ export function ArticleCard({
             {article.title}
           </a>
         ) : (
-          <button className="article-title" type="button" onClick={() => onOpen(article)}>
+          <a className="article-title" href={articlePath(locale, article.id)} onClick={(event) => { event.preventDefault(); onOpen(article); }}>
             {article.title}
-          </button>
+          </a>
         )}
         <SupersededNotice articleId={article.id}/>
         <EditorialNote articleId={article.id}/>
@@ -64,8 +65,8 @@ export function ArticleCard({
             <a className="article-action-link" href={article.url} target="_blank" rel="noreferrer">{" " + t("Abrir diretriz") + " "}<ArrowUpRight size={15} />
             </a>
           ) : (
-            <button className="article-action-link" type="button" onClick={() => onOpen(article)}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
-            </button>
+            <a className="article-action-link" href={articlePath(locale, article.id)} onClick={(event) => { event.preventDefault(); onOpen(article); }}>{" " + t("Ver artigo") + " "}<ArrowUpRight size={15} />
+            </a>
           )}
         </div>
       </div>

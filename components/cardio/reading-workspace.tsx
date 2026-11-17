@@ -4,6 +4,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { Bookmark, ChevronDown, MoreHorizontal, Search } from "lucide-react";
 import type { AccountController } from "@/hooks/use-account";
 import type { BrowseState } from "@/hooks/use-browse";
+import { articlePath } from "@/lib/article-path";
 import type { Article } from "@/lib/catalog";
 import { emptyReading, type Reading, type SavedSearch, type SavedQuery } from "@/lib/reading";
 import { SupersededNotice } from "./editorial";
@@ -18,7 +19,7 @@ function ReadingEditor({ article, account, onOpen }: {
   account: AccountController;
   onOpen: (article: Article) => void;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [draft, setDraft] = useState(article.reading || emptyReading);
   const [tags, setTags] = useState((article.reading?.tags || []).join(", "));
   const [busy, setBusy] = useState(false);
@@ -51,7 +52,7 @@ function ReadingEditor({ article, account, onOpen }: {
     </div>
     {society
       ? <a className="article-title" href={article.url} target="_blank" rel="noreferrer">{article.title}</a>
-      : <button className="article-title" onClick={() => onOpen(article)}>{article.title}</button>}
+      : <a className="article-title" href={articlePath(locale === "en" ? "en" : "pt", article.id)} onClick={(event) => { event.preventDefault(); onOpen(article); }}>{article.title}</a>}
     <SupersededNotice articleId={article.id} />
     {reading.notes && <p className="library-note-preview">{reading.notes}</p>}
     <details className="library-edit">

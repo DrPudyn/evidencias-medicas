@@ -1,3 +1,4 @@
+import { savedAbstract, savedSections } from "@/lib/article-path";
 import { canonicalGuideline } from "@/data/catalogo";
 import { guidelineToArticle } from "@/components/cardio/catalog-query";
 import {body,currentUser,json,sameOrigin,settings} from "@/lib/server";
@@ -59,14 +60,16 @@ export async function POST(req:Request){
  if(!sameOrigin(req))return json({error:"Origem não autorizada."},403);
  const u=await currentUser(req);if(!u)return json({error:"Entre para salvar artigos."},401);
  try{
-  const a=await body(req);if(typeof a.title!=="string"||a.title.length>1500)return json({error:"Artigo inválido."},400);
+  const a=await body(req, 48000);if(typeof a.title!=="string"||a.title.length>1500)return json({error:"Artigo inválido."},400);
   const reading=readingSchema.parse(a.reading === undefined ? {} : a.reading);
   const id=String(a.id||"");
   const pubmed=/^\d{1,12}$/.test(id);
   const guideline=canonicalGuideline(id,String(a.source||""));
   if(!pubmed&&!guideline)return json({error:"Artigo inválido."},400);
   const safe=guideline?guidelineToArticle(guideline,guideline.provenance.society):{
-    id,title:a.title,journal:String(a.journal||"").slice(0,250),authors:String(a.authors||"").slice(0,300),date:String(a.date||"").slice(0,40),type:String(a.type||"").slice(0,100),topic:String(a.topic||"all").slice(0,50),doi:String(a.doi||"").slice(0,200),url:`https://pubmed.ncbi.nlm.nih.gov/${id}/`,source:"PubMed"
+    id,title:a.title,journal:String(a.journal||"").slice(0,250),authors:String(a.authors||"").slice(0,300),date:String(a.date||"").slice(0,40),type:String(a.type||"").slice(0,100),topic:String(a.topic||"all").slice(0,50),doi:String(a.doi||"").slice(0,200),url:`https://pubmed.ncbi.nlm.nih.gov/${id}/`,source:"PubMed",
+    ...(savedAbstract(a.abstract) ? { abstract: savedAbstract(a.abstract) } : {}),
+    ...(savedSections(a.sections) ? { sections: savedSections(a.sections) } : {}),
   };
   await settings().DB.prepare("INSERT OR IGNORE INTO bookmarks(user_id,article_id,article,created_at,reading) VALUES(?,?,?,?,?)").bind(u.id,id,JSON.stringify(safe),Date.now(),JSON.stringify(reading)).run();
   const stored=await settings().DB.prepare("SELECT article,reading FROM bookmarks WHERE user_id=? AND article_id=?").bind(u.id,id).first<{article:string;reading:string}>();

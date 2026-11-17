@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import type { MouseEvent } from "react";
 import { ArticleDetail } from "@/components/cardio/article-detail";
 import { api } from "@/components/cardio/api";
 import { useArticleDetail } from "@/hooks/use-article-detail";
+import { articlePath } from "@/lib/article-path";
 import type { Article } from "@/lib/catalog";
 
-export function LibraryView({ lang, items: initial }: { lang: "pt" | "en"; items: Article[] }) {
+export function LibraryView({ lang, items: initial }: { lang: "pt" | "en"; items: Array<Article & { savedOn?: string }> }) {
   const en = lang === "en";
   const home = en ? "/en#explorar" : "/pt#explorar";
   const back = en ? "/en/library" : "/pt/biblioteca";
@@ -15,6 +17,11 @@ export function LibraryView({ lang, items: initial }: { lang: "pt" | "en"; items
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
   const detail = useArticleDetail(selected);
+
+  function openDetail(event: MouseEvent<HTMLAnchorElement>, article: Article) {
+    event.preventDefault();
+    setSelected(article);
+  }
 
   async function remove(article: Article) {
     setPending(article.id);
@@ -52,16 +59,16 @@ export function LibraryView({ lang, items: initial }: { lang: "pt" | "en"; items
           {items.map((article) => (
             <li className="library-row" key={article.id}>
               <div className="library-copy">
-                <button className="library-title" type="button" onClick={() => setSelected(article)}>{article.title}</button>
+                <a className="library-title" href={articlePath(lang, article.id)} onClick={(event) => openDetail(event, article)}>{article.title}</a>
                 <p className="library-meta">
                   {article.type ? <span className="type-tag">{article.type}</span> : null}
                   <span>{article.journal}</span>
                   {article.date ? <span>{article.date.slice(0, 4)}</span> : null}
-                  {article.savedAt ? <span>{en ? "Saved" : "Salvo"} {new Date(article.savedAt).toLocaleDateString(en ? "en" : "pt-BR")}</span> : null}
+                  {article.savedOn ? <span>{en ? "Saved" : "Salvo"} {article.savedOn}</span> : null}
                 </p>
               </div>
               <div className="library-actions">
-                <button className="button secondary" type="button" onClick={() => setSelected(article)}>{en ? "View details" : "Ver detalhes"}</button>
+                <a className="button secondary" href={articlePath(lang, article.id)} onClick={(event) => openDetail(event, article)}>{en ? "View details" : "Ver detalhes"}</a>
                 <a className="button secondary" href={article.url || `https://pubmed.ncbi.nlm.nih.gov/${article.id}/`} target="_blank" rel="noreferrer">PubMed</a>
                 <form method="post" action="/api/bookmarks" onSubmit={(event) => { event.preventDefault(); void remove(article); }}>
                   <input type="hidden" name="action" value="remove" />
